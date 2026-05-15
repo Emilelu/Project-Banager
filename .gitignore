@@ -1,0 +1,5 @@
+~$*!.xlsx
+node_modules
+**/uploads/*
+**/.vscode
+**/bangumi.db
