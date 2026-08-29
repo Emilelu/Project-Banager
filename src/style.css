@@ -43,6 +43,19 @@ body.with-bg::before {
   background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
+  transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* iOS 风格聚焦态：弹窗打开 / 启动入场时壁纸加深模糊，关闭后渐清晰 */
+body.with-bg.bg-focus::before {
+  filter: blur(calc(var(--bg-blur) + 16px));
+  transform: scale(1.13);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.with-bg::before {
+    transition: none;
+  }
 }
 
 body.with-bg::after {
@@ -55,6 +68,18 @@ body.with-bg::after {
 
 .dark body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
+}
+
+/* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来，
+   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读 */
+body.with-bg .sidebar-bg {
+  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) * 0.55 + 0.28));
+  backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
+  -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
+}
+
+.dark body.with-bg .sidebar-bg {
+  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) * 0.55 + 0.28));
 }
 
 /* ==================== 全局响应式缩放 ==================== */

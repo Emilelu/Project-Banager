@@ -64,6 +64,12 @@
           {{ currentTitle }}
         </h1>
         <div class="flex items-center gap-3">
+          <button @click="onToggleBg"
+            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
+            :class="{ 'opacity-45': !bgActive }"
+            :title="bgActive ? '点击关闭壁纸背景' : '点击开启壁纸背景'">
+            <span class="text-lg transition-transform duration-300 hover:scale-110">🖼️</span>
+          </button>
           <button @click="showThemeSettings = true"
             class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
             title="主题与背景设置">
@@ -131,11 +137,16 @@ import { getDb } from './db/index'
 import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
 import ThemeSettings from './components/ThemeSettings.vue'
+import { useAppearance } from './composables/useAppearance'
 
 const route = useRoute()
 const currentTime = ref('')
 const fileInputRef = ref(null)
 const showThemeSettings = ref(false)
+
+const appearance = useAppearance()
+const bgActive = computed(() => appearance.state.bgEnabled && !!appearance.state.bgUrl && !appearance.state.bgFailed)
+const onToggleBg = () => { appearance.toggleBackground() }
 const { theme, isDark, toggleTheme } = useTheme()
 
 const BACKUP_KEY = 'banager_last_backup'
