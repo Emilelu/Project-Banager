@@ -79,8 +79,8 @@
             <div class="flex items-center gap-1 mt-0.5">
               <span class="text-sm font-bold text-primary">e</span>
               <span @dblclick.stop="startEdit(item,'current_episode')" class="editable-cell">
-                <input v-if="editing?.id===item.id&&editing?.field==='current_episode'" v-model.number="editValue"
-                  type="number" min="0" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit"
+                <input v-if="editing?.id===item.id&&editing?.field==='current_episode'" v-model="editValue"
+                  type="text" inputmode="decimal" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit"
                   class="inline-edit-input w-16" autofocus />
                 <span v-else class="text-sm font-bold text-primary">{{ item.current_episode }}</span>
               </span>
@@ -172,11 +172,14 @@
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">当前集数</label>
+                <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                  <span>当前集数</span>
+                  <span class="text-xs text-gray-400">支持 01、02 补零格式</span>
+                </label>
                 <div class="flex items-center gap-2">
                   <button type="button" @click="formEpisodeDecrement"
                     class="w-10 h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 hover:bg-primary/10 transition btn-press text-primary font-bold text-lg">−</button>
-                  <input v-model.number="form.current_episode" type="number" min="0"
+                  <input v-model="form.current_episode" type="text" inputmode="decimal" placeholder="如: 0、9、01、26.19"
                     class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                   <button type="button" @click="formEpisodeIncrement"
                     class="w-10 h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 hover:bg-primary/10 transition btn-press text-primary font-bold text-lg">+</button>
@@ -233,7 +236,7 @@
                 </label>
                 <input ref="urlParamsInput" v-model="form.url_params" type="text" placeholder='如: keyword={集数} 或 keyword={集数}&page=1'
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914</p>
+                <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914；集数为 01、02 等补零格式时按原样替换</p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
@@ -383,6 +386,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchingApi, remainingApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput } from '../composables/useDatePicker'
+import { smartIncrement, smartDecrement, normalizeEpisodeInput } from '../composables/useEpisode'
 
 const weekDays = ['周一','周二','周三','周四','周五','周六','周日']
 const dayIcons = ['🌙','🔥','🌊','⚡','🌸','🎉','☀️']
@@ -737,8 +741,7 @@ const saveEdit = async () => {
   const { id, field } = editing.value
   let val = editValue.value
   if (field === 'current_episode') {
-    const numVal = parseFloat(val)
-    val = isNaN(numVal) ? '0' : String(val)
+    val = normalizeEpisodeInput(val)
   }
   const item = watchingList.value.find(i => i.id === id)
   // current_episode 用字符串比较
@@ -788,45 +791,19 @@ const openEditDialog = () => {
   showDialog.value = true
 }
 
-// 对话框中集数智能增减
-// 小数部分当成独立整数增减，不进位：26.19→26.20，26.99→26.100
+// 对话框中集数智能增减（共享逻辑：小数不进位，补零格式保持位数）
 const formEpisodeIncrement = () => {
-  const str = String(form.value.current_episode || '0')
-  if (str.includes('.')) {
-    const dotIndex = str.indexOf('.')
-    const intPart = str.substring(0, dotIndex)
-    const decimalStr = str.substring(dotIndex + 1)
-    const newDecimal = parseInt(decimalStr, 10) + 1
-    form.value.current_episode = intPart + '.' + String(newDecimal)
-  } else {
-    const intVal = parseInt(str, 10) || 0
-    form.value.current_episode = String(intVal + 1)
-  }
+  form.value.current_episode = smartIncrement(form.value.current_episode)
 }
 
 const formEpisodeDecrement = () => {
-  const str = String(form.value.current_episode || '0')
-  const numVal = parseFloat(str) || 0
-  if (numVal <= 0) { form.value.current_episode = '0'; return }
-  if (str.includes('.')) {
-    const dotIndex = str.indexOf('.')
-    const intPart = str.substring(0, dotIndex)
-    const decimalStr = str.substring(dotIndex + 1)
-    const decVal = parseInt(decimalStr, 10)
-    if (decVal <= 0) { form.value.current_episode = '0'; return }
-    const newDecimal = decVal - 1
-    form.value.current_episode = intPart + '.' + String(newDecimal)
-  } else {
-    const intVal = parseInt(str, 10) || 0
-    form.value.current_episode = String(Math.max(0, intVal - 1))
-  }
+  form.value.current_episode = smartDecrement(form.value.current_episode)
 }
 
 const saveForm = async () => {
   if (!form.value.name.trim()) { showToast('请输入番剧名称','warning'); return }
-  // 确保 current_episode 是有效值
-  const epVal = parseFloat(form.value.current_episode)
-  form.value.current_episode = isNaN(epVal) ? '0' : String(form.value.current_episode)
+  // 规范化集数：保留补零（01）与小数（26.19），非法输入归 0
+  form.value.current_episode = normalizeEpisodeInput(form.value.current_episode)
   // 合并时间选择到 time_slot
   form.value.time_slot = formTime.value || ''
   try {
