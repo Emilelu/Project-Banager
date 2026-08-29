@@ -132,7 +132,7 @@ import { showToast } from '../composables/useToast'
 defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
-const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, shuffleBackground, applyBackground } = useAppearance()
+const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -164,11 +164,8 @@ const onRandom = () => {
 }
 
 const toggleBg = async () => {
-  state.bgEnabled = !state.bgEnabled
-  applyBackground()
-  if (state.bgEnabled && !state.bgUrl) {
-    try { await shuffleBackground() } catch (e) { showToast(e.message || '获取壁纸失败', 'error') }
-  }
+  // 复用引擎的一键开关：开启时无图自动取一张，错误统一由引擎提示
+  await toggleBackground()
 }
 
 const onShuffle = async () => {

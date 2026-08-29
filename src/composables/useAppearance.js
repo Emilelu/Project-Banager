@@ -4,6 +4,7 @@
  * 背景图通过 body.with-bg + CSS 变量渲染，遮罩与模糊保证可读性
  */
 import { reactive, watch } from 'vue'
+import { showToast } from './useToast'
 
 const STORAGE_KEY = 'banager_appearance'
 
@@ -19,6 +20,7 @@ const state = reactive({
   bgCors: false,            // 当前图是否可取色（Wallhaven 支持）
   bgColors: [],             // Wallhaven 返回的壁纸主色（hex 列表）
   bgLoading: false,
+  bgFailed: false,          // 运行时标记：当前图片加载失败（不持久化）
 })
 
 // ========== 颜色工具 ==========
@@ -86,7 +88,8 @@ function applyGlass() {
 
 function applyBackground() {
   if (typeof document === "undefined") return
-  const active = state.bgEnabled && state.bgUrl
+  // 图片加载失败时彻底回到原渐变底色，不留遮罩层影响可读性
+  const active = state.bgEnabled && state.bgUrl && !state.bgFailed
   document.body.classList.toggle('with-bg', active)
   const root = document.documentElement.style
   if (active) {
@@ -98,6 +101,24 @@ function applyBackground() {
     root.setProperty('--bg-blur', '0px')
     root.setProperty('--bg-dim', '0')
   }
+}
+
+// 预载探测：加载失败自动摘掉背景层（API 停服 / 图片被删 / 断网时保证页面观感）
+function probeBackground() {
+  if (typeof Image === 'undefined') return
+  if (!state.bgUrl) return
+  const img = new Image()
+  img.onload = () => {
+    state.bgFailed = false
+    applyBackground()
+  }
+  img.onerror = () => {
+    if (state.bgFailed) return
+    state.bgFailed = true
+    applyBackground()
+    showToast('背景图加载失败，已自动关闭背景（可稍后在设置中重试）', 'warning')
+  }
+  img.src = state.bgUrl
 }
 
 function applyAll() {
@@ -159,17 +180,11 @@ function pickPaletteFromColors() {
 async function shuffleBackground() {
   if (state.bgProvider === 'custom') {
     if (!state.bgCustomUrl.trim()) throw new Error('请先填写图片地址')
-    state.bgUrl = state.bgCustomUrl.trim()
-    state.bgCors = false
-    state.bgColors = []
-    applyBackground()
+    _applyNewBg(state.bgCustomUrl.trim(), false, [])
     return
   }
   if (state.bgProvider === 'dmoe') {
-    state.bgUrl = `https://www.dmoe.cc/random.php?t=${Date.now()}`
-    state.bgCors = false
-    state.bgColors = []
-    applyBackground()
+    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
     return
   }
   // Wallhaven：动漫分类，SFW，随机排序
@@ -181,19 +196,48 @@ async function shuffleBackground() {
     const json = await res.json()
     const item = json.data?.[0]
     if (!item) throw new Error('未获取到壁纸')
-    state.bgUrl = item.path
-    state.bgCors = true
-    state.bgColors = item.colors || []
-    applyBackground()
+    _applyNewBg(item.path, true, item.colors || [])
   } finally {
     state.bgLoading = false
+  }
+}
+
+function _applyNewBg(url, cors, colors) {
+  state.bgUrl = url
+  state.bgCors = cors
+  state.bgColors = colors
+  state.bgFailed = false
+  applyBackground()
+  probeBackground()
+}
+
+/** 顶栏一键开关背景：开启时无图则自动取一张 */
+async function toggleBackground() {
+  state.bgEnabled = !state.bgEnabled
+  state.bgFailed = false
+  if (state.bgEnabled) {
+    applyBackground()
+    if (!state.bgUrl) {
+      try {
+        await shuffleBackground()
+        showToast('壁纸背景已开启 🖼️')
+      } catch (e) {
+        showToast(e.message || '获取壁纸失败', 'error')
+      }
+    } else {
+      probeBackground()
+      showToast(state.bgFailed ? '壁纸背景开启失败' : '壁纸背景已开启 🖼️')
+    }
+  } else {
+    applyBackground()
+    showToast('壁纸背景已关闭')
   }
 }
 
 // ========== 持久化与初始化 ==========
 
 watch(state, () => {
-  const { bgLoading, ...persisted } = state
+  const { bgLoading, bgFailed, ...persisted } = state
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)) } catch {}
 }, { deep: true })
 
@@ -203,7 +247,10 @@ export function initAppearance() {
     if (saved) Object.assign(state, saved)
   } catch {}
   state.bgLoading = false
+  state.bgFailed = false
   applyAll()
+  // 启动时探测上次的壁纸是否仍然可用（API 停服 / 图片被删时自动关闭）
+  probeBackground()
 }
 
 export function useAppearance() {
@@ -214,6 +261,7 @@ export function useAppearance() {
     randomizePalette,
     pickPaletteFromColors,
     shuffleBackground,
+    toggleBackground,
     applyBackground,
   }
 }
