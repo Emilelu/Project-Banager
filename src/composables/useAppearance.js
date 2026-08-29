@@ -12,12 +12,13 @@ const state = reactive({
   glass: 'frost',           // 'frost' 毛玻璃 | 'liquid' 液态玻璃
   palette: null,            // null = 默认樱紫；否则 { p: [h,s,l], s: [h,s,l] }
   bgEnabled: false,
-  bgProvider: 'wallhaven',  // 'wallhaven' | 'dmoe' | 'custom'
+  bgProvider: 'alcy',       // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'wallhaven' | 'custom'
+  bgAutoSwitch: true,       // 每次打开页面自动换一张；关闭即固定当前壁纸
   bgCustomUrl: '',
   bgDim: 0.55,              // 遮罩浓度 0~0.9
   bgBlur: 0,                // 背景模糊 0~20px
   bgUrl: '',                // 当前生效的图片地址
-  bgCors: false,            // 当前图是否可取色（Wallhaven 支持）
+  bgCors: false,            // 当前图是否可取色
   bgColors: [],             // Wallhaven 返回的壁纸主色（hex 列表）
   bgLoading: false,
   bgFailed: false,          // 运行时标记：当前图片加载失败（不持久化）
@@ -116,9 +117,98 @@ function probeBackground() {
     if (state.bgFailed) return
     state.bgFailed = true
     applyBackground()
-    showToast('背景图加载失败，已自动关闭背景（可稍后在设置中重试）', 'warning')
+    if (!state.bgSilentProbe) {
+      showToast('背景图加载失败，已自动关闭背景（可稍后在设置中重试）', 'warning')
+    }
   }
   img.src = state.bgUrl
+}
+
+// 带超时的探测，返回 Promise<boolean>（用于启动自动换图失败时回退旧壁纸）
+function probeUrl(url, timeout = 8000) {
+  return new Promise(resolve => {
+    if (typeof Image === 'undefined' || !url) { resolve(false); return }
+    const img = new Image()
+    const timer = setTimeout(() => { img.src = ''; resolve(false) }, timeout)
+    img.onload = () => { clearTimeout(timer); resolve(true) }
+    img.onerror = () => { clearTimeout(timer); resolve(false) }
+    img.src = url
+  })
+}
+
+/** 启动时自动换一张：新图加载失败则回退到上一张可用的壁纸 */
+async function autoSwitchOnStartup() {
+  const prev = state.bgUrl
+  state.bgSilentProbe = true
+  try {
+    await shuffleBackground()
+    if (state.bgUrl && state.bgUrl !== prev) {
+      const ok = await probeUrl(state.bgUrl)
+      if (!ok && prev) {
+        state.bgUrl = prev
+        state.bgFailed = false
+        applyBackground()
+        probeBackground()
+        showToast('新壁纸加载失败，已保留原壁纸', 'warning')
+      }
+    }
+  } catch {}
+  finally { state.bgSilentProbe = false }
+}
+
+/**
+ * Wallhaven 连通性诊断：区分「网络层不可达」「跨域被拦」「瞬时故障」
+ * 页面内 fetch 失败的具体原因浏览器不会透露，用对照探测缩小范围
+ */
+async function diagnoseWallhaven() {
+  const steps = []
+  steps.push({ name: '浏览器在线状态', ok: navigator.onLine, detail: navigator.onLine ? '在线' : '离线' })
+
+  // 不带跨域语义的请求：失败 = 网络层不可达（DNS/防火墙/代理/扩展拦截）
+  let noCorsOk = false, t0 = Date.now()
+  try {
+    await fetch('https://wallhaven.cc/favicon.ico', { mode: 'no-cors', signal: AbortSignal.timeout(8000) })
+    noCorsOk = true
+  } catch {}
+  steps.push({
+    name: '直连请求 (no-cors)',
+    ok: noCorsOk,
+    detail: noCorsOk ? `${Date.now() - t0}ms，服务器可达` : '失败 — 网络层不可达：DNS 污染 / 防火墙 / 广告拦截扩展'
+  })
+
+  // 跨域 API 请求：直连成功而它失败 = 跨域/中间人问题
+  let corsOk = false
+  t0 = Date.now()
+  try {
+    const res = await fetch('https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&atleast=1920x1080', { signal: AbortSignal.timeout(8000) })
+    corsOk = res.ok
+  } catch {}
+  steps.push({
+    name: 'API 跨域请求',
+    ok: corsOk,
+    detail: corsOk ? `${Date.now() - t0}ms，API 正常` : '失败 — 服务器可达但跨域被拦（扩展/代理篡改）或接口故障'
+  })
+
+  // 图片加载（无 CORS 要求）：进一步验证静态资源可达性
+  let imgOk = false
+  t0 = Date.now()
+  try {
+    imgOk = await probeUrl('https://wallhaven.cc/favicon.ico', 8000)
+  } catch {}
+  steps.push({
+    name: '图片资源加载',
+    ok: imgOk,
+    detail: imgOk ? `${Date.now() - t0}ms，静态资源可达` : '失败 — 静态资源不可达'
+  })
+
+  let conclusion
+  if (!navigator.onLine) conclusion = '浏览器处于离线状态，请检查网络连接。'
+  else if (!noCorsOk) conclusion = '结论：网络层不可达。可能是 DNS 污染、防火墙拦截或广告拦截扩展，建议改用樱花源（Alcy）。'
+  else if (!corsOk) conclusion = '结论：服务器可达但 API 跨域被拦，多为浏览器扩展或代理所致，建议改用樱花源（Alcy）。'
+  else if (!imgOk) conclusion = '结论：API 正常但静态资源异常，图片可能加载失败，建议改用樱花源（Alcy）。'
+  else conclusion = '结论：Wallhaven 网络与跨域均正常，之前失败应为瞬时故障，可直接重试。'
+  steps.push({ name: '诊断结论', ok: true, detail: conclusion })
+  return steps
 }
 
 function applyAll() {
@@ -237,34 +327,39 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
 }
 
-/** 按当前源换一张随机背景图；Wallhaven 同时携带可取色的主色元数据，失败时自动降级樱花源 */
+/** 按当前源换一张随机背景图；Wallhaven 同时携带可取色的主色元数据，失败时自动降级 */
 async function shuffleBackground() {
   if (state.bgProvider === 'custom') {
     if (!state.bgCustomUrl.trim()) throw new Error('请先填写图片地址')
     _applyNewBg(state.bgCustomUrl.trim(), false, [])
     return
   }
+  if (state.bgProvider === 'alcy') {
+    // 樱花 Alcy 源：全链路带跨域许可，可直接取色
+    _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`, true, [])
+    return
+  }
   if (state.bgProvider === 'dmoe') {
     _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
     return
   }
-  // Wallhaven：动漫分类，SFW，随机排序；不可达时自动降级樱花源
+  // Wallhaven：动漫分类，SFW，随机排序；不可达时自动降级 Alcy 源
   state.bgLoading = true
   try {
     const seed = Math.random().toString(36).slice(2)
     const res = await fetch(
       `https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&seed=${seed}&atleast=1920x1080`,
-      { signal: AbortSignal.timeout(10000) }
+      { signal: AbortSignal.timeout(8000) }
     )
-    if (!res.ok) throw new Error(`Wallhaven 接口返回 ${res.status}`)
+    if (!res.ok) throw new Error(`接口返回 ${res.status}`)
     const json = await res.json()
     const item = json.data?.[0]
     if (!item) throw new Error('未获取到壁纸')
     _applyNewBg(item.path, true, item.colors || [])
   } catch (e) {
-    // 降级：本次改用樱花源（不改变用户选择的图源，之后仍可重试 Wallhaven）
-    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
-    showToast(`Wallhaven 不可达（${e.message}），已改用樱花源`, 'warning')
+    // 降级：本次改用樱花 Alcy 源（不改变用户所选图源，之后仍可重试 Wallhaven）
+    _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`, true, [])
+    showToast(`Wallhaven 不可达（${e.message}），已改用樱花 Alcy 源`, 'warning')
   } finally {
     state.bgLoading = false
   }
@@ -305,20 +400,32 @@ async function toggleBackground() {
 // ========== 持久化与初始化 ==========
 
 watch(state, () => {
-  const { bgLoading, bgFailed, ...persisted } = state
+  const { bgLoading, bgFailed, bgSilentProbe, ...persisted } = state
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)) } catch {}
 }, { deep: true })
 
 export function initAppearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    if (saved) Object.assign(state, saved)
+    if (saved) {
+      // 一次性迁移：Wallhaven 在部分网络不可达，迁移到更稳的樱花 Alcy 源（可在设置中改回）
+      if (saved.bgProvider === 'wallhaven' && !localStorage.getItem('banager_wh_migrated')) {
+        saved.bgProvider = 'alcy'
+        try { localStorage.setItem('banager_wh_migrated', '1') } catch {}
+      }
+      Object.assign(state, saved)
+    }
   } catch {}
   state.bgLoading = false
   state.bgFailed = false
+  state.bgSilentProbe = false
   applyAll()
   // 启动时探测上次的壁纸是否仍然可用（API 停服 / 图片被删时自动关闭）
   probeBackground()
+  // 自动换图模式：每次打开换一张（新图加载失败自动回退到上一张可用的壁纸）
+  if (state.bgEnabled && state.bgAutoSwitch) {
+    autoSwitchOnStartup()
+  }
 }
 
 export function useAppearance() {
@@ -332,6 +439,7 @@ export function useAppearance() {
     shuffleBackground,
     toggleBackground,
     applyBackground,
+    diagnoseWallhaven,
   }
 }
 

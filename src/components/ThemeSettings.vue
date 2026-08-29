@@ -73,8 +73,9 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <select v-model="state.bgProvider"
                     class="flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
-                    <option value="wallhaven">Wallhaven · 随机二次元（可取色）</option>
-                    <option value="dmoe">樱花随机壁纸</option>
+                    <option value="alcy">樱花随机二次元 · Alcy（默认，可取色）</option>
+                    <option value="dmoe">樱花随机壁纸 · dmoe</option>
+                    <option value="wallhaven">Wallhaven · 高质量二次元（需网络可达）</option>
                     <option value="custom">自定义图片地址</option>
                   </select>
                   <button @click="onShuffle" :disabled="state.bgLoading"
@@ -84,6 +85,18 @@
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" placeholder="https://... 直链图片地址"
                   class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
+                <!-- 自动换图 / 固定壁纸 -->
+                <div class="mt-2 flex items-center gap-2 flex-wrap">
+                  <button @click="state.bgAutoSwitch = !state.bgAutoSwitch"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                    <span>{{ state.bgAutoSwitch ? '🔄' : '📌' }}</span>
+                    {{ state.bgAutoSwitch ? '每次打开自动换一张' : '已固定当前壁纸' }}
+                  </button>
+                  <button v-if="state.bgAutoSwitch" @click="state.bgAutoSwitch = false"
+                    class="px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press"
+                    title="关闭自动换图，固定当前这张壁纸">固定这张</button>
+                </div>
                 <div v-if="state.bgUrl" class="mt-3">
                   <img :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"
                     class="w-full h-28 object-cover rounded-xl border border-white/40" alt="背景预览" />
@@ -113,8 +126,21 @@
                     🎨 从壁纸取色
                   </button>
                   <span v-if="!canPickFromBg" class="text-xs text-gray-400">先获取一张壁纸</span>
-                  <span v-else-if="state.bgCors" class="text-xs text-gray-400">使用 Wallhaven 主色数据</span>
-                  <span v-else class="text-xs text-gray-400">尝试读取壁纸像素（取决于图源跨域权限）</span>
+                  <span v-else-if="state.bgCors && state.bgColors.length > 0" class="text-xs text-gray-400">使用 Wallhaven 主色数据</span>
+                  <span v-else class="text-xs text-gray-400">读取壁纸像素取色（图源需开放跨域权限）</span>
+                </div>
+                <!-- 网络诊断 -->
+                <div class="mt-3 pt-3 border-t border-white/20">
+                  <button @click="runDiag" :disabled="diagRunning"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press disabled:opacity-40">
+                    {{ diagRunning ? '⏳ 诊断中…' : '🔍 诊断 Wallhaven 连通性' }}
+                  </button>
+                  <div v-if="diagSteps.length" class="mt-2 p-3 rounded-xl bg-black/80 text-[0.7rem] leading-relaxed font-mono space-y-1">
+                    <div v-for="s in diagSteps" :key="s.name"
+                      :class="s.name === '诊断结论' ? 'text-amber-300 font-bold' : s.ok ? 'text-green-400' : 'text-red-400'">
+                      {{ s.ok ? '✓' : '✗' }} {{ s.name }}：{{ s.detail }}
+                    </div>
+                  </div>
                 </div>
               </template>
               <p v-else class="text-xs text-gray-400">开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。</p>
@@ -138,7 +164,7 @@ import { showToast } from '../composables/useToast'
 defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
-const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
+const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground, diagnoseWallhaven } = useAppearance()
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -211,6 +237,19 @@ const onPickFromBg = async () => {
 const onBgError = () => {
   bgFailed.value = true
   showToast('背景图片加载失败，请换一张', 'error')
+}
+
+// Wallhaven 连通性诊断
+const diagRunning = ref(false)
+const diagSteps = ref([])
+const runDiag = async () => {
+  diagRunning.value = true
+  diagSteps.value = []
+  try {
+    diagSteps.value = await diagnoseWallhaven()
+  } finally {
+    diagRunning.value = false
+  }
 }
 
 // 切换图源后提示重新换图
