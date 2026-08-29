@@ -90,12 +90,16 @@
                   <p v-if="bgFailed" class="text-xs text-danger mt-1">⚠️ 图片加载失败，请换一张</p>
                 </div>
                 <div class="mt-3 space-y-2">
-                  <label class="flex items-center gap-3 text-xs text-gray-500">
-                    <span class="w-16 shrink-0">遮罩浓度</span>
-                    <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
-                      class="flex-1 accent-pink-500" />
-                    <span class="w-10 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
-                  </label>
+                  <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-3 text-xs text-gray-500 flex-1">
+                      <span class="w-16 shrink-0">遮罩浓度</span>
+                      <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
+                        class="flex-1 accent-pink-500" />
+                      <span class="w-10 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
+                    </label>
+                    <button @click="resetBgTuning" title="恢复默认（遮罩 55%、无模糊）"
+                      class="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认</button>
+                  </div>
                   <label class="flex items-center gap-3 text-xs text-gray-500">
                     <span class="w-16 shrink-0">背景模糊</span>
                     <input type="range" min="0" max="20" step="1" v-model.number="state.bgBlur" @input="applyBackground()"
@@ -108,7 +112,9 @@
                     class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-accent to-accent-light text-white hover:shadow-lg hover:shadow-accent/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed">
                     🎨 从壁纸取色
                   </button>
-                  <span v-if="!canPickFromBg" class="text-xs text-gray-400">当前图源不支持取色，换用 Wallhaven 源</span>
+                  <span v-if="!canPickFromBg" class="text-xs text-gray-400">先获取一张壁纸</span>
+                  <span v-else-if="state.bgCors" class="text-xs text-gray-400">使用 Wallhaven 主色数据</span>
+                  <span v-else class="text-xs text-gray-400">尝试读取壁纸像素（取决于图源跨域权限）</span>
                 </div>
               </template>
               <p v-else class="text-xs text-gray-400">开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。</p>
@@ -132,7 +138,7 @@ import { showToast } from '../composables/useToast'
 defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
-const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
+const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -156,7 +162,15 @@ const applyCustom = () => {
   setPalette({ p: hexToHsl(customP.value), s: hexToHsl(customS.value) })
 }
 
-const canPickFromBg = computed(() => state.bgEnabled && state.bgCors && state.bgColors.length > 0)
+const canPickFromBg = computed(() => state.bgEnabled && !!state.bgUrl)
+
+// 恢复遮罩/模糊默认值
+const resetBgTuning = () => {
+  state.bgDim = 0.55
+  state.bgBlur = 0
+  applyBackground()
+  showToast('已恢复默认遮罩与模糊')
+}
 
 const onRandom = () => {
   randomizePalette()
@@ -179,9 +193,19 @@ const onShuffle = async () => {
   }
 }
 
-const onPickFromBg = () => {
-  if (pickPaletteFromColors()) showToast('已从壁纸取色 🎨')
-  else showToast('这张壁纸颜色太素，换一张试试', 'warning')
+const onPickFromBg = async () => {
+  // Wallhaven 优先用接口自带的主色元数据；其他源尝试读取像素（取决于图源跨域权限）
+  if (state.bgCors && state.bgColors.length > 0) {
+    if (pickPaletteFromColors()) showToast('已从壁纸取色 🎨')
+    else showToast('这张壁纸颜色太素，换一张试试', 'warning')
+    return
+  }
+  try {
+    await extractPaletteFromImage(state.bgUrl)
+    showToast('已从壁纸取色 🎨')
+  } catch (e) {
+    showToast(e.message, 'warning')
+  }
 }
 
 const onBgError = () => {

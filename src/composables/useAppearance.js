@@ -176,7 +176,68 @@ function pickPaletteFromColors() {
   return true
 }
 
-/** 按当前源换一张随机背景图；Wallhaven 同时携带可取色的主色元数据 */
+/**
+ * 通用 canvas 取色：跨域加载图片副本 → 缩样 → 按色相桶统计饱和度权重 →
+ * 取主峰为主色、相距 ≥30° 的次峰为副色。
+ * 图源未返回 CORS 许可（如樱花接口）时浏览器会拒绝读取像素，reject 并说明原因
+ */
+function extractPaletteFromImage(url) {
+  return new Promise((resolve, reject) => {
+    if (typeof Image === 'undefined' || typeof document === 'undefined') {
+      reject(new Error('当前环境不支持取色')); return
+    }
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const size = 64
+        const canvas = document.createElement('canvas')
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, size, size)
+        const { data } = ctx.getImageData(0, 0, size, size)
+        const bins = new Array(36).fill(0)
+        const binStat = new Array(36).fill(null).map(() => ({ s: 0, l: 0, n: 0 }))
+        for (let i = 0; i < data.length; i += 4) {
+          const [h, s, l] = hexToHsl(rgbToHex(data[i], data[i + 1], data[i + 2]))
+          if (s < 24 || l < 18 || l > 82) continue // 跳过灰、黑、白
+          const b = Math.min(35, Math.floor(h / 10))
+          bins[b] += s
+          binStat[b].s += s
+          binStat[b].l += l
+          binStat[b].n++
+        }
+        const order = bins.map((w, i) => [i, w]).sort((a, b) => b[1] - a[1]).filter(([, w]) => w > 0)
+        if (!order.length) { reject(new Error('这张壁纸颜色太素，取不到合适配色')); return }
+        const pBin = order[0][0]
+        const secBin = order.find(([i]) => {
+          const dh = Math.abs(i - pBin) * 10
+          return dh >= 30 && dh <= 200
+        })
+        const pick = (bin) => {
+          const st = binStat[bin]
+          return [bin * 10 + 5, clamp(st.s / st.n, 48, 85), safeL(st.l / st.n)]
+        }
+        const p = pick(pBin)
+        const s = secBin ? pick(secBin[0]) : [(p[0] + 55) % 360, clamp(p[1], 48, 80), safeL(p[2] + 6)]
+        state.palette = { p, s }
+        applyPalette()
+        resolve(true)
+      } catch (e) {
+        reject(new Error('该图源未开放跨域读取权限，无法取色'))
+      }
+    }
+    img.onerror = () => reject(new Error('取色图片加载失败（图源未开放跨域权限或地址无效）'))
+    img.src = url
+  })
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+}
+
+/** 按当前源换一张随机背景图；Wallhaven 同时携带可取色的主色元数据，失败时自动降级樱花源 */
 async function shuffleBackground() {
   if (state.bgProvider === 'custom') {
     if (!state.bgCustomUrl.trim()) throw new Error('请先填写图片地址')
@@ -187,16 +248,23 @@ async function shuffleBackground() {
     _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
     return
   }
-  // Wallhaven：动漫分类，SFW，随机排序
+  // Wallhaven：动漫分类，SFW，随机排序；不可达时自动降级樱花源
   state.bgLoading = true
   try {
     const seed = Math.random().toString(36).slice(2)
-    const res = await fetch(`https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&seed=${seed}&atleast=1920x1080`)
+    const res = await fetch(
+      `https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&seed=${seed}&atleast=1920x1080`,
+      { signal: AbortSignal.timeout(10000) }
+    )
     if (!res.ok) throw new Error(`Wallhaven 接口返回 ${res.status}`)
     const json = await res.json()
     const item = json.data?.[0]
     if (!item) throw new Error('未获取到壁纸')
     _applyNewBg(item.path, true, item.colors || [])
+  } catch (e) {
+    // 降级：本次改用樱花源（不改变用户选择的图源，之后仍可重试 Wallhaven）
+    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
+    showToast(`Wallhaven 不可达（${e.message}），已改用樱花源`, 'warning')
   } finally {
     state.bgLoading = false
   }
@@ -260,6 +328,7 @@ export function useAppearance() {
     setPalette,
     randomizePalette,
     pickPaletteFromColors,
+    extractPaletteFromImage,
     shuffleBackground,
     toggleBackground,
     applyBackground,

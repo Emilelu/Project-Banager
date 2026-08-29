@@ -57,6 +57,18 @@ body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
+/* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来，
+   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读 */
+body.with-bg .sidebar-bg {
+  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) * 0.55 + 0.28));
+  backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
+  -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
+}
+
+.dark body.with-bg .sidebar-bg {
+  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) * 0.55 + 0.28));
+}
+
 /* ==================== 全局响应式缩放 ==================== */
 /* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
    所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放 */
