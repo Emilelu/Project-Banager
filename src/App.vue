@@ -64,6 +64,11 @@
           {{ currentTitle }}
         </h1>
         <div class="flex items-center gap-3">
+          <button @click="showThemeSettings = true"
+            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
+            title="主题与背景设置">
+            <span class="text-lg transition-transform duration-300 hover:scale-110">🎨</span>
+          </button>
           <button @click="toggleTheme"
             class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
             :title="themeLabel">
@@ -87,6 +92,9 @@
 
     <!-- 全局 Toast 通知 -->
     <ToastHost />
+
+    <!-- 主题与背景设置 -->
+    <ThemeSettings :show="showThemeSettings" @close="showThemeSettings = false" />
 
     <!-- 导入备份确认对话框 -->
     <Teleport to="body">
@@ -122,10 +130,12 @@ import { useTheme } from './composables/useTheme'
 import { getDb } from './db/index'
 import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
+import ThemeSettings from './components/ThemeSettings.vue'
 
 const route = useRoute()
 const currentTime = ref('')
 const fileInputRef = ref(null)
+const showThemeSettings = ref(false)
 const { theme, isDark, toggleTheme } = useTheme()
 
 const BACKUP_KEY = 'banager_last_backup'

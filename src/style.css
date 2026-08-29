@@ -2,6 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== 主题配色变量 ==================== */
+/* rgb 通道三元组形式，供 Tailwind 主题色与全局样式共用；
+   运行时由 useAppearance.js 覆写（自定义/随机/背景图取色） */
+:root {
+  --c-primary: 124 58 237;        /* #7C3AED 樱紫 */
+  --c-primary-light: 167 139 250; /* #A78BFA */
+  --c-primary-dark: 109 40 217;   /* #6D28D9 */
+  --c-secondary: 236 72 153;      /* #EC4899 */
+  --c-secondary-light: 244 114 182; /* #F472B6 */
+  --c-secondary-dark: 219 39 119; /* #DB2777 */
+  --c-success: 16 185 129;
+  --c-success-dark: 5 150 105;
+  --c-warning: 245 158 11;
+  --c-warning-dark: 217 119 6;
+  --c-danger: 239 68 68;
+  --c-danger-dark: 220 38 38;
+  --c-accent: 6 182 212;
+  --c-accent-light: 34 211 238;
+  --c-sakura: 255 183 197;
+  --c-sakura-dark: 255 143 171;
+  --c-mint: 167 243 208;
+  --c-lavender: 196 181 253;
+
+  /* 背景图系统（useAppearance.js 控制） */
+  --bg-image: none;
+  --bg-blur: 0px;
+  --bg-dim: 0.55;
+  --bg-scrim-light: 245 243 255; /* 与日间渐变底色一致 */
+  --bg-scrim-dark: 15 10 26;     /* 与暗色渐变底色一致 */
+}
+
+/* ==================== 背景图 ==================== */
+/* 图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
+body.with-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: var(--bg-image) center / cover no-repeat;
+  filter: blur(var(--bg-blur));
+  transform: scale(1.08);
+}
+
+body.with-bg::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgb(var(--bg-scrim-light) / var(--bg-dim));
+}
+
+.dark body.with-bg::after {
+  background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
+}
+
 /* ==================== 全局响应式缩放 ==================== */
 /* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
    所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放 */
@@ -27,7 +82,7 @@ body {
 
 /* 侧边栏 - 暗色更深邃的渐变 */
 .sidebar-bg {
-  background: linear-gradient(180deg, #7C3AED 0%, #6D28D9 40%, #4C1D95 100%);
+  background: linear-gradient(180deg, rgb(var(--c-primary)) 0%, rgb(var(--c-primary-dark)) 40%, color-mix(in srgb, rgb(var(--c-primary-dark)) 72%, black) 100%);
 }
 
 .dark .sidebar-bg {
@@ -42,7 +97,7 @@ body {
 
 /* 渐变文字 */
 .dark .gradient-text {
-  background: linear-gradient(135deg, #A78BFA, #F472B6);
+  background: linear-gradient(135deg, rgb(var(--c-primary-light)), rgb(var(--c-secondary-light)));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -50,7 +105,7 @@ body {
 
 /* 表格 */
 .dark table thead tr {
-  background: linear-gradient(to right, rgba(124, 58, 237, 0.25), rgba(236, 72, 153, 0.25)) !important;
+  background: linear-gradient(to right, rgb(var(--c-primary)/0.25), rgb(var(--c-secondary)/0.25)) !important;
 }
 
 .dark th,
@@ -59,7 +114,7 @@ body {
 }
 
 .dark th.text-primary-dark {
-  color: #A78BFA !important;
+  color: rgb(var(--c-primary-light)) !important;
 }
 
 /* 文字颜色适配 - 确保暗色模式可读性 */
@@ -101,23 +156,23 @@ body {
 }
 
 .dark .bg-primary\/10 {
-  background: rgba(124, 58, 237, 0.18) !important;
+  background: rgb(var(--c-primary)/0.18) !important;
 }
 
 .dark .bg-primary\/15 {
-  background: rgba(124, 58, 237, 0.22) !important;
+  background: rgb(var(--c-primary)/0.22) !important;
 }
 
 .dark .bg-primary\/5 {
-  background: rgba(124, 58, 237, 0.10) !important;
+  background: rgb(var(--c-primary)/0.10) !important;
 }
 
 .dark .bg-danger\/10 {
-  background: rgba(239, 68, 68, 0.15) !important;
+  background: rgb(var(--c-danger)/0.15) !important;
 }
 
 .dark .bg-secondary\/20 {
-  background: rgba(236, 72, 153, 0.15) !important;
+  background: rgb(var(--c-secondary)/0.15) !important;
 }
 
 .dark .bg-success\/80 {
@@ -125,7 +180,7 @@ body {
 }
 
 .dark .bg-warning\/80 {
-  background: rgba(245, 158, 11, 0.6) !important;
+  background: rgb(var(--c-warning)/0.6) !important;
 }
 
 /* 边框适配 */
@@ -151,7 +206,7 @@ body {
 .dark textarea {
   background: rgba(20, 15, 40, 0.6) !important;
   color: #e2e8f0 !important;
-  border-color: rgba(124, 58, 237, 0.3) !important;
+  border-color: rgb(var(--c-primary)/0.3) !important;
 }
 
 .dark input::placeholder,
@@ -168,22 +223,22 @@ body {
 .dark .inline-edit-input {
   background: rgba(20, 15, 40, 0.85) !important;
   color: #e2e2f0 !important;
-  border-color: rgba(124, 58, 237, 0.4) !important;
+  border-color: rgb(var(--c-primary)/0.4) !important;
 }
 
 /* 可编辑单元格 */
 .dark .editable-cell:hover {
-  background: rgba(124, 58, 237, 0.15) !important;
+  background: rgb(var(--c-primary)/0.15) !important;
 }
 
 /* 列表项 */
 .dark .list-item:hover {
-  background-color: rgba(124, 58, 237, 0.10) !important;
+  background-color: rgb(var(--c-primary)/0.10) !important;
 }
 
 /* 链接颜色 */
 .dark a.text-primary {
-  color: #A78BFA !important;
+  color: rgb(var(--c-primary-light)) !important;
 }
 
 .dark a.text-primary:hover {
@@ -191,7 +246,7 @@ body {
 }
 
 .dark .text-primary\/60 {
-  color: rgba(167, 139, 250, 0.7) !important;
+  color: rgb(var(--c-primary-light)/0.7) !important;
 }
 
 /* 按钮文字 - 确保渐变按钮上的白色文字可见 */
@@ -207,12 +262,12 @@ body {
 
 /* 主题切换按钮 */
 .dark .hover\:bg-primary\/10:hover {
-  background: rgba(124, 58, 237, 0.15) !important;
+  background: rgb(var(--c-primary)/0.15) !important;
 }
 
 /* 选中状态 */
 .dark .bg-danger\/10 {
-  background: rgba(239, 68, 68, 0.12) !important;
+  background: rgb(var(--c-danger)/0.12) !important;
 }
 
 .dark .border-l-danger {
@@ -220,7 +275,7 @@ body {
 }
 
 .dark .border-l-primary {
-  border-left-color: #A78BFA !important;
+  border-left-color: rgb(var(--c-primary-light)) !important;
 }
 
 /* 日期选择器日历图标 - 深色模式可见 */
@@ -232,18 +287,18 @@ body {
 /* 时间选择器触发框 - 深色模式 */
 .dark .time-picker-trigger {
   background: rgba(20, 15, 40, 0.6) !important;
-  border-color: rgba(124, 58, 237, 0.3) !important;
+  border-color: rgb(var(--c-primary)/0.3) !important;
   color: #e2e8f0 !important;
 }
 
 .dark .time-picker-trigger:hover {
-  border-color: rgba(124, 58, 237, 0.5) !important;
+  border-color: rgb(var(--c-primary)/0.5) !important;
 }
 
 /* 时间选择器下拉面板 - 深色模式 */
 .dark .time-picker-dropdown {
   background: rgba(20, 15, 40, 0.95) !important;
-  border-color: rgba(124, 58, 237, 0.3) !important;
+  border-color: rgb(var(--c-primary)/0.3) !important;
 }
 
 .dark .time-picker-dropdown button {
@@ -251,16 +306,16 @@ body {
 }
 
 .dark .time-picker-dropdown button:hover {
-  background: rgba(124, 58, 237, 0.15) !important;
+  background: rgb(var(--c-primary)/0.15) !important;
 }
 
 .dark .time-picker-dropdown button.bg-primary {
-  background: rgba(124, 58, 237, 0.7) !important;
+  background: rgb(var(--c-primary)/0.7) !important;
   color: #ffffff !important;
 }
 
 .dark .time-picker-dropdown button.bg-secondary {
-  background: rgba(236, 72, 153, 0.7) !important;
+  background: rgb(var(--c-secondary)/0.7) !important;
   color: #ffffff !important;
 }
 
@@ -276,11 +331,11 @@ body {
 
 /* 标签/徽章 */
 .dark .bg-primary\/10.text-primary {
-  color: #A78BFA !important;
+  color: rgb(var(--c-primary-light)) !important;
 }
 
 .dark .bg-secondary\/10.text-secondary-dark {
-  color: #F472B6 !important;
+  color: rgb(var(--c-secondary-light)) !important;
 }
 
 /* 自定义滚动条 - 樱花风格 */
@@ -290,17 +345,17 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(124, 58, 237, 0.05);
+  background: rgb(var(--c-primary)/0.05);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #A78BFA, #EC4899);
+  background: linear-gradient(180deg, rgb(var(--c-primary-light)), rgb(var(--c-secondary)));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #7C3AED, #DB2777);
+  background: linear-gradient(180deg, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
 }
 
 /* 页面切换动画 */
@@ -401,7 +456,7 @@ body {
 
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px -5px rgba(124, 58, 237, 0.15), 0 4px 10px -5px rgba(236, 72, 153, 0.1);
+  box-shadow: 0 8px 25px -5px rgb(var(--c-primary)/0.15), 0 4px 10px -5px rgb(var(--c-secondary)/0.1);
 }
 
 /* 按钮点击效果 */
@@ -421,9 +476,31 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+/* ==================== 液态玻璃风格 ==================== */
+/* body[data-glass='liquid'] 时覆盖 .glass：更强折射感的高光边缘 + 饱和度提升 + 悬浮投影 */
+body[data-glass='liquid'] .glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.30));
+  backdrop-filter: blur(20px) saturate(1.65);
+  -webkit-backdrop-filter: blur(20px) saturate(1.65);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.25),
+    0 8px 32px rgba(31, 38, 135, 0.16);
+}
+
+.dark body[data-glass='liquid'] .glass {
+  background: linear-gradient(135deg, rgba(30, 22, 58, 0.72), rgba(16, 12, 34, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.12),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
 /* 渐变文字 */
 .gradient-text {
-  background: linear-gradient(135deg, #7C3AED, #EC4899);
+  background: linear-gradient(135deg, rgb(var(--c-primary)), rgb(var(--c-secondary)));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -465,7 +542,7 @@ body {
 }
 
 .editable-cell:hover {
-  background: rgba(124, 58, 237, 0.08);
+  background: rgb(var(--c-primary)/0.08);
 }
 
 /* Toast 动画 */
@@ -497,7 +574,7 @@ body {
 }
 
 .list-item:hover {
-  background-color: rgba(124, 58, 237, 0.04);
+  background-color: rgb(var(--c-primary)/0.04);
 }
 
 /* 表格布局 - 修复 Tailwind preflight 将表格元素重置为 block 的问题 */
@@ -561,7 +638,7 @@ td .truncate {
   top: -4px;
   right: -4px;
   font-size: 12px;
-  color: #F59E0B;
+  color: rgb(var(--c-warning));
   animation: sparkle 1.5s ease-in-out infinite;
 }
 
