@@ -12,14 +12,12 @@ const state = reactive({
   glass: 'frost',           // 'frost' 毛玻璃 | 'liquid' 液态玻璃
   palette: null,            // null = 默认樱紫；否则 { p: [h,s,l], s: [h,s,l] }
   bgEnabled: false,
-  bgProvider: 'alcy',       // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'wallhaven' | 'custom'
+  bgProvider: 'alcy',       // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
   bgAutoSwitch: true,       // 每次打开页面自动换一张；关闭即固定当前壁纸
   bgCustomUrl: '',
   bgDim: 0.55,              // 遮罩浓度 0~0.9
   bgBlur: 0,                // 背景模糊 0~20px
   bgUrl: '',                // 当前生效的图片地址
-  bgCors: false,            // 当前图是否可取色
-  bgColors: [],             // Wallhaven 返回的壁纸主色（hex 列表）
   bgLoading: false,
   bgFailed: false,          // 运行时标记：当前图片加载失败（不持久化）
 })
@@ -54,6 +52,10 @@ function hexToHsl(hex) {
   return [Math.round(h), Math.round(s * 100), Math.round(l * 100)]
 }
 
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
+}
+
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v))
 
 // 主色亮度钳制在保证白色文字可读的区间
@@ -62,7 +64,7 @@ const safeL = l => clamp(l, 40, 58)
 // ========== 应用 ==========
 
 function applyPalette() {
-  if (typeof document === "undefined") return
+  if (typeof document === 'undefined') return
   const root = document.documentElement.style
   if (!state.palette) {
     ;['--c-primary', '--c-primary-light', '--c-primary-dark', '--c-secondary', '--c-secondary-light', '--c-secondary-dark']
@@ -82,13 +84,13 @@ function applyPalette() {
 }
 
 function applyGlass() {
-  if (typeof document === "undefined") return
+  if (typeof document === 'undefined') return
   if (state.glass === 'liquid') document.body.dataset.glass = 'liquid'
   else delete document.body.dataset.glass
 }
 
 function applyBackground() {
-  if (typeof document === "undefined") return
+  if (typeof document === 'undefined') return
   // 图片加载失败时彻底回到原渐变底色，不留遮罩层影响可读性
   const active = state.bgEnabled && state.bgUrl && !state.bgFailed
   document.body.classList.toggle('with-bg', active)
@@ -104,7 +106,9 @@ function applyBackground() {
   }
 }
 
-// 预载探测：加载失败自动摘掉背景层（API 停服 / 图片被删 / 断网时保证页面观感）
+// ========== 壁纸加载探测 ==========
+
+// 预载探测：加载失败自动摘掉背景层（接口停服 / 图片被删 / 断网时保证页面观感）
 function probeBackground() {
   if (typeof Image === 'undefined') return
   if (!state.bgUrl) return
@@ -112,8 +116,11 @@ function probeBackground() {
   img.onload = () => {
     state.bgFailed = false
     applyBackground()
+    // 启动入场：壁纸就绪后由糊渐清晰
+    clearBootFocus()
   }
   img.onerror = () => {
+    bootFocusPending = false
     if (state.bgFailed) return
     state.bgFailed = true
     applyBackground()
@@ -163,86 +170,41 @@ async function autoSwitchOnStartup() {
 
 // ========== iOS 风格壁纸聚焦动画 ==========
 // 有弹窗打开时壁纸加深模糊（进入"应用"状态），关闭后渐清晰（回到"桌面"状态）；
-// 页面启动时也做一次由糊到清晰的入场。 MutationObserver 统一感知所有 Teleport 弹窗，无需逐处接线
+// 页面启动/刷新时保持模糊直到壁纸加载完成，再由糊渐清晰入场
 let focusObserverStarted = false
+let bootFocusPending = false
+
+function hasFullscreenDialog() {
+  return !!document.querySelector('body > .fixed.inset-0.z-50')
+}
 
 function startFocusObserver() {
   if (focusObserverStarted || typeof MutationObserver === 'undefined' || typeof document === 'undefined') return
   focusObserverStarted = true
   const update = () => {
-    // 全屏遮罩弹窗（z-50）视为"应用"状态；右键菜单等轻浮层不触发。
-    // 排除仍在进出场过渡中的弹窗：打开渐糊随过渡即时生效，关闭渐清晰与淡出同步
-    const hasDialog = !!document.querySelector('body > .fixed.inset-0.z-50')
-    document.body.classList.toggle('bg-focus', hasDialog)
+    // 启动入场期间保持模糊（壁纸就绪后由 clearBootFocus 渐清晰）
+    if (bootFocusPending) { document.body.classList.add('bg-focus'); return }
+    document.body.classList.toggle('bg-focus', hasFullscreenDialog())
   }
+  // class 属性变化也要监听：弹窗进出场只改类，元素可能保留
   const mo = new MutationObserver(update)
   mo.observe(document.body, { childList: true, attributes: true, attributeFilter: ['class'], subtree: false })
   update()
 }
 
+/** 启动入场：壁纸就绪前保持模糊，就绪后 150ms 渐清晰；6s 兜底防挂起 */
 function startupSharpen() {
   if (!document.body.classList.contains('with-bg')) return
+  bootFocusPending = true
   document.body.classList.add('bg-focus')
-  setTimeout(() => {
-    if (!document.body.classList.contains('bg-focus')) return
-    // 弹窗聚焦期间保持模糊，仅无弹窗时渐清晰
-    if (!document.querySelector('body > .fixed.inset-0.z-50')) document.body.classList.remove('bg-focus')
-  }, 350)
+  setTimeout(() => clearBootFocus(), 6000)
 }
 
-/**
- * Wallhaven 连通性诊断：区分「网络层不可达」「跨域被拦」「瞬时故障」
- * 页面内 fetch 失败的具体原因浏览器不会透露，用对照探测缩小范围
- */
-async function diagnoseWallhaven() {
-  const steps = []
-  steps.push({ name: '浏览器在线状态', ok: navigator.onLine, detail: navigator.onLine ? '在线' : '离线' })
-
-  // 不带跨域语义的请求：失败 = 网络层不可达（DNS/防火墙/代理/扩展拦截）
-  let noCorsOk = false, t0 = Date.now()
-  try {
-    await fetch('https://wallhaven.cc/favicon.ico', { mode: 'no-cors', signal: AbortSignal.timeout(8000) })
-    noCorsOk = true
-  } catch {}
-  steps.push({
-    name: '直连请求 (no-cors)',
-    ok: noCorsOk,
-    detail: noCorsOk ? `${Date.now() - t0}ms，服务器可达` : '失败 — 网络层不可达：DNS 污染 / 防火墙 / 广告拦截扩展'
-  })
-
-  // 跨域 API 请求：直连成功而它失败 = 跨域/中间人问题
-  let corsOk = false
-  t0 = Date.now()
-  try {
-    const res = await fetch('https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&atleast=1920x1080', { signal: AbortSignal.timeout(8000) })
-    corsOk = res.ok
-  } catch {}
-  steps.push({
-    name: 'API 跨域请求',
-    ok: corsOk,
-    detail: corsOk ? `${Date.now() - t0}ms，API 正常` : '失败 — Wallhaven API 未开放跨域许可（浏览器永久限制，与网络无关）'
-  })
-
-  // 图片加载（无 CORS 要求）：进一步验证静态资源可达性
-  let imgOk = false
-  t0 = Date.now()
-  try {
-    imgOk = await probeUrl('https://wallhaven.cc/favicon.ico', 8000)
-  } catch {}
-  steps.push({
-    name: '图片资源加载',
-    ok: imgOk,
-    detail: imgOk ? `${Date.now() - t0}ms，静态资源可达` : '失败 — 静态资源不可达'
-  })
-
-  let conclusion
-  if (!navigator.onLine) conclusion = '浏览器处于离线状态，请检查网络连接。'
-  else if (!noCorsOk) conclusion = '结论：网络层不可达。可能是 DNS 污染、防火墙拦截或广告拦截扩展，建议改用樱花源（Alcy）。'
-  else if (!corsOk) conclusion = '结论：Wallhaven API 自身未开放跨域许可，任何浏览器都无法直连（永久限制）。请使用樱花源（Alcy）。'
-  else if (!imgOk) conclusion = '结论：API 正常但静态资源异常，图片可能加载失败，建议改用樱花源（Alcy）。'
-  else conclusion = '结论：Wallhaven 网络与跨域均正常，之前失败应为瞬时故障，可直接重试。'
-  steps.push({ name: '诊断结论', ok: true, detail: conclusion })
-  return steps
+function clearBootFocus() {
+  if (!bootFocusPending) return
+  bootFocusPending = false
+  if (typeof document === 'undefined') return
+  if (!hasFullscreenDialog()) document.body.classList.remove('bg-focus')
 }
 
 function applyAll() {
@@ -276,34 +238,9 @@ function randomizePalette() {
 }
 
 /**
- * 从壁纸主色列表（hex）提取配色：主色取饱和度最高者，
- * 副色取色相差 ≥ 30° 的次鲜艳色；找不到合格颜色时返回 false
- */
-function pickPaletteFromColors() {
-  const candidates = (state.bgColors || [])
-    .map(hexToHsl)
-    .filter(([, s, l]) => s > 26 && l > 22 && l < 80)
-    .sort((a, b) => b[1] - a[1])
-  if (!candidates.length) return false
-  const p = candidates[0]
-  const sec = candidates.find(c => {
-    const dh = Math.abs(c[0] - p[0])
-    return dh >= 30 && dh <= 200
-  })
-  state.palette = {
-    p: [p[0], clamp(p[1], 48, 85), safeL(p[2])],
-    s: sec
-      ? [sec[0], clamp(sec[1], 48, 85), safeL(sec[2])]
-      : [(p[0] + 55) % 360, clamp(p[1], 48, 80), safeL(p[2] + 6)],
-  }
-  applyPalette()
-  return true
-}
-
-/**
  * 通用 canvas 取色：跨域加载图片副本 → 缩样 → 按色相桶统计饱和度权重 →
  * 取主峰为主色、相距 ≥30° 的次峰为副色。
- * 图源未返回 CORS 许可（如樱花接口）时浏览器会拒绝读取像素，reject 并说明原因
+ * 图源未返回 CORS 许可时浏览器会拒绝读取像素，reject 并说明原因
  */
 function extractPaletteFromImage(url) {
   return new Promise((resolve, reject) => {
@@ -357,53 +294,23 @@ function extractPaletteFromImage(url) {
   })
 }
 
-function rgbToHex(r, g, b) {
-  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
-}
-
-/** 按当前源换一张随机背景图；Wallhaven 同时携带可取色的主色元数据，失败时自动降级 */
-async function shuffleBackground() {
+/** 按当前源换一张随机背景图 */
+function shuffleBackground() {
   if (state.bgProvider === 'custom') {
     if (!state.bgCustomUrl.trim()) throw new Error('请先填写图片地址')
-    _applyNewBg(state.bgCustomUrl.trim(), false, [])
-    return
-  }
-  if (state.bgProvider === 'alcy') {
-    // 樱花 Alcy 源：全链路带跨域许可，可直接取色
-    _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`, true, [])
+    _applyNewBg(state.bgCustomUrl.trim())
     return
   }
   if (state.bgProvider === 'dmoe') {
-    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`, false, [])
+    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`)
     return
   }
-  // Wallhaven：动漫分类，SFW，随机排序；不可达时自动降级 Alcy 源
-  state.bgLoading = true
-  try {
-    const seed = Math.random().toString(36).slice(2)
-    const res = await fetch(
-      `https://wallhaven.cc/api/v1/search?categories=010&purity=100&sorting=random&seed=${seed}&atleast=1920x1080`,
-      { signal: AbortSignal.timeout(8000) }
-    )
-    if (!res.ok) throw new Error(`接口返回 ${res.status}`)
-    const json = await res.json()
-    const item = json.data?.[0]
-    if (!item) throw new Error('未获取到壁纸')
-    _applyNewBg(item.path, true, item.colors || [])
-  } catch (e) {
-    // Wallhaven API 无跨域许可，浏览器无法直连；降级：本次改用樱花 Alcy 源
-    _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`, true, [])
-    const reason = e.message === 'Failed to fetch' ? 'API 无跨域许可' : e.message
-    showToast(`Wallhaven 不可用（${reason}），已改用樱花 Alcy 源`, 'warning')
-  } finally {
-    state.bgLoading = false
-  }
+  // 樱花 Alcy 源（默认）：全链路带跨域许可，背景与取色都可用
+  _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`)
 }
 
-function _applyNewBg(url, cors, colors) {
+function _applyNewBg(url) {
   state.bgUrl = url
-  state.bgCors = cors
-  state.bgColors = colors
   state.bgFailed = false
   applyBackground()
   probeBackground()
@@ -417,7 +324,7 @@ async function toggleBackground() {
     applyBackground()
     if (!state.bgUrl) {
       try {
-        await shuffleBackground()
+        shuffleBackground()
         showToast('壁纸背景已开启 🖼️')
       } catch (e) {
         showToast(e.message || '获取壁纸失败', 'error')
@@ -435,7 +342,7 @@ async function toggleBackground() {
 // ========== 持久化与初始化 ==========
 
 watch(state, () => {
-  const { bgLoading, bgFailed, bgSilentProbe, ...persisted } = state
+  const { bgLoading, bgFailed, ...persisted } = state
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)) } catch {}
 }, { deep: true })
 
@@ -443,22 +350,18 @@ export function initAppearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     if (saved) {
-      // 一次性迁移：Wallhaven API 无跨域许可，浏览器无法直连，迁移到樱花 Alcy 源（可在设置中改回）
-      if (saved.bgProvider === 'wallhaven' && !localStorage.getItem('banager_wh_migrated')) {
-        saved.bgProvider = 'alcy'
-        try { localStorage.setItem('banager_wh_migrated', '1') } catch {}
-      }
+      // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
+      if (!saved.bgProvider || saved.bgProvider === 'wallhaven') saved.bgProvider = 'alcy'
       Object.assign(state, saved)
     }
   } catch {}
   state.bgLoading = false
   state.bgFailed = false
-  state.bgSilentProbe = false
   applyAll()
   startFocusObserver()
-  // 启动时探测上次的壁纸是否仍然可用（API 停服 / 图片被删时自动关闭）
+  // 启动时探测上次的壁纸是否仍然可用（接口停服 / 图片被删时自动关闭）
   probeBackground()
-  // 壁纸入场：由糊渐清晰（iOS 风格）
+  // 壁纸入场：保持模糊直到壁纸就绪，再由糊渐清晰（iOS 风格）
   startupSharpen()
   // 自动换图模式：每次打开换一张（新图加载失败自动回退到上一张可用的壁纸）
   if (state.bgEnabled && state.bgAutoSwitch) {
@@ -472,12 +375,10 @@ export function useAppearance() {
     setGlass,
     setPalette,
     randomizePalette,
-    pickPaletteFromColors,
     extractPaletteFromImage,
     shuffleBackground,
     toggleBackground,
     applyBackground,
-    diagnoseWallhaven,
   }
 }
 

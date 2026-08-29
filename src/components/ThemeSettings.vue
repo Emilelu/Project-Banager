@@ -76,11 +76,10 @@
                     <option value="alcy">樱花随机二次元 · Alcy（默认，可取色）</option>
                     <option value="dmoe">樱花随机壁纸 · dmoe</option>
                     <option value="custom">自定义图片地址</option>
-                    <option value="wallhaven">Wallhaven（API 无跨域许可，浏览器不可用）</option>
                   </select>
-                  <button @click="onShuffle" :disabled="state.bgLoading"
-                    class="px-3 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-secondary to-secondary-light text-white hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press disabled:opacity-40">
-                    {{ state.bgLoading ? '⏳ 加载中' : '🔄 换一张' }}
+                  <button @click="onShuffle"
+                    class="px-3 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-secondary to-secondary-light text-white hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">
+                    🔄 换一张
                   </button>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" placeholder="https://... 直链图片地址"
@@ -103,16 +102,12 @@
                   <p v-if="bgFailed" class="text-xs text-danger mt-1">⚠️ 图片加载失败，请换一张</p>
                 </div>
                 <div class="mt-3 space-y-2">
-                  <div class="flex items-center gap-3">
-                    <label class="flex items-center gap-3 text-xs text-gray-500 flex-1">
-                      <span class="w-16 shrink-0">遮罩浓度</span>
-                      <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
-                        class="flex-1 accent-pink-500" />
-                      <span class="w-10 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
-                    </label>
-                    <button @click="resetBgTuning" title="恢复默认（遮罩 55%、无模糊）"
-                      class="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认</button>
-                  </div>
+                  <label class="flex items-center gap-3 text-xs text-gray-500">
+                    <span class="w-16 shrink-0">遮罩浓度</span>
+                    <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
+                      class="flex-1 accent-pink-500" />
+                    <span class="w-10 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
+                  </label>
                   <label class="flex items-center gap-3 text-xs text-gray-500">
                     <span class="w-16 shrink-0">背景模糊</span>
                     <input type="range" min="0" max="20" step="1" v-model.number="state.bgBlur" @input="applyBackground()"
@@ -126,21 +121,9 @@
                     🎨 从壁纸取色
                   </button>
                   <span v-if="!canPickFromBg" class="text-xs text-gray-400">先获取一张壁纸</span>
-                  <span v-else-if="state.bgCors && state.bgColors.length > 0" class="text-xs text-gray-400">使用 Wallhaven 主色数据</span>
                   <span v-else class="text-xs text-gray-400">读取壁纸像素取色（图源需开放跨域权限）</span>
-                </div>
-                <!-- 网络诊断 -->
-                <div class="mt-3 pt-3 border-t border-white/20">
-                  <button @click="runDiag" :disabled="diagRunning"
-                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press disabled:opacity-40">
-                    {{ diagRunning ? '⏳ 诊断中…' : '🔍 诊断 Wallhaven 连通性' }}
-                  </button>
-                  <div v-if="diagSteps.length" class="mt-2 p-3 rounded-xl bg-black/80 text-[0.7rem] leading-relaxed font-mono space-y-1">
-                    <div v-for="s in diagSteps" :key="s.name"
-                      :class="s.name === '诊断结论' ? 'text-amber-300 font-bold' : s.ok ? 'text-green-400' : 'text-red-400'">
-                      {{ s.ok ? '✓' : '✗' }} {{ s.name }}：{{ s.detail }}
-                    </div>
-                  </div>
+                  <button @click="resetBgTuning" title="恢复默认（遮罩 55%、无模糊）"
+                    class="ml-auto px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认</button>
                 </div>
               </template>
               <p v-else class="text-xs text-gray-400">开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。</p>
@@ -164,7 +147,7 @@ import { showToast } from '../composables/useToast'
 defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
-const { state, setGlass, setPalette, randomizePalette, pickPaletteFromColors, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground, diagnoseWallhaven } = useAppearance()
+const { state, setGlass, setPalette, randomizePalette, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -220,12 +203,7 @@ const onShuffle = async () => {
 }
 
 const onPickFromBg = async () => {
-  // Wallhaven 优先用接口自带的主色元数据；其他源尝试读取像素（取决于图源跨域权限）
-  if (state.bgCors && state.bgColors.length > 0) {
-    if (pickPaletteFromColors()) showToast('已从壁纸取色 🎨')
-    else showToast('这张壁纸颜色太素，换一张试试', 'warning')
-    return
-  }
+  // 读取壁纸像素取色（Alcy 源已开放跨域权限；图源无跨域许可时会明确提示）
   try {
     await extractPaletteFromImage(state.bgUrl)
     showToast('已从壁纸取色 🎨')
@@ -237,19 +215,6 @@ const onPickFromBg = async () => {
 const onBgError = () => {
   bgFailed.value = true
   showToast('背景图片加载失败，请换一张', 'error')
-}
-
-// Wallhaven 连通性诊断
-const diagRunning = ref(false)
-const diagSteps = ref([])
-const runDiag = async () => {
-  diagRunning.value = true
-  diagSteps.value = []
-  try {
-    diagSteps.value = await diagnoseWallhaven()
-  } finally {
-    diagRunning.value = false
-  }
 }
 
 // 切换图源后提示重新换图
