@@ -14,7 +14,7 @@
             </select>
           </div>
           <div class="flex items-center gap-3 text-sm">
-            <span class="px-3 py-1.5 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl">
+            <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl">
               本年: {{ yearCount }}部
             </span>
             <span class="px-3 py-1.5 bg-gray-100 text-gray-600 font-bold rounded-xl">
@@ -31,18 +31,18 @@
           </div>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
-          <button @click="openAddDialog" class="px-3 py-1.5 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加记录</button>
-          <button :disabled="!selected" @click="openEditDialog" class="px-3 py-1.5 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
-          <button :disabled="!selected" @click="deleteItem" class="px-3 py-1.5 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 删除</button>
+          <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加记录</button>
+          <button :disabled="!selected" @click="openEditDialog" class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
+          <button :disabled="!selected" @click="deleteItem" class="px-4 py-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 删除</button>
           <div class="border-l border-white/30 h-6 mx-1"></div>
-          <button @click="toggleBatchMode" class="px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all btn-press" :class="batchMode?'bg-gradient-to-r from-primary to-primary-light shadow-lg shadow-primary/30':'bg-gradient-to-r from-gray-400 to-gray-500'">☑️ 批量选择</button>
-          <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="px-3 py-1.5 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-danger/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
-          <button v-if="batchMode" @click="toggleSelectAll" class="px-3 py-1.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press">{{ isAllChecked?'取消全选':'全选' }}</button>
-          <button @click="openClearDialog" class="px-3 py-1.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press">💣 清空列表</button>
+          <button @click="toggleBatchMode" class="px-4 py-2 text-white rounded-xl text-sm font-medium transition-all btn-press" :class="batchMode?'bg-gradient-to-r from-primary to-primary-light shadow-lg shadow-primary/30':'bg-gradient-to-r from-gray-400 to-gray-500'">☑️ 批量选择</button>
+          <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="px-4 py-2 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-danger/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
+          <button v-if="batchMode" @click="toggleSelectAll" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">{{ isAllChecked?'取消全选':'全选' }}</button>
+          <button @click="openClearDialog" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">💣 清空列表</button>
           <div class="border-l border-white/30 h-6 mx-1"></div>
-          <button @click="openAddYearDialog" class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">✨ 添加年份</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="editYearLabel" class="px-3 py-1.5 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">✏️ 编辑年份</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="openDeleteYearDialog" class="px-3 py-1.5 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press">🗑️ 删除年份</button>
+          <button @click="openAddYearDialog" class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">✨ 添加年份</button>
+          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="editYearLabel" class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">✏️ 编辑年份</button>
+          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="openDeleteYearDialog" class="px-4 py-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">🗑️ 删除年份</button>
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
@@ -250,7 +250,7 @@
             <div class="px-6 py-5 space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">作品名称</label>
-                <input v-model="form.name" type="text" placeholder="请输入作品名称"
+                <input ref="dialogNameInput" v-model="form.name" type="text" placeholder="请输入作品名称"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div>
@@ -353,25 +353,14 @@
         </div>
       </transition>
     </Teleport>
-
-    <!-- Toast -->
-    <Teleport to="body">
-      <transition name="toast">
-        <div v-if="toast.show" class="fixed top-6 right-6 z-[100]">
-          <div class="px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-slide-down"
-            :class="toast.type==='success'?'bg-gradient-to-r from-success to-emerald-400':toast.type==='error'?'bg-gradient-to-r from-danger to-red-400':'bg-gradient-to-r from-warning to-amber-400'">
-            {{ toast.message }}
-          </div>
-        </div>
-      </transition>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
-import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears } from '../composables/useDatePicker'
+import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey } from '../composables/useDatePicker'
+import { showToast } from '../composables/useToast'
 
 const years = ref([])
 const watchedList = ref([])
@@ -416,8 +405,15 @@ const sortedYears = computed(() => {
 })
 
 // 排序：默认按观看日期从早到晚（日期格式统一为 YYYY/MM/DD HH:mm，取数字位直接比较即按时间序）
-const sortField = ref('watch_date')
-const sortOrder = ref('asc')
+// 排序偏好持久化到 localStorage
+const SORT_KEY_F = 'watched_sort_field'
+const SORT_KEY_O = 'watched_sort_order'
+const sortField = ref(localStorage.getItem(SORT_KEY_F) || 'watch_date')
+const sortOrder = ref(localStorage.getItem(SORT_KEY_O) || 'asc')
+watch([sortField, sortOrder], ([f, o]) => {
+  localStorage.setItem(SORT_KEY_F, f)
+  localStorage.setItem(SORT_KEY_O, o)
+})
 const toggleSort = (field) => {
   if (sortField.value === field) {
     sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -428,10 +424,7 @@ const toggleSort = (field) => {
 }
 const compareByField = (a, b) => {
   if (sortField.value === 'watch_date') {
-    const da = String(a.watch_date || '').replace(/\D/g, '')
-    const db = String(b.watch_date || '').replace(/\D/g, '')
-    if (da !== db) return da < db ? -1 : 1
-    return 0
+    return compareDateKey(a.watch_date, b.watch_date)
   }
   return String(a[sortField.value] || '').localeCompare(String(b[sortField.value] || ''), 'zh-CN')
 }
@@ -652,12 +645,6 @@ const confirmActionFn = async () => {
   }
 }
 
-const toast = ref({ show:false, message:'', type:'success' })
-const showToast = (message, type='success') => {
-  toast.value = { show:true, message, type }
-  setTimeout(() => { toast.value.show = false }, 2500)
-}
-
 const fetchYears = async () => {
   try {
     const res = await watchedYearsApi.getAll()
@@ -780,14 +767,21 @@ const saveYearForm = async () => {
 }
 
 // ========== 记录操作 ==========
+const dialogNameInput = ref(null)
+const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
+
+// 仅当选中的是真实年份标签时才预填观看日期（排除「全部年份」「未分类」两个哨兵值）
+const isRealYear = (y) => !!y && y !== '__all__' && y !== '__unclassified__'
+
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name:'', watch_date: selectedYear.value === '__unclassified__' ? '' : selectedYear.value, url:'', url_params:'', notes:'' }
+  form.value = { name:'', watch_date: isRealYear(selectedYear.value) ? selectedYear.value : '', url:'', url_params:'', notes:'' }
   formTime.value = ''
   formDateValidationError.value = ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
   showDialog.value = true
+  focusNameInput()
 }
 
 const openEditDialog = () => {
@@ -809,6 +803,7 @@ const openEditDialog = () => {
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
   showDialog.value = true
+  focusNameInput()
 }
 
 const saveForm = async () => {

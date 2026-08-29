@@ -49,3 +49,14 @@ export function normalizeEpisodeInput(val) {
   const n = parseFloat(s)
   return isNaN(n) ? '0' : String(n)
 }
+
+// 拼接条目的动态链接：url + url_params，{集数} 按存储原样替换（存 01 输出 01）
+export function buildItemUrl(item) {
+  if (!item?.url) return ''
+  let url = item.url
+  if (item.url_params) {
+    const params = item.url_params.replace(/\{集数\}/g, item.current_episode || 0)
+    url += (url.includes('?') ? '&' : '?') + params
+  }
+  return url
+}

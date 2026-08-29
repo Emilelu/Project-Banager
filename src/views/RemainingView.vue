@@ -4,40 +4,48 @@
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-3">
-          <span class="px-3 py-1.5 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl text-sm">
+          <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl text-sm">
             等番: {{ remainingList.length }}部
           </span>
           <!-- 本季新番链接（yuc.wiki） -->
           <a :href="currentSeasonLink.url" target="_blank" rel="noopener"
-            class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press inline-flex items-center gap-1">
+            class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press inline-flex items-center gap-1">
             📺 {{ currentSeasonLink.label }}
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
           </a>
           <div class="inline-block">
-            <button ref="seasonMenuBtn" @click="toggleSeasonMenu" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-xl text-xs font-medium hover:bg-gray-200 transition btn-press">📅 查看新番 ▾</button>
+            <button ref="seasonMenuBtn" @click="toggleSeasonMenu" class="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-200 transition btn-press">📅 查看新番 ▾</button>
+          </div>
+          <div class="relative">
+            <input v-model="searchQuery" type="text" placeholder="搜索番剧名称..."
+              class="pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80 w-48" />
+            <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
           </div>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <button @click="openAddDialog"
-            class="px-3 py-1.5 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加等番</button>
+            class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加等番</button>
           <button @click="openBatchAddDialog"
-            class="px-3 py-1.5 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">📝 批量添加</button>
+            class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">📝 批量添加</button>
           <button :disabled="!selected" @click="openEditDialog"
-            class="px-3 py-1.5 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
+            class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
           <button :disabled="!selected" @click="openMoveDialog"
-            class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">📺 移至追番</button>
+            class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">📺 移至追番</button>
           <button :disabled="!selected" @click="deleteItem"
-            class="px-3 py-1.5 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 删除</button>
+            class="px-4 py-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 删除</button>
           <div class="border-l border-white/30 h-6 mx-1"></div>
           <button @click="toggleBatchMode"
-            class="px-3 py-1.5 text-white rounded-xl text-xs font-medium transition-all btn-press"
+            class="px-4 py-2 text-white rounded-xl text-sm font-medium transition-all btn-press"
             :class="batchMode ? 'bg-gradient-to-r from-primary to-primary-light shadow-lg shadow-primary/30' : 'bg-gradient-to-r from-gray-400 to-gray-500'">☑️ 批量选择</button>
           <button v-if="batchMode" :disabled="checkedIds.length === 0" @click="batchDelete"
-            class="px-3 py-1.5 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-danger/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
+            class="px-4 py-2 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-danger/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
           <button v-if="batchMode" @click="toggleSelectAll"
-            class="px-3 py-1.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press">{{ isAllChecked ? '取消全选' : '全选' }}</button>
+            class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">{{ isAllChecked ? '取消全选' : '全选' }}</button>
           <button @click="openClearDialog"
-            class="px-3 py-1.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-xs font-medium hover:shadow-lg transition-all btn-press">💣 清空列表</button>
+            class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">💣 清空列表</button>
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
@@ -75,7 +83,7 @@
           <tr v-if="paginatedList.length === 0">
             <td :colspan="batchMode ? 5 : 4" class="py-16 text-center text-gray-400">
               <div class="text-4xl mb-3 animate-float">📭</div>
-              <div>暂无等番记录</div>
+              <div>{{ searchQuery ? '没有找到匹配的记录' : '暂无等番记录' }}</div>
             </td>
           </tr>
           <tr v-for="(item, idx) in paginatedList" :key="item.id"
@@ -233,7 +241,7 @@
             <div class="px-6 py-5 space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">番剧名称</label>
-                <input v-model="form.name" type="text" placeholder="请输入番剧名称"
+                <input ref="dialogNameInput" v-model="form.name" type="text" placeholder="请输入番剧名称"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div>
@@ -356,34 +364,30 @@
         </div>
       </transition>
     </Teleport>
-
-    <!-- Toast -->
-    <Teleport to="body">
-      <transition name="toast">
-        <div v-if="toast.show" class="fixed top-6 right-6 z-[100]">
-          <div class="px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-slide-down"
-            :class="toast.type === 'success' ? 'bg-gradient-to-r from-success to-emerald-400' : toast.type === 'error' ? 'bg-gradient-to-r from-danger to-red-400' : 'bg-gradient-to-r from-warning to-amber-400'">
-            {{ toast.message }}
-          </div>
-        </div>
-      </transition>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { remainingApi, batchApi } from '../db/api'
-import { dateInputToFormat, formatToDateInput } from '../composables/useDatePicker'
+import { dateInputToFormat, formatToDateInput, compareDateKey } from '../composables/useDatePicker'
+import { showToast } from '../composables/useToast'
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const remainingList = ref([])
 const selected = ref(null)
 
-// 排序
-const sortField = ref('')
-const sortOrder = ref('asc')
+// 排序：偏好持久化到 localStorage；预计日期用数字位比较（兼容 2025/07、2025/07/15 混排）
+const searchQuery = ref('')
+const SORT_KEY_F = 'remaining_sort_field'
+const SORT_KEY_O = 'remaining_sort_order'
+const sortField = ref(localStorage.getItem(SORT_KEY_F) || '')
+const sortOrder = ref(localStorage.getItem(SORT_KEY_O) || 'asc')
+watch([sortField, sortOrder], ([f, o]) => {
+  localStorage.setItem(SORT_KEY_F, f)
+  localStorage.setItem(SORT_KEY_O, o)
+})
 const toggleSort = (field) => {
   if (sortField.value === field) {
     sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -394,11 +398,15 @@ const toggleSort = (field) => {
 }
 const sortedRemainingList = computed(() => {
   let list = remainingList.value
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    list = list.filter(item => item.name.toLowerCase().includes(q))
+  }
   if (sortField.value) {
     list = [...list].sort((a, b) => {
-      const va = String(a[sortField.value] || '')
-      const vb = String(b[sortField.value] || '')
-      let cmp = va.localeCompare(vb, 'zh-CN')
+      const cmp = sortField.value === 'expected_date'
+        ? compareDateKey(a.expected_date, b.expected_date)
+        : String(a[sortField.value] || '').localeCompare(String(b[sortField.value] || ''), 'zh-CN')
       return sortOrder.value === 'asc' ? cmp : -cmp
     })
   }
@@ -518,6 +526,7 @@ const seasonLinks = computed(() => {
     { label: `${year}年 春季新番 (4月)`, url: `https://yuc.wiki/${year}04` },
     { label: `${year}年 夏季新番 (7月)`, url: `https://yuc.wiki/${year}07` },
     { label: `${year}年 秋季新番 (10月)`, url: `https://yuc.wiki/${year}10` },
+    { label: `${year + 1}年 冬季新番 (1月)`, url: `https://yuc.wiki/${year + 1}01` },
     { label: `新番卫星观测站 (未开播)`, url: 'https://yuc.wiki/new' },
   ]
 })
@@ -628,12 +637,6 @@ const confirmActionFn = async () => {
   }
 }
 
-const toast = ref({ show: false, message: '', type: 'success' })
-const showToast = (message, type = 'success') => {
-  toast.value = { show: true, message, type }
-  setTimeout(() => { toast.value.show = false }, 2500)
-}
-
 const fetchData = async () => {
   try {
     const res = await remainingApi.getAll()
@@ -667,10 +670,14 @@ const saveEdit = async () => {
 }
 
 // ========== 对话框操作 ==========
+const dialogNameInput = ref(null)
+const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
+
 const openAddDialog = () => {
   dialogMode.value = 'add'
   form.value = { name: '', expected_date: '', url: '', url_params: '', notes: '' }
   showDialog.value = true
+  focusNameInput()
 }
 
 const openEditDialog = () => {
@@ -684,6 +691,7 @@ const openEditDialog = () => {
     notes: selected.value.notes || ''
   }
   showDialog.value = true
+  focusNameInput()
 }
 
 const saveForm = async () => {
@@ -701,9 +709,14 @@ const saveForm = async () => {
   } catch { showToast('操作失败', 'error') }
 }
 
+// 「移至追番」记住上次选择的星期和时间，作为下次默认值
+const MOVE_KEY = 'banager_move_to_watching'
+
 const openMoveDialog = () => {
   if (!selected.value) return
-  moveForm.value = { day_of_week: '', time_slot: '' }
+  let saved = {}
+  try { saved = JSON.parse(localStorage.getItem(MOVE_KEY)) || {} } catch { saved = {} }
+  moveForm.value = { day_of_week: saved.day_of_week || '', time_slot: saved.time_slot || '' }
   showMoveDialog.value = true
 }
 
@@ -711,7 +724,10 @@ const moveToWatching = async () => {
   if (!selected.value) return
   try {
     const res = await remainingApi.moveToWatching(selected.value.id, moveForm.value)
-    if (res.data.success) { showToast('已移至追番列表 📺'); showMoveDialog.value = false; selected.value = null; await fetchData() }
+    if (res.data.success) {
+      localStorage.setItem(MOVE_KEY, JSON.stringify({ day_of_week: moveForm.value.day_of_week, time_slot: moveForm.value.time_slot }))
+      showToast('已移至追番列表 📺'); showMoveDialog.value = false; selected.value = null; await fetchData()
+    }
     else showToast(res.data.error || '操作失败', 'error')
   } catch { showToast('操作失败', 'error') }
 }

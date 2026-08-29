@@ -109,3 +109,12 @@ export function formatToDateInput(formattedValue) {
   const datePart = formattedValue.split(' ')[0]
   return datePart.replace(/\//g, '-')
 }
+
+// 日期字符串比较：取数字位直接比较，兼容 2025、2025/07、2025/07/15 14:30、2014~2017 混排
+// 日期存储时已零填充，数字串的字典序即时间序；短前缀（纯年份）排在同年前面
+export function compareDateKey(a, b) {
+  const da = String(a || '').replace(/\D/g, '')
+  const db = String(b || '').replace(/\D/g, '')
+  if (da === db) return 0
+  return da < db ? -1 : 1
+}
