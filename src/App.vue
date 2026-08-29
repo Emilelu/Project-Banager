@@ -43,7 +43,10 @@
             <span>📂</span><span>导入恢复</span>
           </button>
         </div>
-        <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak" class="hidden" @change="importDb" />
+        <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak" class="hidden" @change="onBackupFileChosen" />
+        <div class="text-center text-xs" :class="backupWarning ? 'text-amber-300 font-medium' : 'text-white/40'">
+          💾 上次备份: {{ backupLabel }}
+        </div>
         <div class="flex items-center justify-center gap-2 text-white/30 text-xs">
           <span class="animate-sparkle">✦</span>
           <span>Standalone</span>
@@ -81,6 +84,34 @@
         </router-view>
       </main>
     </div>
+
+    <!-- 全局 Toast 通知 -->
+    <ToastHost />
+
+    <!-- 导入备份确认对话框 -->
+    <Teleport to="body">
+      <transition name="modal-overlay">
+        <div v-if="showImportConfirm" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[8px]" @click="cancelImport"></div>
+      </transition>
+      <transition name="modal">
+        <div v-if="showImportConfirm" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto">
+            <div class="px-6 py-5 text-center">
+              <div class="text-4xl mb-3">📂</div>
+              <h3 class="text-lg font-bold text-gray-800 mb-2">导入备份</h3>
+              <p class="text-sm text-gray-500">
+                导入备份将<b class="text-danger">覆盖当前所有数据</b>！<br />
+                文件：<span class="font-semibold text-gray-700">{{ pendingImportFile?.name }}</span>
+              </p>
+            </div>
+            <div class="px-6 py-4 border-t border-white/20 flex justify-center gap-3">
+              <button @click="cancelImport" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">取消</button>
+              <button @click="confirmImportDb" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">确认导入</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -89,11 +120,24 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from './composables/useTheme'
 import { getDb } from './db/index'
+import { showToast } from './composables/useToast'
+import ToastHost from './components/ToastHost.vue'
 
 const route = useRoute()
 const currentTime = ref('')
 const fileInputRef = ref(null)
 const { theme, isDark, toggleTheme } = useTheme()
+
+const BACKUP_KEY = 'banager_last_backup'
+const lastBackupTs = ref(0)
+
+const backupLabel = computed(() => {
+  if (!lastBackupTs.value) return '从未备份'
+  const days = Math.floor((Date.now() - lastBackupTs.value) / 86400000)
+  return days <= 0 ? '今天' : `${days} 天前`
+})
+// 从未备份或超过一周未备份时高亮提醒
+const backupWarning = computed(() => !lastBackupTs.value || (Date.now() - lastBackupTs.value > 7 * 86400000))
 
 // 导出数据库为 .db 文件
 async function exportDb() {
@@ -109,9 +153,12 @@ async function exportDb() {
     a.download = `bangumi_backup_${ts}.db`
     a.click()
     URL.revokeObjectURL(url)
+    localStorage.setItem(BACKUP_KEY, String(Date.now()))
+    lastBackupTs.value = Date.now()
+    showToast('备份已导出 💾')
   } catch (e) {
     console.error('导出失败:', e)
-    alert('导出失败: ' + e.message)
+    showToast('导出失败: ' + e.message, 'error')
   }
 }
 
@@ -120,32 +167,40 @@ function triggerImportDb() {
   fileInputRef.value?.click()
 }
 
-// 从 .db 文件恢复数据库
-async function importDb(event) {
+// 选择备份文件后弹确认框（替代原生 confirm）
+const showImportConfirm = ref(false)
+const pendingImportFile = ref(null)
+
+function onBackupFileChosen(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  pendingImportFile.value = file
+  showImportConfirm.value = true
+}
 
-  const confirmed = confirm(`导入备份将覆盖当前所有数据！\n\n文件: ${file.name}\n\n确定要继续吗？`)
-  if (!confirmed) {
-    event.target.value = ''
-    return
-  }
+function cancelImport() {
+  showImportConfirm.value = false
+  pendingImportFile.value = null
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
 
+// 从备份文件恢复数据库
+async function confirmImportDb() {
+  const file = pendingImportFile.value
+  showImportConfirm.value = false
+  pendingImportFile.value = null
+  if (fileInputRef.value) fileInputRef.value.value = ''
+  if (!file) return
   try {
     const arrayBuffer = await file.arrayBuffer()
-    const data = new Uint8Array(arrayBuffer)
-
     const db = await getDb()
-    db.importDb(data) // 调用数据库的 importDb 方法
+    db.importDb(new Uint8Array(arrayBuffer))
     db.save() // 持久化到 IndexedDB
-
-    alert('导入成功！页面将刷新以加载新数据。')
-    window.location.reload()
+    showToast('导入成功！页面即将刷新')
+    setTimeout(() => window.location.reload(), 900)
   } catch (e) {
     console.error('导入失败:', e)
-    alert('导入失败: ' + e.message)
-  } finally {
-    event.target.value = ''
+    showToast('导入失败: ' + e.message, 'error')
   }
 }
 
@@ -194,6 +249,7 @@ const updateTime = () => {
 
 onMounted(() => {
   updateTime()
+  lastBackupTs.value = parseInt(localStorage.getItem(BACKUP_KEY)) || 0
   timer = setInterval(updateTime, 1000)
 })
 

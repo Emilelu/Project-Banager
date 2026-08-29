@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 flex flex-col min-h-full" @click="handleRootClick">
+  <div class="space-y-5 flex flex-col min-h-full">
     <!-- 等番本月提示 -->
     <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3 shrink-0">
       <div class="flex items-center justify-between">
@@ -55,56 +55,62 @@
         </div>
         <div v-for="(day, colIdx) in weekDays" :key="'col-'+day"
           class="border-r border-white/10 last:border-r-0 min-h-[18.75rem] flex flex-col bg-white/30">
-          <div v-for="item in getItemsByDay(day)" :key="item.id"
-            class="watching-card flex-1 px-3 py-2.5 border-b border-white/10 cursor-pointer transition-all duration-200 group relative"
-            :class="[batchMode && checkedIds.includes(item.id)?'bg-danger/10 border-l-3 border-l-danger':selected?.id===item.id?'bg-primary/15 border-l-3 border-l-primary':'hover:bg-primary/5']"
-            @click="batchMode?toggleCheck(item.id):selectItem(item)"
-            @mousedown="handleCardMiddleClick($event, item)"
-            @contextmenu.prevent="!batchMode && openContextMenu($event,item)">
-            <div v-if="batchMode" class="absolute top-1 left-1 z-10" @click.stop="toggleCheck(item.id)">
-              <div class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
-                :class="checkedIds.includes(item.id)?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
-                <svg v-if="checkedIds.includes(item.id)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-              </div>
-            </div>
-            <div @dblclick.stop="!batchMode && startEdit(item,'name')" class="editable-cell" :class="{'ml-5': batchMode}">
-              <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
-                @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors">{{ item.name }}</span>
-              <a v-if="item.url" :href="buildUrl(item)" target="_blank" rel="noopener" @click.stop
-                class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center" title="打开链接">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-              </a>
-            </div>
-            <div class="flex items-center gap-1 mt-0.5">
-              <span class="text-sm font-bold text-primary">e</span>
-              <span @dblclick.stop="startEdit(item,'current_episode')" class="editable-cell">
-                <input v-if="editing?.id===item.id&&editing?.field==='current_episode'" v-model.number="editValue"
-                  type="number" min="0" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit"
-                  class="inline-edit-input w-16" autofocus />
-                <span v-else class="text-sm font-bold text-primary">{{ item.current_episode }}</span>
-              </span>
-              <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 ml-auto">
-                <button @click.stop="incrementEpisode(item)" class="w-6 h-6 rounded bg-success/80 text-white text-sm flex items-center justify-center hover:bg-success transition btn-press" title="+1集">+</button>
-                <button @click.stop="decrementEpisode(item)" class="w-6 h-6 rounded bg-warning/80 text-white text-sm flex items-center justify-center hover:bg-warning transition btn-press" title="-1集">-</button>
-              </div>
-            </div>
-            <div @dblclick.stop="startEdit(item,'time_slot')" class="editable-cell">
-              <input v-if="editing?.id===item.id&&editing?.field==='time_slot'" v-model="editValue"
-                @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm text-gray-500 font-medium" :class="item.time_slot ? '' : 'text-gray-400 font-normal'">{{ item.time_slot || '' }}</span>
-            </div>
-            <div @dblclick.stop="startEdit(item,'notes')" class="editable-cell">
-              <input v-if="editing?.id===item.id&&editing?.field==='notes'" v-model="editValue"
-                @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '' }}</span>
-            </div>
-
-          </div>
+          <WatchingCard v-for="item in getItemsByDay(day)" :key="item.id" class="flex-1"
+            :item="item"
+            :selected="selected?.id===item.id"
+            :batch-mode="batchMode"
+            :checked="checkedIds.includes(item.id)"
+            :editing="editing"
+            v-model:editValue="editValue"
+            @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
+            @toggle-check="toggleCheck(item.id)"
+            @context-menu="!batchMode && openContextMenu($event, item)"
+            @middle-click="handleCardMiddleClick($event, item)"
+            @start-edit="startEdit(item, $event)"
+            @save-edit="saveEdit"
+            @cancel-edit="cancelEdit"
+            @increment="incrementEpisode(item)"
+            @decrement="decrementEpisode(item)" />
           <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center text-gray-300 text-sm">
             <span class="animate-pulse-soft">✨ 暂无</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 空状态引导 -->
+    <div v-if="watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-8 text-center shrink-0">
+      <div class="text-4xl mb-2 animate-float">📺</div>
+      <p class="text-sm text-gray-500 mb-4">还没有追番记录，从添加第一部番剧或导入 Excel 开始吧</p>
+      <div class="flex items-center justify-center gap-3">
+        <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加番剧</button>
+        <router-link to="/import" class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">📥 从 Excel 导入</router-link>
+      </div>
+    </div>
+
+    <!-- 未排期：未分配更新星期的番剧 -->
+    <div v-if="unscheduledItems.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-4 py-3 shrink-0">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="px-2.5 py-1 bg-warning/10 text-warning-dark rounded-lg text-sm font-bold">📋 未排期 {{ unscheduledItems.length }} 部</span>
+        <span class="text-xs text-gray-400">未分配更新星期，点击选中后「✏️ 编辑」选择星期即可入列</span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <WatchingCard v-for="item in unscheduledItems" :key="item.id" class="w-64"
+          :item="item"
+          :selected="selected?.id===item.id"
+          :batch-mode="batchMode"
+          :checked="checkedIds.includes(item.id)"
+          :editing="editing"
+          v-model:editValue="editValue"
+          @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
+          @toggle-check="toggleCheck(item.id)"
+          @context-menu="!batchMode && openContextMenu($event, item)"
+          @middle-click="handleCardMiddleClick($event, item)"
+          @start-edit="startEdit(item, $event)"
+          @save-edit="saveEdit"
+          @cancel-edit="cancelEdit"
+          @increment="incrementEpisode(item)"
+          @decrement="decrementEpisode(item)" />
       </div>
     </div>
 
@@ -115,7 +121,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[32.5rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[32.5rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode==='add'?'✨':'✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode==='add'?'添加番剧':'编辑番剧' }}</h3>
@@ -123,7 +129,7 @@
             <div class="px-6 py-5 space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">番剧名称</label>
-                <input v-model="form.name" type="text" placeholder="请输入番剧名称"
+                <input ref="dialogNameInput" v-model="form.name" type="text" placeholder="请输入番剧名称"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div class="grid grid-cols-2 gap-4">
@@ -172,11 +178,14 @@
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">当前集数</label>
+                <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                  <span>当前集数</span>
+                  <span class="text-xs text-gray-400">支持 01、02 补零格式</span>
+                </label>
                 <div class="flex items-center gap-2">
                   <button type="button" @click="formEpisodeDecrement"
                     class="w-10 h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 hover:bg-primary/10 transition btn-press text-primary font-bold text-lg">−</button>
-                  <input v-model.number="form.current_episode" type="number" min="0"
+                  <input v-model="form.current_episode" type="text" inputmode="decimal" placeholder="如: 0、9、01、26.19"
                     class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                   <button type="button" @click="formEpisodeIncrement"
                     class="w-10 h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 hover:bg-primary/10 transition btn-press text-primary font-bold text-lg">+</button>
@@ -184,7 +193,7 @@
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">链接 URL</label>
-                <input v-model="form.url" type="text" placeholder="如: https://...（粘贴含 ? 的链接会自动分离参数）"
+                <input v-model="form.url" @input="onUrlInput" type="text" placeholder="如: https://...（粘贴含 ? 的链接会自动分离参数）"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                 <div class="mt-2 flex items-center gap-1.5 flex-wrap">
                   <span class="text-xs text-gray-400">快速填充:</span>
@@ -233,7 +242,7 @@
                 </label>
                 <input ref="urlParamsInput" v-model="form.url_params" type="text" placeholder='如: keyword={集数} 或 keyword={集数}&page=1'
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914</p>
+                <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914；集数为 01、02 等补零格式时按原样替换</p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
@@ -257,7 +266,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDateDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="moveToWatched">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="moveToWatched">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">✅</span>
               <h3 class="text-lg font-bold gradient-text">选择观看日期</h3>
@@ -327,9 +336,9 @@
     <!-- 右键菜单 -->
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️ 编辑</button>
-          <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
+          <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
           <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">📋 移至等番</button>
           <button @click="ctxMoveToWatched" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✅ 移至已看</button>
           <div class="border-t border-white/20 my-1"></div>
@@ -346,7 +355,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction==='clear'?'💣':confirmAction==='batchDelete'?'🗑️':confirmAction==='delete'?'🗑️':'📋' }}</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear'?'确认清空':confirmAction==='batchDelete'?'批量删除':confirmAction==='delete'?'确认删除':'移至等番' }}</h3>
@@ -364,18 +373,6 @@
         </div>
       </transition>
     </Teleport>
-
-    <!-- Toast -->
-    <Teleport to="body">
-      <transition name="toast">
-        <div v-if="toast.show" class="fixed top-6 right-6 z-[100]">
-          <div class="px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-slide-down"
-            :class="toast.type==='success'?'bg-gradient-to-r from-success to-emerald-400':toast.type==='error'?'bg-gradient-to-r from-danger to-red-400':'bg-gradient-to-r from-warning to-amber-400'">
-            {{ toast.message }}
-          </div>
-        </div>
-      </transition>
-    </Teleport>
   </div>
 </template>
 
@@ -383,6 +380,9 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchingApi, remainingApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput } from '../composables/useDatePicker'
+import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl } from '../composables/useEpisode'
+import { showToast } from '../composables/useToast'
+import WatchingCard from '../components/WatchingCard.vue'
 
 const weekDays = ['周一','周二','周三','周四','周五','周六','周日']
 const dayIcons = ['🌙','🔥','🌊','⚡','🌸','🎉','☀️']
@@ -447,12 +447,15 @@ const currentMonthRemaining = computed(() => {
   })
 })
 
-// 点击空白处取消编辑/取消选中
-const handleRootClick = (e) => {
+// 未排期：未分配更新星期的番剧（周历按星期分列，空星期的记录不显示在任何列）
+const unscheduledItems = computed(() => watchingList.value.filter(item => !item.day_of_week))
+
+// 点击番剧卡片和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
+const onDocClick = (e) => {
   if (editing.value && !e.target.closest('input, select, textarea')) {
     saveEdit()
   }
-  if (e.target.closest('.watching-card, button, input, select, textarea, .glass, a, [role="dialog"]')) return
+  if (e.target.closest('.watching-card, button, input, select, textarea, a, .app-dialog, .context-menu')) return
   selected.value = null
 }
 
@@ -480,8 +483,9 @@ const toggleBatchMode = () => {
 const handleKeydown = (e) => {
   if (e.key === 'Escape') {
     if (showDialog.value) { showDialog.value = false; return }
-    if (showMoveDialog.value) { showMoveDialog.value = false; return }
+    if (showDateDialog.value) { showDateDialog.value = false; return }
     if (showConfirmDialog.value) { showConfirmDialog.value = false; return }
+    if (contextMenu.value.show) { contextMenu.value.show = false; return }
     if (batchMode.value) { batchMode.value = false; checkedIds.value = [] }
   }
 }
@@ -519,19 +523,11 @@ const dateManualInput = ref(false)
 
 const form = ref({ name:'', day_of_week:'', time_slot:'', current_episode:'0', url:'', url_params:'', notes:'' })
 
-const buildUrl = (item) => {
-  if (!item.url) return ''
-  let url = item.url
-  if (item.url_params) {
-    const params = item.url_params.replace(/\{集数\}/g, item.current_episode || 0)
-    url += (url.includes('?') ? '&' : '?') + params
-  }
-  return url
-}
-
 // ========== URL 输入辅助 ==========
 // 粘贴含 ? 的完整链接时，自动把查询参数移到「URL 动态参数」，URL 只保留基础地址
-watch(() => form.value.url, (val) => {
+// 只在用户主动输入时触发（@input），打开编辑弹窗回填存量数据不会误改写
+const onUrlInput = () => {
+  const val = form.value.url
   if (!val) return
   const qIdx = val.indexOf('?')
   if (qIdx === -1) return
@@ -542,7 +538,7 @@ watch(() => form.value.url, (val) => {
     const cur = (form.value.url_params || '').replace(/&+$/, '')
     form.value.url_params = cur ? `${cur}&${query}` : query
   }
-})
+}
 
 // {集数} 快速插入：优先插入到动态参数输入框光标处，否则追加到末尾
 const urlParamsInput = ref(null)
@@ -611,7 +607,7 @@ const ctxEdit = () => { closeContextMenu(); openEditDialog() }
 const ctxOpenUrl = () => {
   const item = contextMenu.value.item
   closeContextMenu()
-  if (item?.url) window.open(buildUrl(item), '_blank')
+  if (item?.url) window.open(buildItemUrl(item), '_blank')
 }
 const ctxMoveToRemaining = () => { closeContextMenu(); openMoveToRemainingDialog() }
 const ctxMoveToWatched = () => { closeContextMenu(); openDateDialog() }
@@ -661,12 +657,6 @@ const confirmActionFn = async () => {
       else showToast(res.data.error||'操作失败','error')
     } catch { showToast('操作失败','error') }
   }
-}
-
-const toast = ref({ show:false, message:'', type:'success' })
-const showToast = (message, type='success') => {
-  toast.value = { show:true, message, type }
-  setTimeout(() => { toast.value.show = false }, 2500)
 }
 
 // ========== 时间排序 ==========
@@ -719,7 +709,7 @@ const selectItem = (item) => { selected.value = item }
 const handleCardMiddleClick = (e, item) => {
   if (e.button === 1) {
     e.preventDefault()
-    const url = item.url ? buildUrl(item) : defaultBgmUrl(item)
+    const url = item.url ? buildItemUrl(item) : defaultBgmUrl(item)
     window.open(url, '_blank')
   }
 }
@@ -737,8 +727,7 @@ const saveEdit = async () => {
   const { id, field } = editing.value
   let val = editValue.value
   if (field === 'current_episode') {
-    const numVal = parseFloat(val)
-    val = isNaN(numVal) ? '0' : String(val)
+    val = normalizeEpisodeInput(val)
   }
   const item = watchingList.value.find(i => i.id === id)
   // current_episode 用字符串比较
@@ -759,6 +748,9 @@ const saveEdit = async () => {
 }
 
 // ========== 对话框操作 ==========
+const dialogNameInput = ref(null)
+const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
+
 const openAddDialog = () => {
   dialogMode.value = 'add'
   form.value = { name:'', day_of_week:'', time_slot:'', current_episode:'0', url:'', url_params:'', notes:'' }
@@ -767,6 +759,7 @@ const openAddDialog = () => {
   formShowTimeDropdown.value = false
   activeTemplate.value = ''
   showDialog.value = true
+  focusNameInput()
 }
 
 const openEditDialog = () => {
@@ -786,47 +779,22 @@ const openEditDialog = () => {
   formShowTimeDropdown.value = false
   activeTemplate.value = ''
   showDialog.value = true
+  focusNameInput()
 }
 
-// 对话框中集数智能增减
-// 小数部分当成独立整数增减，不进位：26.19→26.20，26.99→26.100
+// 对话框中集数智能增减（共享逻辑：小数不进位，补零格式保持位数）
 const formEpisodeIncrement = () => {
-  const str = String(form.value.current_episode || '0')
-  if (str.includes('.')) {
-    const dotIndex = str.indexOf('.')
-    const intPart = str.substring(0, dotIndex)
-    const decimalStr = str.substring(dotIndex + 1)
-    const newDecimal = parseInt(decimalStr, 10) + 1
-    form.value.current_episode = intPart + '.' + String(newDecimal)
-  } else {
-    const intVal = parseInt(str, 10) || 0
-    form.value.current_episode = String(intVal + 1)
-  }
+  form.value.current_episode = smartIncrement(form.value.current_episode)
 }
 
 const formEpisodeDecrement = () => {
-  const str = String(form.value.current_episode || '0')
-  const numVal = parseFloat(str) || 0
-  if (numVal <= 0) { form.value.current_episode = '0'; return }
-  if (str.includes('.')) {
-    const dotIndex = str.indexOf('.')
-    const intPart = str.substring(0, dotIndex)
-    const decimalStr = str.substring(dotIndex + 1)
-    const decVal = parseInt(decimalStr, 10)
-    if (decVal <= 0) { form.value.current_episode = '0'; return }
-    const newDecimal = decVal - 1
-    form.value.current_episode = intPart + '.' + String(newDecimal)
-  } else {
-    const intVal = parseInt(str, 10) || 0
-    form.value.current_episode = String(Math.max(0, intVal - 1))
-  }
+  form.value.current_episode = smartDecrement(form.value.current_episode)
 }
 
 const saveForm = async () => {
   if (!form.value.name.trim()) { showToast('请输入番剧名称','warning'); return }
-  // 确保 current_episode 是有效值
-  const epVal = parseFloat(form.value.current_episode)
-  form.value.current_episode = isNaN(epVal) ? '0' : String(form.value.current_episode)
+  // 规范化集数：保留补零（01）与小数（26.19），非法输入归 0
+  form.value.current_episode = normalizeEpisodeInput(form.value.current_episode)
   // 合并时间选择到 time_slot
   form.value.time_slot = formTime.value || ''
   try {
@@ -902,5 +870,11 @@ const deleteItem = () => { openConfirmDialog() }
 onMounted(async () => {
   await fetchData()
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('click', onDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('click', onDocClick)
 })
 </script>

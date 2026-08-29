@@ -74,35 +74,19 @@
       </div>
     </div>
 
-    <!-- Toast -->
-    <Teleport to="body">
-      <transition name="toast">
-        <div v-if="toast.show" class="fixed top-6 right-6 z-[100]">
-          <div class="px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-slide-down"
-            :class="toast.type==='success'?'bg-gradient-to-r from-success to-emerald-400':toast.type==='error'?'bg-gradient-to-r from-danger to-red-400':'bg-gradient-to-r from-warning to-amber-400'">
-            {{ toast.message }}
-          </div>
-        </div>
-      </transition>
-    </Teleport>
+    <!-- Toast 通知由 App.vue 的 ToastHost 统一渲染 -->
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick } from 'vue'
 import { importApi } from '../db/api'
+import { showToast } from '../composables/useToast'
 
 const selectedFile = ref(null)
 const importing = ref(false)
 const logs = ref([])
 const logContainer = ref(null)
-
-const toast = ref({ show: false, message: '', type: 'success' })
-
-const showToast = (message, type = 'success') => {
-  toast.value = { show: true, message, type }
-  setTimeout(() => { toast.value.show = false }, 3000)
-}
 
 const addLog = (message, type = 'info') => {
   logs.value.push({ message, type })

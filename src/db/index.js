@@ -1,10 +1,10 @@
 /**
  * 浏览器端数据库模块
  * 使用 sql.js (WASM) + IndexedDB 持久化
- * 完全兼容 server/database.js 的业务逻辑
  */
 
 import initSqlJs from 'sql.js'
+import { smartIncrement, smartDecrement } from '../composables/useEpisode'
 
 const DB_NAME = 'BangumiManagerDB'
 const DB_STORE = 'database'
@@ -342,39 +342,11 @@ class BangumiDatabase {
     }
   }
 
-  _smartIncrement(current) {
-    const str = String(current || '0')
-    if (str.includes('.')) {
-      const dotIndex = str.indexOf('.')
-      const intPart = str.substring(0, dotIndex)
-      const decimalStr = str.substring(dotIndex + 1)
-      const newDecimal = parseInt(decimalStr, 10) + 1
-      return intPart + '.' + String(newDecimal)
-    }
-    const intVal = parseInt(str, 10) || 0
-    return String(intVal + 1)
-  }
-
-  _smartDecrement(current) {
-    const str = String(current || '0')
-    if (str.includes('.')) {
-      const dotIndex = str.indexOf('.')
-      const intPart = str.substring(0, dotIndex)
-      const decimalStr = str.substring(dotIndex + 1)
-      const decVal = parseInt(decimalStr, 10)
-      if (decVal <= 0) return '0'
-      const newDecimal = decVal - 1
-      return intPart + '.' + String(newDecimal)
-    }
-    const intVal = parseInt(str, 10) || 0
-    return String(Math.max(0, intVal - 1))
-  }
-
   incrementEpisode(id) {
     try {
       const row = this._get('SELECT current_episode FROM watching WHERE id = ?', [id])
       if (!row) return { success: false, error: '未找到记录' }
-      const newVal = this._smartIncrement(row.current_episode)
+      const newVal = smartIncrement(row.current_episode)
       this._run(
         'UPDATE watching SET current_episode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [newVal, id]
@@ -389,7 +361,7 @@ class BangumiDatabase {
     try {
       const row = this._get('SELECT current_episode FROM watching WHERE id = ?', [id])
       if (!row) return { success: false, error: '未找到记录' }
-      const newVal = this._smartDecrement(row.current_episode)
+      const newVal = smartDecrement(row.current_episode)
       this._run(
         'UPDATE watching SET current_episode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [newVal, id]
