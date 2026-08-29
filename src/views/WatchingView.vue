@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-5" @click="handleRootClick">
+  <div class="space-y-5 flex flex-col min-h-full" @click="handleRootClick">
     <!-- 等番本月提示 -->
-    <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3">
+    <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3 shrink-0">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2 text-sm">
           <span class="text-lg">📢</span>
@@ -12,7 +12,7 @@
     </div>
 
     <!-- 操作面板 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4 shrink-0">
       <div class="flex items-center gap-2 flex-wrap">
         <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all duration-300 btn-press">✨ 添加番剧</button>
         <button :disabled="!selected" @click="openEditDialog" class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
@@ -26,6 +26,10 @@
         <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="px-4 py-2 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-danger/30 transition-all duration-300 btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
         <button v-if="batchMode" @click="toggleSelectAll" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-300 btn-press">{{ isAllChecked?'取消全选':'全选' }}</button>
         <button @click="openClearDialog" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-300 btn-press">💣 清空列表</button>
+        <div class="border-l border-white/30 h-6 mx-1"></div>
+        <button @click="toggleTimeSort" class="px-4 py-2 bg-gradient-to-r from-primary/80 to-secondary/80 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-300 btn-press" title="按更新时间排序">
+          🕐 {{ timeSortAsc ? '时间 早→晚' : '时间 晚→早' }}
+        </button>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
         <span class="inline-block w-2 h-2 rounded-full bg-danger animate-pulse-soft"></span>
@@ -41,16 +45,16 @@
     </div>
 
     <!-- 周历视图 -->
-    <div class="glass rounded-2xl shadow-lg overflow-hidden border border-white/30">
-      <div class="grid grid-cols-7">
+    <div class="glass rounded-2xl shadow-lg overflow-hidden border border-white/30 flex-1 flex flex-col">
+      <div class="grid grid-cols-7 grid-rows-[auto_1fr] flex-1">
         <div v-for="(day, idx) in weekDays" :key="day"
-          class="px-3 py-3 text-center text-sm font-bold border-b border-r border-white/20 transition-all duration-300"
+          class="px-3 py-3 text-center text-base font-bold border-b border-r border-white/20 transition-all duration-300"
           :class="[idx===5?'bg-secondary/20 text-secondary-dark':idx===6?'bg-danger/15 text-danger':'bg-primary/10 text-primary-dark']">
           <span class="inline-block transition-transform duration-300 hover:scale-110">{{ dayIcons[idx] }}</span>
           <span class="ml-1">{{ day }}</span>
         </div>
         <div v-for="(day, colIdx) in weekDays" :key="'col-'+day"
-          class="border-r border-white/10 last:border-r-0 min-h-[300px] flex flex-col bg-white/30">
+          class="border-r border-white/10 last:border-r-0 min-h-[18.75rem] flex flex-col bg-white/30">
           <div v-for="item in getItemsByDay(day)" :key="item.id"
             class="watching-card flex-1 px-3 py-2.5 border-b border-white/10 cursor-pointer transition-all duration-200 group relative"
             :class="[batchMode && checkedIds.includes(item.id)?'bg-danger/10 border-l-3 border-l-danger':selected?.id===item.id?'bg-primary/15 border-l-3 border-l-primary':'hover:bg-primary/5']"
@@ -66,38 +70,38 @@
             <div @dblclick.stop="!batchMode && startEdit(item,'name')" class="editable-cell" :class="{'ml-5': batchMode}">
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors">{{ item.name }}</span>
+              <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors">{{ item.name }}</span>
               <a v-if="item.url" :href="buildUrl(item)" target="_blank" rel="noopener" @click.stop
                 class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center" title="打开链接">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
               </a>
             </div>
             <div class="flex items-center gap-1 mt-0.5">
-              <span class="text-xs font-bold text-primary">e</span>
+              <span class="text-sm font-bold text-primary">e</span>
               <span @dblclick.stop="startEdit(item,'current_episode')" class="editable-cell">
                 <input v-if="editing?.id===item.id&&editing?.field==='current_episode'" v-model.number="editValue"
                   type="number" min="0" @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit"
                   class="inline-edit-input w-16" autofocus />
-                <span v-else class="text-xs font-bold text-primary">{{ item.current_episode }}</span>
+                <span v-else class="text-sm font-bold text-primary">{{ item.current_episode }}</span>
               </span>
               <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 ml-auto">
-                <button @click.stop="incrementEpisode(item)" class="w-5 h-5 rounded bg-success/80 text-white text-xs flex items-center justify-center hover:bg-success transition btn-press" title="+1集">+</button>
-                <button @click.stop="decrementEpisode(item)" class="w-5 h-5 rounded bg-warning/80 text-white text-xs flex items-center justify-center hover:bg-warning transition btn-press" title="-1集">-</button>
+                <button @click.stop="incrementEpisode(item)" class="w-6 h-6 rounded bg-success/80 text-white text-sm flex items-center justify-center hover:bg-success transition btn-press" title="+1集">+</button>
+                <button @click.stop="decrementEpisode(item)" class="w-6 h-6 rounded bg-warning/80 text-white text-sm flex items-center justify-center hover:bg-warning transition btn-press" title="-1集">-</button>
               </div>
             </div>
             <div @dblclick.stop="startEdit(item,'time_slot')" class="editable-cell">
               <input v-if="editing?.id===item.id&&editing?.field==='time_slot'" v-model="editValue"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-xs text-gray-400">{{ item.time_slot || '' }}</span>
+              <span v-else class="text-sm text-gray-500 font-medium" :class="item.time_slot ? '' : 'text-gray-400 font-normal'">{{ item.time_slot || '' }}</span>
             </div>
             <div @dblclick.stop="startEdit(item,'notes')" class="editable-cell">
               <input v-if="editing?.id===item.id&&editing?.field==='notes'" v-model="editValue"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-xs text-gray-400 truncate block">{{ item.notes || '' }}</span>
+              <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '' }}</span>
             </div>
 
           </div>
-          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center text-gray-300 text-xs">
+          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center text-gray-300 text-sm">
             <span class="animate-pulse-soft">✨ 暂无</span>
           </div>
         </div>
@@ -111,7 +115,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[520px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[32.5rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode==='add'?'✨':'✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode==='add'?'添加番剧':'编辑番剧' }}</h3>
@@ -141,7 +145,7 @@
                       <span class="text-sm font-mono" :class="formTime?'text-gray-800':'text-gray-400'">{{ formTime || '点击选择时间' }}</span>
                       <svg class="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
-                    <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 left-0 w-[320px] glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
+                    <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 left-0 w-[20rem] glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
                       <div class="grid grid-cols-8 gap-1.5">
                         <button v-for="h in 24" :key="'fh'+h" @click="formSelectTimeHour(h-1)"
                           class="px-1.5 py-1.5 text-xs rounded-lg transition btn-press whitespace-nowrap"
@@ -180,12 +184,54 @@
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">链接 URL</label>
-                <input v-model="form.url" type="text" placeholder="如: https://..."
+                <input v-model="form.url" type="text" placeholder="如: https://...（粘贴含 ? 的链接会自动分离参数）"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs text-gray-400">快速填充:</span>
+                  <button type="button" @click="selectTemplate('video')"
+                    class="px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
+                    :class="activeTemplate==='video' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'">▶ B站视频</button>
+                  <button type="button" @click="selectTemplate('space')"
+                    class="px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
+                    :class="activeTemplate==='space' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'">🏠 空间搜索</button>
+                  <button type="button" @click="selectTemplate('search')"
+                    class="px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
+                    :class="activeTemplate==='search' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'">🔍 全站搜索</button>
+                </div>
+                <div v-if="activeTemplate" class="mt-2 p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-2">
+                  <template v-if="activeTemplate==='video'">
+                    <input v-model="tplVideo.bv" type="text" placeholder="BV 号或视频链接，如 BV1GAuw6HEdd"
+                      class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                    <p class="text-xs text-gray-400">填充后 URL 动态参数为 p={集数}，点击链接直达对应分P</p>
+                  </template>
+                  <template v-else-if="activeTemplate==='space'">
+                    <input v-model="tplSpace.uid" type="text" placeholder="UP 主 UID，如 693539400"
+                      class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                    <div class="grid grid-cols-2 gap-2">
+                      <input v-model="tplSpace.name" type="text" placeholder="番剧名称，如 闇芝居"
+                        class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                      <input v-model="tplSpace.season" type="number" min="1" placeholder="季数，如 17"
+                        class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                    </div>
+                    <p class="text-xs text-gray-400">生成空间内搜索链接：keyword=名称 | 季数季 | 第{集数}集</p>
+                  </template>
+                  <template v-else>
+                    <input v-model="tplSearch.keyword" type="text" placeholder="如: 『尼古喵喵』{集数}【中文字幕】"
+                      class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                    <p class="text-xs text-gray-400">关键词中可包含 {集数}，点击链接时自动替换为当前集数</p>
+                  </template>
+                  <div class="flex justify-end gap-2">
+                    <button type="button" @click="activeTemplate=''" class="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition btn-press">取消</button>
+                    <button type="button" @click="applyTemplate" class="px-3 py-1.5 text-xs text-white bg-gradient-to-r from-primary to-primary-light rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">填充</button>
+                  </div>
+                </div>
               </div>
               <div v-if="form.url">
-                <label class="block text-sm font-medium text-gray-700 mb-1">URL 动态参数</label>
-                <input v-model="form.url_params" type="text" placeholder='如: keyword={集数} 或 keyword={集数}&page=1'
+                <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
+                  <span>URL 动态参数</span>
+                  <button type="button" @click="insertEpisodeToken" class="text-xs text-primary hover:text-primary-dark transition btn-press">＋ 插入 {集数}</button>
+                </label>
+                <input ref="urlParamsInput" v-model="form.url_params" type="text" placeholder='如: keyword={集数} 或 keyword={集数}&page=1'
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                 <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914</p>
               </div>
@@ -211,7 +257,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDateDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[420px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="moveToWatched">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="moveToWatched">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">✅</span>
               <h3 class="text-lg font-bold gradient-text">选择观看日期</h3>
@@ -281,7 +327,7 @@
     <!-- 右键菜单 -->
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[160px] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️ 编辑</button>
           <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
           <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">📋 移至等番</button>
@@ -300,7 +346,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[380px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction==='clear'?'💣':confirmAction==='batchDelete'?'🗑️':confirmAction==='delete'?'🗑️':'📋' }}</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear'?'确认清空':confirmAction==='batchDelete'?'批量删除':confirmAction==='delete'?'确认删除':'移至等番' }}</h3>
@@ -334,7 +380,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchingApi, remainingApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput } from '../composables/useDatePicker'
 
@@ -347,23 +393,23 @@ const watchingList = ref([])
 const remainingList = ref([])
 const selected = ref(null)
 
-// 记住选中状态 - 保存 id 到 sessionStorage
+// 记住选中状态 - 保存 id 到 localStorage
 const saveSelectedId = (id) => {
-  if (id) sessionStorage.setItem(SELECTED_KEY, String(id))
-  else sessionStorage.removeItem(SELECTED_KEY)
+  if (id) localStorage.setItem(SELECTED_KEY, String(id))
+  else localStorage.removeItem(SELECTED_KEY)
 }
 
 // 恢复选中状态
 const restoreSelected = () => {
-  const savedId = sessionStorage.getItem(SELECTED_KEY)
+  const savedId = localStorage.getItem(SELECTED_KEY)
   if (savedId) {
     const item = watchingList.value.find(i => String(i.id) === savedId)
     if (item) selected.value = item
-    else sessionStorage.removeItem(SELECTED_KEY)
+    else localStorage.removeItem(SELECTED_KEY)
   }
 }
 
-// 自动同步 selected 到 sessionStorage
+// 自动同步 selected 到 localStorage
 watch(selected, (val) => {
   saveSelectedId(val?.id)
 })
@@ -483,6 +529,78 @@ const buildUrl = (item) => {
   return url
 }
 
+// ========== URL 输入辅助 ==========
+// 粘贴含 ? 的完整链接时，自动把查询参数移到「URL 动态参数」，URL 只保留基础地址
+watch(() => form.value.url, (val) => {
+  if (!val) return
+  const qIdx = val.indexOf('?')
+  if (qIdx === -1) return
+  const base = val.slice(0, qIdx)
+  const query = val.slice(qIdx + 1)
+  form.value.url = base
+  if (query) {
+    const cur = (form.value.url_params || '').replace(/&+$/, '')
+    form.value.url_params = cur ? `${cur}&${query}` : query
+  }
+})
+
+// {集数} 快速插入：优先插入到动态参数输入框光标处，否则追加到末尾
+const urlParamsInput = ref(null)
+const insertEpisodeToken = () => {
+  const token = '{集数}'
+  const el = urlParamsInput.value
+  const cur = form.value.url_params || ''
+  if (el && typeof el.selectionStart === 'number') {
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    form.value.url_params = cur.slice(0, start) + token + cur.slice(end)
+    nextTick(() => {
+      el.focus()
+      el.selectionStart = el.selectionEnd = start + token.length
+    })
+  } else {
+    form.value.url_params = cur + token
+  }
+}
+
+// ========== 链接快速填充模板 ==========
+const activeTemplate = ref('')
+const tplVideo = ref({ bv: '' })
+const tplSpace = ref({ uid: localStorage.getItem('banager_tpl_space_uid') || '', name: '', season: '1' })
+const tplSearch = ref({ keyword: '' })
+
+const selectTemplate = (t) => {
+  activeTemplate.value = activeTemplate.value === t ? '' : t
+}
+
+const applyTemplate = () => {
+  if (activeTemplate.value === 'video') {
+    const raw = String(tplVideo.value.bv || '').trim()
+    // 支持直接粘贴完整视频链接，自动提取 BV 号
+    const m = raw.match(/BV[0-9A-Za-z]{8,12}/)
+    const bv = m ? m[0] : raw
+    if (!bv) return
+    form.value.url = `https://www.bilibili.com/video/${bv}`
+    form.value.url_params = 'p={集数}'
+  } else if (activeTemplate.value === 'space') {
+    const raw = String(tplSpace.value.uid || '').trim()
+    // 支持直接粘贴空间链接，自动提取 UID
+    const m = raw.match(/\d{3,}/)
+    const uid = m ? m[0] : raw
+    if (!uid) return
+    localStorage.setItem('banager_tpl_space_uid', uid)
+    const season = parseInt(tplSpace.value.season, 10) || 1
+    form.value.url = `https://space.bilibili.com/${uid}/search`
+    form.value.url_params = `keyword=${String(tplSpace.value.name || '').trim()} | ${season}季 | 第{集数}集`
+  } else if (activeTemplate.value === 'search') {
+    const kw = String(tplSearch.value.keyword || '').trim()
+    if (!kw) return
+    form.value.url = 'https://search.bilibili.com/all'
+    form.value.url_params = `keyword=${kw}`
+  }
+  activeTemplate.value = ''
+}
+
 const contextMenu = ref({ show:false, x:0, y:0, item:null })
 const openContextMenu = (e, item) => {
   selected.value = item
@@ -551,7 +669,30 @@ const showToast = (message, type='success') => {
   setTimeout(() => { toast.value.show = false }, 2500)
 }
 
-const getItemsByDay = (day) => watchingList.value.filter(item => item.day_of_week === day)
+// ========== 时间排序 ==========
+// 每日列内按更新时间排序，默认从早到晚，可切换方向；偏好持久化到 localStorage
+const timeSortAsc = ref(localStorage.getItem('watching_time_sort') !== 'desc')
+const toggleTimeSort = () => {
+  timeSortAsc.value = !timeSortAsc.value
+  localStorage.setItem('watching_time_sort', timeSortAsc.value ? 'asc' : 'desc')
+}
+// 解析 time_slot 中的 HH:mm 为分钟数，无法解析的排在最后
+const parseTimeSlot = (slot) => {
+  if (!slot) return Infinity
+  const m = String(slot).match(/(\d{1,2}):(\d{2})/)
+  if (!m) return Infinity
+  const h = parseInt(m[1], 10)
+  const min = parseInt(m[2], 10)
+  if (h > 23 || min > 59) return Infinity
+  return h * 60 + min
+}
+const getItemsByDay = (day) => watchingList.value
+  .filter(item => item.day_of_week === day)
+  .sort((a, b) => {
+    const ta = parseTimeSlot(a.time_slot)
+    const tb = parseTimeSlot(b.time_slot)
+    return timeSortAsc.value ? ta - tb : tb - ta
+  })
 
 const fetchData = async () => {
   try {
@@ -624,6 +765,7 @@ const openAddDialog = () => {
   formTime.value = ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
+  activeTemplate.value = ''
   showDialog.value = true
 }
 
@@ -642,6 +784,7 @@ const openEditDialog = () => {
   formTime.value = selected.value.time_slot || ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
+  activeTemplate.value = ''
   showDialog.value = true
 }
 

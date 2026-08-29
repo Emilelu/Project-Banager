@@ -136,7 +136,7 @@
             <button @click="showPageSizeMenu=!showPageSizeMenu" class="px-2 py-1 border border-primary/20 rounded-lg text-xs hover:bg-primary/5 transition bg-white/80">
               每页 {{ pageSize }} 条 ▾
             </button>
-            <div v-if="showPageSizeMenu" class="absolute left-0 bottom-full mb-1 glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[120px] z-50">
+            <div v-if="showPageSizeMenu" class="absolute left-0 bottom-full mb-1 glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[7.5rem] z-50">
               <button v-for="s in pageSizeOptions" :key="s" @click="setPageSize(s)"
                 class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ s }} 条/页</button>
               <div class="border-t border-white/20 my-1"></div>
@@ -166,7 +166,7 @@
     <!-- 右键菜单 -->
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[160px] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️ 编辑</button>
           <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
           <div class="border-t border-white/20 my-1"></div>
@@ -183,7 +183,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[420px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction==='clear'?'💣':confirmAction==='batchDelete'?'🗑️':confirmAction==='deleteYear'?'📅':'🗑️' }}</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear'?'确认清空':confirmAction==='batchDelete'?'批量删除':confirmAction==='deleteYear'?'删除年份':'确认删除' }}</h3>
@@ -213,7 +213,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showClearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[420px] border border-white/40 pointer-events-auto">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">💣</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">选择清空范围</h3>
@@ -242,7 +242,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[460px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode==='add'?'✨':'✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode==='add'?'添加历史记录':'编辑历史记录' }}</h3>
@@ -334,7 +334,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showYearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[400px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveYearForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveYearForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📅</span>
               <h3 class="text-lg font-bold gradient-text">{{ yearDialogMode==='add'?'添加年份':'编辑年份' }}</h3>
@@ -370,7 +370,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { watchedApi, watchedYearsApi, batchApi } from '../api'
+import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears } from '../composables/useDatePicker'
 
 const years = ref([])
@@ -415,8 +415,8 @@ const sortedYears = computed(() => {
   })
 })
 
-// 排序
-const sortField = ref('')
+// 排序：默认按观看日期从早到晚（日期格式统一为 YYYY/MM/DD HH:mm，取数字位直接比较即按时间序）
+const sortField = ref('watch_date')
 const sortOrder = ref('asc')
 const toggleSort = (field) => {
   if (sortField.value === field) {
@@ -425,6 +425,15 @@ const toggleSort = (field) => {
     sortField.value = field
     sortOrder.value = 'asc'
   }
+}
+const compareByField = (a, b) => {
+  if (sortField.value === 'watch_date') {
+    const da = String(a.watch_date || '').replace(/\D/g, '')
+    const db = String(b.watch_date || '').replace(/\D/g, '')
+    if (da !== db) return da < db ? -1 : 1
+    return 0
+  }
+  return String(a[sortField.value] || '').localeCompare(String(b[sortField.value] || ''), 'zh-CN')
 }
 
 // 搜索过滤（在当前年份的数据中搜索）+ 排序
@@ -436,9 +445,7 @@ const filteredList = computed(() => {
   }
   if (sortField.value) {
     list = [...list].sort((a, b) => {
-      const va = String(a[sortField.value] || '')
-      const vb = String(b[sortField.value] || '')
-      let cmp = va.localeCompare(vb, 'zh-CN')
+      const cmp = compareByField(a, b)
       return sortOrder.value === 'asc' ? cmp : -cmp
     })
   }

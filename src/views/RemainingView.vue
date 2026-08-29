@@ -7,20 +7,15 @@
           <span class="px-3 py-1.5 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl text-sm">
             等番: {{ remainingList.length }}部
           </span>
-          <!-- 本月新番链接 -->
-          <template v-if="currentSeasonLink.show">
-            <a :href="currentSeasonLink.url" target="_blank" rel="noopener"
-              class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press inline-flex items-center gap-1">
-              📺 {{ currentSeasonLink.label }}
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-            </a>
-          </template>
-          <template v-else>
-            <span class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-xl text-xs font-medium">📺 {{ currentSeasonLink.label }}</span>
-            <div class="inline-block">
-              <button ref="seasonMenuBtn" @click="toggleSeasonMenu" class="px-2 py-1.5 bg-gray-100 text-gray-500 rounded-xl text-xs font-medium hover:bg-gray-200 transition btn-press">📅 查看新番 ▾</button>
-            </div>
-          </template>
+          <!-- 本季新番链接（yuc.wiki） -->
+          <a :href="currentSeasonLink.url" target="_blank" rel="noopener"
+            class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press inline-flex items-center gap-1">
+            📺 {{ currentSeasonLink.label }}
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+          <div class="inline-block">
+            <button ref="seasonMenuBtn" @click="toggleSeasonMenu" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-xl text-xs font-medium hover:bg-gray-200 transition btn-press">📅 查看新番 ▾</button>
+          </div>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <button @click="openAddDialog"
@@ -136,7 +131,7 @@
             <button @click="showPageSizeMenu=!showPageSizeMenu" class="px-2 py-1 border border-primary/20 rounded-lg text-xs hover:bg-primary/5 transition bg-white/80">
               每页 {{ pageSize }} 条 ▾
             </button>
-            <div v-if="showPageSizeMenu" class="absolute left-0 bottom-full mb-1 glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[120px] z-50">
+            <div v-if="showPageSizeMenu" class="absolute left-0 bottom-full mb-1 glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[7.5rem] z-50">
               <button v-for="s in pageSizeOptions" :key="s" @click="setPageSize(s)"
                 class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ s }} 条/页</button>
               <div class="border-t border-white/20 my-1"></div>
@@ -167,7 +162,7 @@
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[160px] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
           <button @click="ctxEdit"
             class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️
             编辑</button>
@@ -194,7 +189,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[380px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction === 'clear' ? '💣' : confirmAction === 'batchDelete' ? '🗑️' :
                 '🗑️' }}
@@ -230,7 +225,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[460px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode === 'add' ? '✨' : '✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode === 'add' ? '添加等番' : '编辑等番' }}</h3>
@@ -294,7 +289,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showMoveDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[400px] border border-white/40 pointer-events-auto">
+          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📺</span>
               <h3 class="text-lg font-bold gradient-text">移至追番</h3>
@@ -328,7 +323,7 @@
     <!-- 季度新番下拉菜单 -->
     <Teleport to="body">
       <div v-if="showSeasonMenu" class="fixed z-[200]" :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[180px] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[11.25rem] animate-scale-in">
           <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
             class="block px-4 py-2 text-sm hover:bg-primary/10 transition">{{ s.label }}</a>
         </div>
@@ -343,7 +338,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showBatchAddDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[460px] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveBatchAdd">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveBatchAdd">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📝</span>
               <h3 class="text-lg font-bold gradient-text">批量添加等番</h3>
@@ -503,28 +498,27 @@ const editing = ref(null)
 const editValue = ref('')
 const dateManualInput = ref(false)
 
-// 本月新番链接
+// 本季新番链接（yuc.wiki，URL 格式为 /YYYYMM，季首月为 01/04/07/10）
 const currentSeasonLink = computed(() => {
   const now = new Date()
   const month = now.getMonth() + 1
-  if ([1, 4, 7, 10].includes(month)) {
-    const t = String(now.getFullYear()) + String(month).padStart(2, '0')
-    return { show: true, url: `https://xf.hmacg.cn/xfb.php?t=${t}`, label: '本月新番列表' }
-  }
-  return { show: false, url: '', label: '本月没有新番' }
+  const seasonMonth = month < 4 ? '01' : month < 7 ? '04' : month < 10 ? '07' : '10'
+  const t = `${now.getFullYear()}${seasonMonth}`
+  return { url: `https://yuc.wiki/${t}`, label: '本季新番' }
 })
 
-// 季度新番链接（用户可选择查看1/4/7/10月的新番）
+// 季度新番链接（用户可选择查看本年 1/4/7/10 月的新番）
 const showSeasonMenu = ref(false)
 const seasonMenuBtn = ref(null)
 const seasonMenuPos = ref({ x: 0, y: 0 })
 const seasonLinks = computed(() => {
   const year = new Date().getFullYear()
   return [
-    { label: `${year}年 冬季新番 (1月)`, url: `https://xf.hmacg.cn/xfb.php?t=${year}01` },
-    { label: `${year}年 春季新番 (4月)`, url: `https://xf.hmacg.cn/xfb.php?t=${year}04` },
-    { label: `${year}年 夏季新番 (7月)`, url: `https://xf.hmacg.cn/xfb.php?t=${year}07` },
-    { label: `${year}年 秋季新番 (10月)`, url: `https://xf.hmacg.cn/xfb.php?t=${year}10` },
+    { label: `${year}年 冬季新番 (1月)`, url: `https://yuc.wiki/${year}01` },
+    { label: `${year}年 春季新番 (4月)`, url: `https://yuc.wiki/${year}04` },
+    { label: `${year}年 夏季新番 (7月)`, url: `https://yuc.wiki/${year}07` },
+    { label: `${year}年 秋季新番 (10月)`, url: `https://yuc.wiki/${year}10` },
+    { label: `新番卫星观测站 (未开播)`, url: 'https://yuc.wiki/new' },
   ]
 })
 

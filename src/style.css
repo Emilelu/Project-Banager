@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== 全局响应式缩放 ==================== */
+/* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
+   所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放 */
+html {
+  font-size: clamp(14px, 0.8333vw, 28px);
+}
+
 /* 全局字体 */
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -545,7 +552,7 @@ td .truncate {
 
 /* 星星装饰 */
 .star-decoration::after {
-  content: '✦';
+  content: '\2726';
   position: absolute;
   top: -4px;
   right: -4px;
