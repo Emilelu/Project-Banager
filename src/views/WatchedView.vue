@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5" @click="handleRootClick" @keydown="handleKeydown" tabindex="-1">
+  <div class="space-y-5" @keydown="handleKeydown" tabindex="-1">
     <!-- 顶部信息栏 + 操作面板合并 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between flex-wrap gap-4">
@@ -166,7 +166,7 @@
     <!-- 右键菜单 -->
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️ 编辑</button>
           <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
           <div class="border-t border-white/20 my-1"></div>
@@ -183,7 +183,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction==='clear'?'💣':confirmAction==='batchDelete'?'🗑️':confirmAction==='deleteYear'?'📅':'🗑️' }}</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear'?'确认清空':confirmAction==='batchDelete'?'批量删除':confirmAction==='deleteYear'?'删除年份':'确认删除' }}</h3>
@@ -213,7 +213,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showClearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">💣</div>
               <h3 class="text-lg font-bold text-gray-800 mb-2">选择清空范围</h3>
@@ -242,7 +242,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode==='add'?'✨':'✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode==='add'?'添加历史记录':'编辑历史记录' }}</h3>
@@ -334,7 +334,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showYearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveYearForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveYearForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📅</span>
               <h3 class="text-lg font-bold gradient-text">{{ yearDialogMode==='add'?'添加年份':'编辑年份' }}</h3>
@@ -357,7 +357,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
@@ -695,11 +695,13 @@ const fetchData = async () => {
 
 const selectItem = (item) => { selected.value = item }
 
-// 点击空白处取消编辑
-const handleRootClick = (e) => {
+// 点击表格行和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
+const onDocClick = (e) => {
   if (editing.value && !e.target.closest('input, select, textarea')) {
     cancelEdit()
   }
+  if (e.target.closest('tbody tr, button, input, select, textarea, a, .app-dialog, .context-menu')) return
+  selected.value = null
 }
 
 // ========== 内联编辑 ==========
@@ -848,5 +850,11 @@ onMounted(async () => {
   await fetchYears()
   await fetchData()
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('click', onDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('click', onDocClick)
 })
 </script>

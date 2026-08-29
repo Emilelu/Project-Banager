@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5" @click="handleRootClick">
+  <div class="space-y-5">
     <!-- 顶部信息栏 + 操作面板 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between flex-wrap gap-4">
@@ -170,7 +170,7 @@
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
           <button @click="ctxEdit"
             class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️
             编辑</button>
@@ -197,7 +197,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3">{{ confirmAction === 'clear' ? '💣' : confirmAction === 'batchDelete' ? '🗑️' :
                 '🗑️' }}
@@ -233,7 +233,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">{{ dialogMode === 'add' ? '✨' : '✏️' }}</span>
               <h3 class="text-lg font-bold gradient-text">{{ dialogMode === 'add' ? '添加等番' : '编辑等番' }}</h3>
@@ -297,7 +297,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showMoveDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto">
+          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto app-dialog">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📺</span>
               <h3 class="text-lg font-bold gradient-text">移至追番</h3>
@@ -331,7 +331,7 @@
     <!-- 季度新番下拉菜单 -->
     <Teleport to="body">
       <div v-if="showSeasonMenu" class="fixed z-[200]" :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[11.25rem] animate-scale-in">
+        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[11.25rem] animate-scale-in context-menu">
           <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
             class="block px-4 py-2 text-sm hover:bg-primary/10 transition">{{ s.label }}</a>
         </div>
@@ -346,7 +346,7 @@
       </transition>
       <transition name="modal">
         <div v-if="showBatchAddDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto" @keydown.ctrl.enter="saveBatchAdd">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveBatchAdd">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
               <span class="text-xl">📝</span>
               <h3 class="text-lg font-bold gradient-text">批量添加等番</h3>
@@ -368,7 +368,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { remainingApi, batchApi } from '../db/api'
 import { dateInputToFormat, formatToDateInput, compareDateKey } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
@@ -543,11 +543,13 @@ const toggleSeasonMenu = () => {
   showSeasonMenu.value = true
 }
 
-// 点击空白处取消编辑
-const handleRootClick = (e) => {
+// 点击表格行和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
+const onDocClick = (e) => {
   if (editing.value && !e.target.closest('input, select, textarea')) {
     saveEdit()
   }
+  if (e.target.closest('tbody tr, button, input, select, textarea, a, .app-dialog, .context-menu')) return
+  selected.value = null
 }
 
 // 批量添加
@@ -737,5 +739,11 @@ const deleteItem = () => { openConfirmDialog() }
 onMounted(() => {
   fetchData()
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('click', onDocClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('click', onDocClick)
 })
 </script>
