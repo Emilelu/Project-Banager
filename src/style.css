@@ -43,6 +43,19 @@ body.with-bg::before {
   background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
+  transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* iOS 风格聚焦态：弹窗打开 / 启动入场时壁纸加深模糊，关闭后渐清晰 */
+body.with-bg.bg-focus::before {
+  filter: blur(calc(var(--bg-blur) + 16px));
+  transform: scale(1.13);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.with-bg::before {
+    transition: none;
+  }
 }
 
 body.with-bg::after {

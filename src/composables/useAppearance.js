@@ -129,7 +129,12 @@ function probeUrl(url, timeout = 8000) {
   return new Promise(resolve => {
     if (typeof Image === 'undefined' || !url) { resolve(false); return }
     const img = new Image()
-    const timer = setTimeout(() => { img.src = ''; resolve(false) }, timeout)
+    const timer = setTimeout(() => {
+      // 不能置空 src：空字符串会解析为当前页面地址（file:// 下触发安全警告），改为移除属性
+      img.onload = img.onerror = null
+      img.removeAttribute('src')
+      resolve(false)
+    }, timeout)
     img.onload = () => { clearTimeout(timer); resolve(true) }
     img.onerror = () => { clearTimeout(timer); resolve(false) }
     img.src = url
@@ -154,6 +159,35 @@ async function autoSwitchOnStartup() {
     }
   } catch {}
   finally { state.bgSilentProbe = false }
+}
+
+// ========== iOS 风格壁纸聚焦动画 ==========
+// 有弹窗打开时壁纸加深模糊（进入"应用"状态），关闭后渐清晰（回到"桌面"状态）；
+// 页面启动时也做一次由糊到清晰的入场。 MutationObserver 统一感知所有 Teleport 弹窗，无需逐处接线
+let focusObserverStarted = false
+
+function startFocusObserver() {
+  if (focusObserverStarted || typeof MutationObserver === 'undefined' || typeof document === 'undefined') return
+  focusObserverStarted = true
+  const update = () => {
+    // 全屏遮罩弹窗（z-50）视为"应用"状态；右键菜单等轻浮层不触发。
+    // 排除仍在进出场过渡中的弹窗：打开渐糊随过渡即时生效，关闭渐清晰与淡出同步
+    const hasDialog = !!document.querySelector('body > .fixed.inset-0.z-50')
+    document.body.classList.toggle('bg-focus', hasDialog)
+  }
+  const mo = new MutationObserver(update)
+  mo.observe(document.body, { childList: true, attributes: true, attributeFilter: ['class'], subtree: false })
+  update()
+}
+
+function startupSharpen() {
+  if (!document.body.classList.contains('with-bg')) return
+  document.body.classList.add('bg-focus')
+  setTimeout(() => {
+    if (!document.body.classList.contains('bg-focus')) return
+    // 弹窗聚焦期间保持模糊，仅无弹窗时渐清晰
+    if (!document.querySelector('body > .fixed.inset-0.z-50')) document.body.classList.remove('bg-focus')
+  }, 350)
 }
 
 /**
@@ -186,7 +220,7 @@ async function diagnoseWallhaven() {
   steps.push({
     name: 'API 跨域请求',
     ok: corsOk,
-    detail: corsOk ? `${Date.now() - t0}ms，API 正常` : '失败 — 服务器可达但跨域被拦（扩展/代理篡改）或接口故障'
+    detail: corsOk ? `${Date.now() - t0}ms，API 正常` : '失败 — Wallhaven API 未开放跨域许可（浏览器永久限制，与网络无关）'
   })
 
   // 图片加载（无 CORS 要求）：进一步验证静态资源可达性
@@ -204,7 +238,7 @@ async function diagnoseWallhaven() {
   let conclusion
   if (!navigator.onLine) conclusion = '浏览器处于离线状态，请检查网络连接。'
   else if (!noCorsOk) conclusion = '结论：网络层不可达。可能是 DNS 污染、防火墙拦截或广告拦截扩展，建议改用樱花源（Alcy）。'
-  else if (!corsOk) conclusion = '结论：服务器可达但 API 跨域被拦，多为浏览器扩展或代理所致，建议改用樱花源（Alcy）。'
+  else if (!corsOk) conclusion = '结论：Wallhaven API 自身未开放跨域许可，任何浏览器都无法直连（永久限制）。请使用樱花源（Alcy）。'
   else if (!imgOk) conclusion = '结论：API 正常但静态资源异常，图片可能加载失败，建议改用樱花源（Alcy）。'
   else conclusion = '结论：Wallhaven 网络与跨域均正常，之前失败应为瞬时故障，可直接重试。'
   steps.push({ name: '诊断结论', ok: true, detail: conclusion })
@@ -357,9 +391,10 @@ async function shuffleBackground() {
     if (!item) throw new Error('未获取到壁纸')
     _applyNewBg(item.path, true, item.colors || [])
   } catch (e) {
-    // 降级：本次改用樱花 Alcy 源（不改变用户所选图源，之后仍可重试 Wallhaven）
+    // Wallhaven API 无跨域许可，浏览器无法直连；降级：本次改用樱花 Alcy 源
     _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`, true, [])
-    showToast(`Wallhaven 不可达（${e.message}），已改用樱花 Alcy 源`, 'warning')
+    const reason = e.message === 'Failed to fetch' ? 'API 无跨域许可' : e.message
+    showToast(`Wallhaven 不可用（${reason}），已改用樱花 Alcy 源`, 'warning')
   } finally {
     state.bgLoading = false
   }
@@ -408,7 +443,7 @@ export function initAppearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     if (saved) {
-      // 一次性迁移：Wallhaven 在部分网络不可达，迁移到更稳的樱花 Alcy 源（可在设置中改回）
+      // 一次性迁移：Wallhaven API 无跨域许可，浏览器无法直连，迁移到樱花 Alcy 源（可在设置中改回）
       if (saved.bgProvider === 'wallhaven' && !localStorage.getItem('banager_wh_migrated')) {
         saved.bgProvider = 'alcy'
         try { localStorage.setItem('banager_wh_migrated', '1') } catch {}
@@ -420,8 +455,11 @@ export function initAppearance() {
   state.bgFailed = false
   state.bgSilentProbe = false
   applyAll()
+  startFocusObserver()
   // 启动时探测上次的壁纸是否仍然可用（API 停服 / 图片被删时自动关闭）
   probeBackground()
+  // 壁纸入场：由糊渐清晰（iOS 风格）
+  startupSharpen()
   // 自动换图模式：每次打开换一张（新图加载失败自动回退到上一张可用的壁纸）
   if (state.bgEnabled && state.bgAutoSwitch) {
     autoSwitchOnStartup()

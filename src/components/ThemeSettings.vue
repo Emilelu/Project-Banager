@@ -75,8 +75,8 @@
                     class="flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
                     <option value="alcy">樱花随机二次元 · Alcy（默认，可取色）</option>
                     <option value="dmoe">樱花随机壁纸 · dmoe</option>
-                    <option value="wallhaven">Wallhaven · 高质量二次元（需网络可达）</option>
                     <option value="custom">自定义图片地址</option>
+                    <option value="wallhaven">Wallhaven（API 无跨域许可，浏览器不可用）</option>
                   </select>
                   <button @click="onShuffle" :disabled="state.bgLoading"
                     class="px-3 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-secondary to-secondary-light text-white hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press disabled:opacity-40">
