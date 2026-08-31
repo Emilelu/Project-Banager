@@ -501,12 +501,13 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 }
 
 .fade-enter-from {
-  opacity: 0;
+  opacity: 0.01; /* 不用 0：opacity:0 的元素被浏览器视为不可见，会跳过 backdrop-filter
+                    合成，淡入中后段玻璃才“突兀”出现；0.01 视觉等同 0 但首帧即参与合成 */
   transform: translateY(8px);
 }
 
 .fade-leave-to {
-  opacity: 0;
+  opacity: 0.01;
   transform: translateY(-8px);
 }
 
@@ -516,11 +517,14 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
       从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
       非零起始能保证淡入期间持续有模糊并平滑升到目标；
    ② 起始值保留 saturate(1)，避免“从无 saturate 瞬间切到有 saturate”的跳变；
-   ③ !important 压过玻璃风格覆盖（body[data-glass='liquid'] .glass 特异性更高）。 */
+   ③ !important 压过玻璃风格覆盖（body[data-glass='liquid'] .glass 特异性更高）；
+   ④ will-change: backdrop-filter 在动画期间提示浏览器稳定合成（backdrop 采样
+      不因淡入触发层重建），动画结束类移除自动释放 */
 .fade-enter-active .glass,
 .fade-leave-active .glass {
   transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: backdrop-filter;
 }
 /* 毛玻璃：起始小幅模糊，随淡入平滑升到目标（避免结束才“啪”出现） */
 body:not([data-glass='liquid']) .fade-enter-from .glass,
