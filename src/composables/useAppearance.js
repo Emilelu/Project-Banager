@@ -30,7 +30,7 @@ const state = reactive({
 // 固定壁纸时把随机端点解析成稳定地址，刷新不再换图。
 const PROVIDERS = {
   alcy: {
-    api: () => `https://t.alcy.cc/ycy?json=true`,
+    api: () => `https://t.alcy.cc/ycy/?json=true`,
   },
   dmoe: {
     api: () => `https://www.dmoe.cc/random.php?json`,
@@ -54,12 +54,16 @@ async function resolveStableUrl(url, provider) {
     const res = await fetch(p.api());
     if (res.ok) {
       const txt = (await res.text()).trim().replace(/^["']|["']$/g, "");
-      // 优先匹配 URL 行；若是 JSON 形式（{"url":"..."}），也兜住
-      const m =
-        txt.match(/https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)/i) ||
-        txt.match(/"url"\s*:\s*"(https?:[^"]+)"/) ||
-        (/^https?:\/\//.test(txt) ? [null, txt] : null);
-      if (m && m[1]) return m[1];
+      // 直接匹配完整 URL：正则无捕获组时 match()[0] 才是完整匹配，[1] 是 undefined
+      const m = txt.match(
+        /https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)/i,
+      );
+      if (m && m[0]) return m[0];
+      // JSON 形式兜底：{"url":"https://..."}
+      const j = txt.match(/"url"\s*:\s*"(https?:[^"]+)"/);
+      if (j && j[1]) return j[1];
+      // 纯 URL 文本兜底
+      if (/^https?:\/\//.test(txt)) return txt;
     }
   } catch {}
   return url;
@@ -78,6 +82,7 @@ async function migratePinnedEndpoint() {
   try {
     const stable = await resolveStableUrl(u, state.bgProvider);
     if (stable && stable !== u) {
+      bgGen++; // 迁移也算一次换图，使旧的 probeBackground 回调作废
       state.bgUrl = stable;
       state.bgFailed = false;
       applyBackground();
@@ -308,18 +313,22 @@ export function crumb(msg) {
 function probeBackground() {
   if (typeof Image === "undefined") return;
   if (!state.bgUrl) return;
-  crumb(`probe start: ${state.bgUrl.slice(0, 60)}`);
+  const gen = bgGen; // 捕获探测启动时的代际
+  const url = state.bgUrl;
+  crumb(`probe start: ${url.slice(0, 60)}`);
   const img = new Image();
   img.onload = () => {
+    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
     crumb("probe ok");
     state.bgFailed = false;
     applyBackground();
     // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
-    analyzeWallpaper(state.bgUrl);
+    analyzeWallpaper(url);
     // 启动入场：壁纸就绪后由糊渐清晰
     clearBootFocus();
   };
   img.onerror = () => {
+    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
     crumb("probe error");
     bootFocusPending = false;
     if (state.bgFailed) return;
@@ -332,7 +341,7 @@ function probeBackground() {
       );
     }
   };
-  img.src = state.bgUrl;
+  img.src = url;
 }
 
 // 带超时的探测，返回 Promise<boolean>（用于启动自动换图失败时回退旧壁纸）
@@ -643,6 +652,7 @@ const CORS_PROXIES = [
  */
 async function analyzeWallpaper(url) {
   if (!url) return;
+  const gen = bgGen; // 捕获取色启动时的代际
   let got = null;
   const attempt = async (src) => {
     const pal = await extractPaletteFromImage(src);
@@ -678,6 +688,8 @@ async function analyzeWallpaper(url) {
       }
     }
   }
+  // 取色期间壁纸若已更换，丢弃本次结果，避免旧图配色覆盖新图
+  if (gen !== bgGen) return;
   // 应用取色：仅「跟随壁纸取色」模式把壁纸色板写为主题色
   if (got && state.paletteMode === "auto") {
     state.palette = got;
@@ -705,7 +717,13 @@ async function shuffleBackground() {
   await _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
 }
 
+// 壁纸代际计数：每次「换图/迁移」递增。异步回调（resolveStableUrl、probeBackground 的
+// onload/onerror、analyzeWallpaper）返回时若代际已变，说明有新壁纸取代了旧任务，丢弃本次结果，
+// 避免迟到的回调把新壁纸覆盖回旧壁纸（否则预览与实际会出现不一致）。
+let bgGen = 0;
+
 async function _applyNewBg(url) {
+  const gen = ++bgGen;
   // 随机配色模式：每次换图（含刷新）都重新生成配色
   if (state.paletteMode === "random") randomizePalette();
   // 关键修复：先把随机端点解析成稳定地址，再 set state.bgUrl + applyBackground。
@@ -715,6 +733,7 @@ async function _applyNewBg(url) {
   try {
     stable = (await resolveStableUrl(url, state.bgProvider)) || url;
   } catch {}
+  if (gen !== bgGen) return; // 已被更新的换图请求取代，丢弃本次结果
   state.bgUrl = stable;
   state.bgFailed = false;
   applyBackground();
@@ -797,6 +816,15 @@ export async function initAppearance() {
     startFocusObserver();
     return;
   }
+  // 自动换图模式：在首次 applyAll 之前先解析新图（await 完成），保证首屏只渲染一张壁纸，
+  // 不出现"先显示旧图、再瞬间切到新图"的双重渲染/自动切换
+  if (state.bgEnabled && state.bgAutoSwitch) {
+    try {
+      await autoSwitchOnStartup();
+    } catch (e) {
+      console.error(e);
+    }
+  }
   crumb("applyAll");
   applyAll();
   // 每次刷新随机配色：随机模式在每次加载时重新生成配色
@@ -823,10 +851,6 @@ export async function initAppearance() {
     probeBackground();
   } catch (e) {
     console.error(e);
-  }
-  // 自动换图模式：每次打开换一张（新图加载失败自动回退到上一张可用的壁纸）
-  if (state.bgEnabled && state.bgAutoSwitch) {
-    autoSwitchOnStartup();
   }
   crumb("init done (sync part)");
 }
