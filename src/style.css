@@ -508,26 +508,28 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 
 /* 切页时玻璃卡片的模糊同样与淡入/位移动画同步渐显，避免切页结束才“啪”地出现模糊。
    要点：
-   ① 起始模糊取目标值的小比例（毛玻璃 4px / 液态 6px）而非 0——Chrome 对
-      backdrop-filter 从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
+   ① 起始模糊取目标值的小比例（毛玻璃 4px）而非 0——Chrome 对 backdrop-filter
+      从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
       非零起始能保证淡入期间持续有模糊并平滑升到目标；
    ② 起始值保留 saturate(1)，避免“从无 saturate 瞬间切到有 saturate”的跳变；
-   ③ !important 压过液态覆盖（body[data-glass='liquid'] .glass 特异性更高，
-      否则液态下起始值被目标值覆盖、过渡失效）。 */
+   ③ !important 压过玻璃风格覆盖（body[data-glass='liquid'] .glass 特异性更高）。 */
 .fade-enter-active .glass,
 .fade-leave-active .glass {
   transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.fade-enter-from .glass,
-.fade-leave-to .glass {
+/* 毛玻璃：起始小幅模糊，随淡入平滑升到目标（避免结束才“啪”出现） */
+body:not([data-glass='liquid']) .fade-enter-from .glass,
+body:not([data-glass='liquid']) .fade-leave-to .glass {
   backdrop-filter: blur(4px) saturate(1) !important;
   -webkit-backdrop-filter: blur(4px) saturate(1) !important;
 }
+/* 液态玻璃：组件一出现就是完整玻璃质感（起始即目标值 blur(20px) saturate(1.65)），
+   只做透明度/位移动画——“先有模糊再淡入”，淡入期间玻璃效果始终完整，无需模糊渐变 */
 body[data-glass='liquid'] .fade-enter-from .glass,
 body[data-glass='liquid'] .fade-leave-to .glass {
-  backdrop-filter: blur(6px) saturate(1) !important;
-  -webkit-backdrop-filter: blur(6px) saturate(1) !important;
+  backdrop-filter: blur(20px) saturate(1.65) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.65) !important;
 }
 
 /* 滑入动画 */
