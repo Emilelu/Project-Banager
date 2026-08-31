@@ -89,7 +89,7 @@
       <!-- 页面内容 -->
       <main class="flex-1 overflow-auto p-6">
         <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
+          <transition name="fade" mode="out-in" appear>
             <component :is="Component" />
           </transition>
         </router-view>

@@ -29,13 +29,13 @@
       </a>
     </div>
     <div class="flex items-center gap-1 mt-0.5">
-      <span class="text-sm font-bold text-primary">e</span>
+      <span class="text-sm font-bold text-gray-800">e</span>
       <span @dblclick.stop="!batchMode && $emit('start-edit', 'current_episode')" class="editable-cell">
         <input v-if="editing?.id === item.id && editing?.field === 'current_episode'" :value="editValue"
           @input="$emit('update:editValue', $event.target.value)"
           type="text" inputmode="decimal" @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')"
           class="inline-edit-input w-16" autofocus />
-        <span v-else class="text-sm font-bold text-primary">{{ item.current_episode }}</span>
+        <span v-else class="text-sm font-bold text-gray-800">{{ item.current_episode }}</span>
       </span>
       <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 ml-auto">
         <button @click.stop="$emit('increment')" class="w-6 h-6 rounded bg-success/80 text-white text-sm flex items-center justify-center hover:bg-success transition btn-press" title="+1集">+</button>
