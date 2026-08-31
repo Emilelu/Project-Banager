@@ -31,6 +31,15 @@
   --bg-dim: 0.55;
   --bg-scrim-light: 245 243 255; /* 与日间渐变底色一致 */
   --bg-scrim-dark: 15 10 26;     /* 与暗色渐变底色一致 */
+
+  /* 自适应文字取色（壁纸激活时由 useAppearance.js 覆写，见 .adaptive 规则）：
+     默认取浅色字阶，适配无壁纸时的深色渐变底色 */
+  --txt-main-300: 226 232 240;
+  --txt-main-400: 203 213 225;
+  --txt-main-500: 148 163 184;
+  --txt-sb-300: 226 232 240;
+  --txt-sb-400: 203 213 225;
+  --txt-sb-500: 148 163 184;
 }
 
 /* ==================== 背景图 ==================== */
@@ -80,6 +89,12 @@ body.with-bg .sidebar-bg {
 
 .dark body.with-bg .sidebar-bg {
   background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) * 0.55 + 0.28));
+}
+
+/* 浅色 + 壁纸（非液态玻璃）：侧栏底色变为浅色 scrim，白色导航文字会看不清；
+   覆一层深色半透明衬底保证可读。液态玻璃模式自身是白色玻璃 + 白字，无需此处理 */
+html:not(.dark) body:not([data-glass='liquid']).with-bg .sidebar-bg {
+  background: rgb(var(--bg-scrim-dark) / 0.62);
 }
 
 /* ==================== 全局响应式缩放 ==================== */
@@ -383,6 +398,19 @@ body {
   background: linear-gradient(180deg, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
 }
 
+/* ==================== 自适应文字取色 ==================== */
+/* 壁纸激活（body.with-bg.adaptive）时，直接压在壁纸/玻璃上的文字按背景亮度自动取
+   深/浅色，保证任意亮度壁纸下都可读。玻璃卡片（.glass）内部的文字保持自身配色，不在此列。 */
+body.with-bg.adaptive .sidebar-bg [class*="text-white"] {
+  color: rgb(var(--txt-sb-400)) !important;
+}
+body.with-bg.adaptive .sidebar-bg [class*="text-white"]:hover {
+  color: rgb(var(--txt-sb-500)) !important;
+}
+body.with-bg.adaptive main :is(.text-gray-300,.text-gray-400,.text-gray-500):not(.glass *):not([class*="glass"]) {
+  color: rgb(var(--txt-main-400)) !important;
+}
+
 /* 页面切换动画 */
 .fade-enter-active,
 .fade-leave-active {
@@ -397,6 +425,19 @@ body {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+/* 切页时玻璃卡片的模糊同样与位移动画同步渐显，避免切页结束才“啪”地出现模糊。
+   时长/曲线与 .fade 一致（0.3s cubic-bezier(.4,0,.2,1)）。 */
+.fade-enter-active .glass,
+.fade-leave-active .glass {
+  transition: backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fade-enter-from .glass,
+.fade-leave-to .glass {
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
 
 /* 滑入动画 */
@@ -428,6 +469,23 @@ body {
 .modal-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(10px);
+}
+
+/* 弹窗玻璃模糊与开合动画同步：入场/出场时让内部 .glass 的 backdrop-filter 模糊值
+   随外层 transform 进度从 0 渐显到目标值，消除“动画播完才突然叠加模糊”的突兀感。
+   时长/曲线与弹窗开合严格一致（开 0.35s / 关 0.25s），不动画曲线本身。 */
+.modal-enter-active .glass {
+  transition: backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    -webkit-backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-leave-active .glass {
+  transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 1, 1),
+    -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 1, 1);
+}
+.modal-enter-from .glass,
+.modal-leave-to .glass {
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
 
 /* 模态框动画 - 背景遮罩（模糊渐变） */
@@ -517,6 +575,29 @@ body[data-glass='liquid'] .glass {
 .dark body[data-glass='liquid'] .glass {
   background: linear-gradient(135deg, rgba(30, 22, 58, 0.72), rgba(16, 12, 34, 0.55));
   border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.12),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* 液态玻璃模式下，侧边栏（.sidebar-bg）跟随主区 .glass 的折射高光 + 饱和 + 悬浮投影；
+   侧栏自带更强模糊以压住壁纸，故在 liquid 基础上保留其 backdrop-filter */
+body[data-glass='liquid'] .sidebar-bg {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.30));
+  backdrop-filter: blur(calc(var(--bg-blur) + 18px)) saturate(1.65);
+  -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 18px)) saturate(1.65);
+  /* 浅色模式下用极淡的深色描边做分隔，避免白玻璃上出现突兀白线；深色沿用浅白描边 */
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.25),
+    0 8px 32px rgba(31, 38, 135, 0.16);
+}
+
+.dark body[data-glass='liquid'] .sidebar-bg {
+  background: linear-gradient(135deg, rgba(30, 22, 58, 0.72), rgba(16, 12, 34, 0.55));
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.12),
     inset 0 -1px 1px rgba(255, 255, 255, 0.04),

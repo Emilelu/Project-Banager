@@ -5,12 +5,15 @@
  */
 import { reactive, watch } from "vue";
 import { showToast } from "./useToast";
+import { relLum, deriveTextScale } from "./colorMath.js";
 
 const STORAGE_KEY = "banager_appearance";
 
 const state = reactive({
   glass: "frost", // 'frost' 毛玻璃 | 'liquid' 液态玻璃
   palette: null, // null = 默认樱紫；否则 { p: [h,s,l], s: [h,s,l] }
+  paletteMode: "auto", // 'auto' 跟随壁纸取色 | 'random' 每次随机 | 'manual' 预设/自定义固定
+  effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
   bgEnabled: false,
   bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
   bgAutoSwitch: true, // 每次打开页面自动换一张；关闭即固定当前壁纸
@@ -21,6 +24,75 @@ const state = reactive({
   bgLoading: false,
   bgFailed: false, // 运行时标记：当前图片加载失败（不持久化）
 });
+
+// ========== 壁纸图源配置 ==========
+// entry：随机端点（每次返回不同图）；api：地址接口（返回最终稳定图床 URL，全程 CORS 许可）。
+// 固定壁纸时把随机端点解析成稳定地址，刷新不再换图。
+const PROVIDERS = {
+  alcy: {
+    api: () => `https://t.alcy.cc/ycy?json=true`,
+  },
+  dmoe: {
+    api: () => `https://www.dmoe.cc/random.php?json`,
+  },
+};
+
+// 把“随机端点”解析为“稳定图床地址”（固定壁纸用）。三级降级：
+// ① no-cors 跟随重定向：Chrome 可拿到确切当前图的最终地址；Firefox url 为空则降级
+// ② 地址接口（alcy 稳定支持）：返回最终稳定 URL 文本
+// ③ 兜底：保留原随机端点（至少能显示背景，但刷新会换图）
+async function resolveStableUrl(url, provider) {
+  if (provider === "custom") return url || "";
+  const p = PROVIDERS[provider] || PROVIDERS.alcy;
+  try {
+    const r = await fetch(url, { mode: "no-cors", redirect: "follow" });
+    if (r.url && /^https?:\/\//.test(r.url)) return r.url;
+  } catch {}
+  try {
+    const res = await fetch(p.api());
+    if (res.ok) {
+      const txt = (await res.text()).trim();
+      if (/^https?:\/\//.test(txt)) return txt;
+    }
+  } catch {}
+  return url;
+}
+
+// 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址
+async function migratePinnedEndpoint() {
+  if (!state.bgEnabled || !state.bgUrl || state.bgAutoSwitch) return;
+  const u = state.bgUrl;
+  const isRandom =
+    /t\.alcy\.cc\/ycy(?!.*json)/.test(u) ||
+    /dmoe\.cc\/random/.test(u) ||
+    /[?&]t=\d+/.test(u);
+  if (!isRandom) return;
+  try {
+    const stable = await resolveStableUrl(u, state.bgProvider);
+    if (stable && stable !== u) {
+      state.bgUrl = stable;
+      state.bgFailed = false;
+      applyBackground();
+      probeBackground();
+    }
+  } catch {}
+}
+
+// 自动换图开关：关闭即“固定当前壁纸”——把当前随机端点解析为稳定地址再保存
+async function setAutoSwitch(v) {
+  state.bgAutoSwitch = v;
+  if (!v && state.bgUrl) {
+    try {
+      const stable = await resolveStableUrl(state.bgUrl, state.bgProvider);
+      if (stable && stable !== state.bgUrl) {
+        state.bgUrl = stable;
+        state.bgFailed = false;
+        applyBackground();
+        probeBackground();
+      }
+    } catch {}
+  }
+}
 
 // ========== 颜色工具 ==========
 
@@ -106,6 +178,46 @@ function applyGlass() {
   if (typeof document === "undefined") return;
   if (state.glass === "liquid") document.body.dataset.glass = "liquid";
   else delete document.body.dataset.glass;
+  // 玻璃风格影响侧栏背景亮度，需重算自适应文字色
+  applyAdaptiveText(state.effYWall);
+}
+
+// ========== 自适应文字取色（保证任意亮度壁纸上文字都可读） ==========
+// 壁纸加载后由 extractPaletteFromImage 写入 state.effYWall（平均相对亮度）。
+// 按「玻璃 + 遮罩 + 壁纸」合成出各区域有效亮度，再用 colorMath.deriveTextScale
+// 推导出该背景下可读的文字色阶（深/浅自适应），写入 --txt-* 变量。
+function applyAdaptiveText(effYWall) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const active = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  if (effYWall == null || !active) {
+    // 无壁纸或未取得亮度：关闭自适应，回退组件自带文字色
+    document.body.classList.remove("adaptive");
+    return;
+  }
+  document.body.classList.add("adaptive");
+  const dark = document.documentElement.classList.contains("dark");
+  const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
+  const cfg = { target: 4.5, r400: 0.8, r300: 0.62, min: 0.02, max: 0.98 };
+  // 主内容区背景亮度 = 遮罩(scrim) 与壁纸的合成
+  const bgDim = clamp(state.bgDim, 0, 0.9);
+  const scrimLum = dark ? 0.02 : 0.9;
+  const effYMain = (1 - bgDim) * effYWall + bgDim * scrimLum;
+  // 侧栏背景亮度：液态玻璃为亮玻璃；毛玻璃为深色 scrim
+  let effYSb;
+  if (state.glass === "liquid") effYSb = 0.86;
+  else {
+    const sbAlpha = dark ? 0.78 : 0.62;
+    effYSb = (1 - sbAlpha) * effYWall + sbAlpha * 0.02;
+  }
+  const main = deriveTextScale(effYMain, base, cfg, effYMain > 0.45);
+  const sb = deriveTextScale(effYSb, base, cfg, effYSb > 0.45);
+  root.style.setProperty("--txt-main-300", main[0]);
+  root.style.setProperty("--txt-main-400", main[1]);
+  root.style.setProperty("--txt-main-500", main[2]);
+  root.style.setProperty("--txt-sb-300", sb[0]);
+  root.style.setProperty("--txt-sb-400", sb[1]);
+  root.style.setProperty("--txt-sb-500", sb[2]);
 }
 
 function applyBackground() {
@@ -125,6 +237,8 @@ function applyBackground() {
     root.setProperty("--bg-blur", "0px");
     root.setProperty("--bg-dim", "0");
   }
+  // 壁纸开关变化后同步自适应文字取色状态
+  applyAdaptiveText(state.effYWall);
 }
 
 // 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
@@ -157,6 +271,8 @@ function probeBackground() {
     crumb("probe ok");
     state.bgFailed = false;
     applyBackground();
+    // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
+    analyzeWallpaper(state.bgUrl);
     // 启动入场：壁纸就绪后由糊渐清晰
     clearBootFocus();
   };
@@ -344,6 +460,26 @@ function randomizePalette() {
   applyPalette();
 }
 
+/** 配色模式切换：'auto' 跟随壁纸取色、'random' 随机、'manual'/预设/自定义则保持当前配色 */
+function setPaletteMode(mode) {
+  state.paletteMode = mode;
+  if (mode === "auto") {
+    // 切回「跟随壁纸」：立即用当前壁纸重新取色（无壁纸则保持现状）
+    if (state.bgEnabled && state.bgUrl) analyzeWallpaper(state.bgUrl);
+  } else if (mode === "random") {
+    randomizePalette();
+  }
+  // 'manual' / 预设 / 自定义：配色已由对应入口（setPalette / applyCustomBackground）设定，保持不变
+}
+
+/** 应用自定义图片地址为壁纸（「完成」时调用） */
+function applyCustomBackground() {
+  if (state.bgProvider !== "custom") state.bgProvider = "custom";
+  const url = (state.bgCustomUrl || "").trim();
+  if (!url) return;
+  _applyNewBg(url);
+}
+
 /**
  * 通用 canvas 取色：跨域加载图片副本 → 缩样 → 按色相桶统计饱和度权重 →
  * 取主峰为主色、相距 ≥30° 的次峰为副色。
@@ -366,6 +502,18 @@ function extractPaletteFromImage(url) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, size, size);
         const { data } = ctx.getImageData(0, 0, size, size);
+        // 平均亮度（供自适应文字取色）：取全像素均值，代表壁纸整体明暗。
+        // 必须在取色逻辑之前计算——即便壁纸“太素”取不到主色，亮度仍可用于文字可读性。
+        {
+          let sumR = 0, sumG = 0, sumB = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            sumR += data[i];
+            sumG += data[i + 1];
+            sumB += data[i + 2];
+          }
+          const px = data.length / 4;
+          state.effYWall = relLum([sumR / px, sumG / px, sumB / px]);
+        }
         const bins = new Array(36).fill(0);
         const binStat = new Array(36)
           .fill(null)
@@ -415,6 +563,63 @@ function extractPaletteFromImage(url) {
   });
 }
 
+// ========== 壁纸取色（含跨域代理回退） ==========
+
+// 部分图源（dmoe / 自定义直链）不返回 CORS 许可，直连 canvas 取色会被污染而失败。
+// 依次走这些图片代理拿到「带 CORS 头、像素可读」的副本再取色。
+const CORS_PROXIES = [
+  // weserv：专为图片设计、稳定且返回 Access-Control-Allow-Origin: *，需去掉协议头
+  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ""))}`,
+  // cors.sh：经验证稳定返回 200 + ACAO:*（可读像素）
+  (u) => `https://proxy.cors.sh/${u}`,
+  // allorigins：通用代理，返回原始字节并带 CORS 头（偶发不稳定，兜底）
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+];
+
+/**
+ * 跟随壁纸取色：壁纸加载成功后提取主色并应用到主题（仅 paletteMode==='auto' 时）。
+ * 直连 crossOrigin 取色失败（图源未开放 CORS）时，依次走图片代理再取色；
+ * 全部失败则静默放弃（不抛错、不改动当前主题）。
+ */
+async function analyzeWallpaper(url) {
+  if (!url) return;
+  const extract = (src) => extractPaletteFromImage(src).then(() => true);
+  let paletteDone = false;
+  try {
+    await extract(url);
+    paletteDone = true;
+    crumb("wallpaper palette: direct ok");
+  } catch (e) {
+    crumb(`wallpaper palette direct failed: ${e?.message || e}`);
+  }
+  // 直连失败 → 依次走代理（仍会写入 state.effYWall 供文字取色）
+  if (!paletteDone) {
+    for (const make of CORS_PROXIES) {
+      try {
+        const res = await fetch(make(url));
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        try {
+          await extract(objUrl);
+          paletteDone = true;
+          crumb("wallpaper palette: proxy ok");
+          break;
+        } finally {
+          URL.revokeObjectURL(objUrl);
+        }
+      } catch (e) {
+        crumb(`wallpaper palette proxy failed: ${e?.message || e}`);
+      }
+    }
+  }
+  // 自适应文字取色：只要拿到壁纸亮度就应用，与 paletteMode 无关（固定/随机配色下文字仍需可读）
+  applyAdaptiveText(state.effYWall);
+  if (!paletteDone && state.paletteMode === "auto") {
+    crumb("wallpaper palette: all methods failed, keep current theme");
+  }
+}
+
 /** 按当前源换一张随机背景图 */
 function shuffleBackground() {
   if (state.bgProvider === "custom") {
@@ -434,6 +639,8 @@ function _applyNewBg(url) {
   state.bgUrl = url;
   state.bgFailed = false;
   applyBackground();
+  // 随机配色模式：每次换图（含刷新）都重新生成配色
+  if (state.paletteMode === "random") randomizePalette();
   probeBackground();
 }
 
@@ -484,6 +691,8 @@ export function initAppearance() {
       if (!saved.bgProvider || saved.bgProvider === "wallhaven")
         saved.bgProvider = "alcy";
       Object.assign(state, saved);
+      // 固定壁纸：若持久化的是旧随机端点，启动时自动解析为稳定地址
+      migratePinnedEndpoint();
     }
     crumb(
       `config loaded: enabled=${state.bgEnabled} provider=${state.bgProvider} auto=${state.bgAutoSwitch}`,
@@ -503,7 +712,16 @@ export function initAppearance() {
   }
   crumb("applyAll");
   applyAll();
+  // 每次刷新随机配色：随机模式在每次加载时重新生成配色
+  if (state.paletteMode === "random") randomizePalette();
   startFocusObserver();
+  // 暗色模式切换会改 scrim 亮度，需重算自适应文字色
+  try {
+    new MutationObserver(() => applyAdaptiveText(state.effYWall)).observe(
+      document.documentElement,
+      { attributes: true, attributeFilter: ["class"] },
+    );
+  } catch {}
   // 启动时探测上次的壁纸是否仍然可用（接口停服 / 图片被删时自动关闭）
   try {
     probeBackground();
@@ -528,15 +746,19 @@ export function useAppearance() {
     state,
     setGlass,
     setPalette,
+    setPaletteMode,
+    setAutoSwitch,
     randomizePalette,
     extractPaletteFromImage,
     shuffleBackground,
     toggleBackground,
     applyBackground,
+    applyCustomBackground,
+    analyzeWallpaper,
   };
 }
 
-export { hexToHsl };
+export { hexToHsl, setPaletteMode, setAutoSwitch, applyCustomBackground, analyzeWallpaper };
 
 /** HSL 数组转 CSS 颜色字符串（用于色板预览） */
 export function hslCss([h, s, l]) {
