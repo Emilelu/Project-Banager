@@ -380,10 +380,22 @@ const remainingList = ref([])
 const selected = ref(null)
 
 // 排序：偏好持久化到 localStorage；预计日期用数字位比较（兼容 2025/07、2025/07/15 混排）
+// 默认按预计日期升序，让最近的等番排在最前。「等待更新」列表用户预期也是这样
 const searchQuery = ref('')
 const SORT_KEY_F = 'remaining_sort_field'
 const SORT_KEY_O = 'remaining_sort_order'
-const sortField = ref(localStorage.getItem(SORT_KEY_F) || '')
+const SORT_MIGRATED_KEY = 'remaining_sort_default_migrated'
+// 旧版 sortField 默认 ''（无排序）导致列表按插入顺序展示，不符合「等待更新」的预期。
+// 一次性迁移：未设过排序键的用户把默认值钉到 expected_date / asc。
+// 设置过排序键的用户保留其偏好（说明曾经点击过表头，主动调整过）。
+if (!localStorage.getItem(SORT_MIGRATED_KEY)) {
+  if (localStorage.getItem(SORT_KEY_F) == null) {
+    localStorage.setItem(SORT_KEY_F, 'expected_date')
+    localStorage.setItem(SORT_KEY_O, 'asc')
+  }
+  localStorage.setItem(SORT_MIGRATED_KEY, '1')
+}
+const sortField = ref(localStorage.getItem(SORT_KEY_F) || 'expected_date')
 const sortOrder = ref(localStorage.getItem(SORT_KEY_O) || 'asc')
 watch([sortField, sortOrder], ([f, o]) => {
   localStorage.setItem(SORT_KEY_F, f)
