@@ -37,35 +37,43 @@ const PROVIDERS = {
   },
 };
 
-// 把“随机端点”解析为“稳定图床地址”（固定壁纸用）。三级降级：
-// ① no-cors 跟随重定向：Chrome 可拿到确切当前图的最终地址；Firefox url 为空则降级
-// ② 地址接口（alcy 稳定支持）：返回最终稳定 URL 文本
-// ③ 兜底：保留原随机端点（至少能显示背景，但刷新会换图）
+// 把"随机端点"解析为"稳定图床地址"（固定壁纸用）。
+//   ① no-cors 跟随重定向：拿到 302 后的最终图床直链（最稳定）
+//   ② api 端点：alcy 的 api 接口返回 JSON 字符串形式 `https://tc...webp`（实测形态）
+//   ③ 兜底：返回原 URL（可能是端点本身，调用方应能感知仍可能刷新换图）
 async function resolveStableUrl(url, provider) {
   if (provider === "custom") return url || "";
   const p = PROVIDERS[provider] || PROVIDERS.alcy;
+  // ① no-cors 跟随重定向：r.url 就是 302 后最终地址
   try {
     const r = await fetch(url, { mode: "no-cors", redirect: "follow" });
-    if (r.url && /^https?:\/\//.test(r.url)) return r.url;
+    if (r.url && /^https?:\/\//.test(r.url) && r.url !== url) return r.url;
   } catch {}
+  // ② api 端点：alcy 的 json 接口实测返回 `https://tc.alcy.cc/...webp` 形式的纯文本
   try {
     const res = await fetch(p.api());
     if (res.ok) {
-      const txt = (await res.text()).trim();
-      if (/^https?:\/\//.test(txt)) return txt;
+      const txt = (await res.text()).trim().replace(/^["']|["']$/g, "");
+      // 优先匹配 URL 行；若是 JSON 形式（{"url":"..."}），也兜住
+      const m =
+        txt.match(/https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)/i) ||
+        txt.match(/"url"\s*:\s*"(https?:[^"]+)"/) ||
+        (/^https?:\/\//.test(txt) ? [null, txt] : null);
+      if (m && m[1]) return m[1];
     }
   } catch {}
   return url;
 }
 
-// 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址
+// 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址。
+// 关键：识别 alcy 的根端点本身 `t.alcy.cc/ycy[/?]` 而不依赖 ?t=... 参数（很多旧/被截断的链接没参数）
 async function migratePinnedEndpoint() {
   if (!state.bgEnabled || !state.bgUrl || state.bgAutoSwitch) return;
   const u = state.bgUrl;
   const isRandom =
-    /t\.alcy\.cc\/ycy(?!.*json)/.test(u) ||
+    /t\.alcy\.cc\/ycy(\/?|\/?\?|\?|$)/.test(u) || // alcy 端点本体（含末尾/、?、?json）
     /dmoe\.cc\/random/.test(u) ||
-    /[?&]t=\d+/.test(u);
+    /[?&]t=\d{8,}/.test(u);
   if (!isRandom) return;
   try {
     const stable = await resolveStableUrl(u, state.bgProvider);
@@ -659,21 +667,18 @@ async function shuffleBackground() {
 }
 
 async function _applyNewBg(url) {
-  state.bgUrl = url;
-  state.bgFailed = false;
-  applyBackground();
   // 随机配色模式：每次换图（含刷新）都重新生成配色
   if (state.paletteMode === "random") randomizePalette();
-  // 解析为稳定地址：弹窗预览 <img> 与背景 ::before 共用同一 URL 才保证同图。
-  // 若保留随机端点，二者各自请求会命中不同图片，预览与实际背景不一致。
+  // 关键修复：先把随机端点解析成稳定地址，再 set state.bgUrl + applyBackground。
+  // 否则首屏用端点渲染，迁移解析后换图 = 「啪」地切一张。
+  // 自定义直链本身就是稳定地址，resolveStableUrl 会原样返回。
+  let stable = url;
   try {
-    const stable = await resolveStableUrl(url, state.bgProvider);
-    if (stable && stable !== state.bgUrl) {
-      state.bgUrl = stable;
-      state.bgFailed = false;
-      applyBackground();
-    }
+    stable = (await resolveStableUrl(url, state.bgProvider)) || url;
   } catch {}
+  state.bgUrl = stable;
+  state.bgFailed = false;
+  applyBackground();
   probeBackground();
 }
 
@@ -713,7 +718,7 @@ watch(
   { deep: true },
 );
 
-export function initAppearance() {
+export async function initAppearance() {
   // ?nobg / #nobg 逃生通道：URL 带此标记时跳过整个背景系统，保证页面永远能打开
   const nobg =
     /[?&]nobg/.test(location.search) || /#.*[?&]nobg/.test(location.hash);
@@ -732,11 +737,13 @@ export function initAppearance() {
         }
       } catch {}
       Object.assign(state, saved);
-      // 固定壁纸：若持久化的是旧随机端点，启动时自动解析为稳定地址
-      migratePinnedEndpoint();
+      // 关键修复：先 AWAIT 迁移到稳定地址，再 applyBackground。
+      // 否则首屏会用随机端点加载一张图，几百毫秒后迁移解析换稳定地址，
+      // 用户看到「刷新后壁纸突然从一张切到另一张」。
+      await migratePinnedEndpoint();
     }
     crumb(
-      `config loaded: enabled=${state.bgEnabled} provider=${state.bgProvider} auto=${state.bgAutoSwitch}`,
+      `config loaded: enabled=${state.bgEnabled} provider=${state.bgProvider} auto=${state.bgAutoSwitch} url=${state.bgUrl?.slice(0, 60) || "(empty)"}`,
     );
   } catch (e) {
     console.error("外观配置读取失败，已重置", e);
@@ -769,12 +776,6 @@ export function initAppearance() {
   } catch (e) {
     console.error(e);
   }
-  // 壁纸入场：保持模糊直到壁纸就绪，再由糊渐清晰（iOS 风格）
-  // try {
-  //   startupSharpen();
-  // } catch (e) {
-  //   console.error(e);
-  // }
   // 自动换图模式：每次打开换一张（新图加载失败自动回退到上一张可用的壁纸）
   if (state.bgEnabled && state.bgAutoSwitch) {
     autoSwitchOnStartup();
