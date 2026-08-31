@@ -941,9 +941,6 @@ export async function initAppearance() {
       // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
       if (!saved.bgProvider || saved.bgProvider === "wallhaven")
         saved.bgProvider = "alcy";
-      // 新默认（用户要求）：「每次打开自动换一张」；老用户持久化的 bgAutoSwitch=false
-      // 是旧默认「固定当前壁纸」，这里强制翻转为 true，使所有用户统一走自动换图
-      if (saved.bgAutoSwitch === false) saved.bgAutoSwitch = true;
       Object.assign(state, saved);
     }
   } catch (e) {

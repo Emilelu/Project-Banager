@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 flex flex-col min-h-full" :class="{ 'view-in': dataLoaded }">
+  <div class="space-y-5 flex flex-col min-h-full">
     <!-- 等番本月提示 -->
     <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3 shrink-0">
       <div class="flex items-center justify-between">
@@ -390,10 +390,10 @@ const dayIcons = ['🌙','🔥','🌊','⚡','🌸','🎉','☀️']
 
 const SELECTED_KEY = 'watching_selected_id'
 
-// 数据就绪门闩：初始为 false，首帧不渲染空状态引导（避免有数据用户一闪而过）；
-// 首次 fetchData 完成后置 true：空状态引导渲染；同时只播一次主区淡入（view-in 动画），
-// 动画结束后 class 自动摘除、opacity 回到缺省 1——不形成常驻透明度，
-// 不吞后代 .glass 的 backdrop-filter，也不压制路由 fade-leave 的离场淡出
+// 数据就绪门闩：初始为 false，首帧不渲染空状态引导（避免有数据用户一闪而过）。
+// 首次 fetchData 完成后置 true，空状态引导（若确实无数据）才开始渲染。
+// 主区淡入不在此处理——交给路由 <transition fade appear>（首次挂载即播），
+// 这里不挂任何透明度/动画类，避免 backdrop root 吞掉 .glass 玻璃与锁住离场淡出
 const dataLoaded = ref(false)
 
 const watchingList = ref([])

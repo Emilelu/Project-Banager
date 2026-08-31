@@ -494,37 +494,6 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   }
 }
 
-/* 首屏数据等待（数据驱动的淡入）：视图挂载后立即以正常状态呈现（无任何常驻透明度——
-   常驻 opacity<1 会形成 backdrop root、吞掉后代 .glass 的 backdrop-filter，毛玻璃丢失，
-   且会用动画层级锁住 opacity、压制路由 fade-leave 的离场淡出，造成切页卡顿回归）。
-   数据就绪后 .view-in 只播一次 0.35s 淡入 + 8px 位移动画（fill-mode: forwards =
-   动画结束后透明度回落到缺省 1，类不常驻；动画期间祖先 opacity<1 的那 0.35s 内，
-   玻璃模糊由内层 .glass 的 backdrop-filter 过渡规则（.fade-enter-active .glass 同款，
-   0.25s 从起始模糊爬到目标）衔接——淡入完成后玻璃已是完整值，无滞后突兀。
-   .view-in 挂在根元素上、与路由 fade 的 enter/leave 并存互不冲突（CSS 动画不生成
-     backdrop root，也不压制路由过渡的 opacity 属性） */
-.view-in {
-  animation: view-fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-@keyframes view-fade-in {
-  from {
-    opacity: 0.01;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-/* 路由切出的关键：.view-in 的 forwards 填充态（opacity:1）优先级高于 CSS transition，
-   若在离场过渡期间仍挂在元素上，会压制 fade-leave 的透明淡出（旧页硬消失→“切页卡顿”）。
-   因此在离场过渡挂类期间停掉视图动画，元素回落到普通样式（opacity 缺省 1），
-   fade-leave 的 transition 正常播放。进场过渡（enter）无需处理：enter 与动画目标一致（opacity 1），
-   且视图动画只播一次（组件重挂时 dataLoaded 重置，会重新播）。 */
-.fade-leave-active .view-in {
-  animation: none;
-}
 
 /* 页面切换动画 */
 .fade-enter-active,
