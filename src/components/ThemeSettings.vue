@@ -98,16 +98,20 @@
                   class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
                 <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">填写直链后点击「完成」即应用并保存，无需再点「换一张」。</p>
                 <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
+                <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
+                     点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
+                     不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
                 <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
-                  <button @click="setAutoSwitch(!state.bgAutoSwitch)"
+                  <button @click="setAutoSwitch(true)"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
                     :class="state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                    <span>{{ state.bgAutoSwitch ? '🔄' : '📌' }}</span>
-                    {{ state.bgAutoSwitch ? '每次打开自动换一张' : '已固定当前壁纸' }}
+                    🔄 每次打开自动换一张
                   </button>
-                  <button v-if="state.bgAutoSwitch" @click="setAutoSwitch(false)"
-                    class="px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press"
-                    title="关闭自动换图，固定当前这张壁纸">固定这张</button>
+                  <button @click="setAutoSwitch(false)"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="!state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                    📌 固定当前壁纸
+                  </button>
                 </div>
                 <div v-if="state.bgUrl" class="mt-3">
                   <img :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"

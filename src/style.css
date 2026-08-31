@@ -27,8 +27,8 @@
 
   /* 背景图系统（useAppearance.js 控制） */
   --bg-image: none;
-  --bg-blur: 0px;
-  --bg-dim: 0.55;
+  --bg-blur: 5px; /* 默认模糊 5px（与 useAppearance 默认一致） */
+  --bg-dim: 0.25; /* 默认遮罩 25%（与 useAppearance 默认一致） */
   --bg-scrim-light: 245 243 255; /* 与日间渐变底色一致 */
   --bg-scrim-dark: 15 10 26;     /* 与暗色渐变底色一致 */
 
@@ -40,6 +40,16 @@
   --txt-sb-300: 226 232 240;
   --txt-sb-400: 203 213 225;
   --txt-sb-500: 148 163 184;
+}
+
+/* ==================== 首屏就绪前（防白屏） ==================== */
+/* 挂载前 initAppearance 不再 await 网络解析，首帧内容立即渲染。
+   在样式引擎应用完成前（<500ms），去掉一切动画类，让内容直接呈现而不是"先透明后淡入"；
+   引擎就绪后移除本类，重挂动画过渡（fade/入场等按原配置播放）。 */
+html.pre-app-ready body #app > *,
+html.pre-app-ready body #app > * * {
+  animation: none !important;
+  transition: none !important;
 }
 
 /* ==================== 背景图 ==================== */
@@ -62,7 +72,8 @@ body.with-bg.bg-focus::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.with-bg::before {
+  body.with-bg::before,
+  body.with-bg.bg-focus::before {
     transition: none;
   }
 }
@@ -80,21 +91,17 @@ body.with-bg::after {
 }
 
 /* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来，
-   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读 */
+   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读。
+   遮罩颜色/浓度与主区（body.with-bg::after）完全一致：浅色 scrim / 深色 scrim，
+   深浅模式都同一套 --bg-dim，保证侧栏与主部分视觉统一。 */
 body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) * 0.55 + 0.28));
+  background: rgb(var(--bg-scrim-light) / var(--bg-dim));
   backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
   -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
 }
 
 .dark body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) * 0.55 + 0.28));
-}
-
-/* 浅色 + 壁纸（非液态玻璃）：侧栏底色变为浅色 scrim，白色导航文字会看不清；
-   覆一层深色半透明衬底保证可读。液态玻璃模式自身是白色玻璃 + 白字，无需此处理 */
-html:not(.dark) body:not([data-glass='liquid']).with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / 0.62);
+  background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
 /* ==================== 全局响应式缩放 ==================== */
@@ -533,6 +540,16 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 .modal-enter-from,
 .modal-leave-to {
   transform: scale(0.95) translateY(10px);
+}
+
+/* 弹窗开启期间允许取色/文字色平滑过渡：取色完成后回写的 --txt-* 与 --c-* 在
+   弹窗打开瞬间同步生效，不再“点开弹窗就卡一下”（取色与弹窗开启解耦）。 */
+body.modal-active .palette-animating,
+body.modal-active .palette-animating *,
+body.modal-active .palette-animating *::before,
+body.modal-active .palette-animating *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+    fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
 }
 
 /* 弹窗玻璃模糊与开合动画同步：入场/出场时让内部 .glass 的 backdrop-filter 模糊值
