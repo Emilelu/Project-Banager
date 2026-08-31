@@ -103,19 +103,13 @@ body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
-/* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来。
-   backdrop-filter 与主区壁纸层（body.with-bg::before）同为 blur(var(--bg-blur))，
-   保证模糊强度一致；遮罩叠加色在 --bg-dim 基础上额外加浓一点
-   （浅色加白 / 深色加黑）：侧栏是常驻导航区，略浓的 scrim 让文字更稳、与主区
-   视觉协调，避免侧栏看起来“缺一层遮罩色” */
-body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) + 0.1));
-  backdrop-filter: blur(var(--bg-blur));
-  -webkit-backdrop-filter: blur(var(--bg-blur));
-}
-
-.dark body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) + 0.1));
+/* 壁纸模式下侧边栏与主区**完全一致**：主区的「模糊壁纸 + 遮罩」层
+   （body.with-bg::before z:-2 / ::after z:-1）本来就是全屏 fixed，覆盖包括侧栏在内的
+   整个视口——毛玻璃（非液态）侧栏只需 background: transparent 透出它们，
+   不再自叠 scrim 或 backdrop-filter（任何叠加都会让侧栏比主区更浓/更雾，
+   看起来不一致）。液态玻璃侧栏有独立玻璃样式，不受此规则影响。 */
+body.with-bg:not([data-glass='liquid']) .sidebar-bg {
+  background: transparent;
 }
 
 /* ==================== 全局响应式缩放 ==================== */
