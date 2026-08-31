@@ -326,20 +326,31 @@ function probeBackground() {
   const img = new Image();
   img.onload = () => {
     if (gen !== bgGen) return; // 壁纸已换，本次探测作废
+    startupProbeActive = false;
     crumb("probe ok");
     state.bgFailed = false;
     applyBackground();
     // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
     analyzeWallpaper(url);
-    // 启动入场：壁纸就绪后由糊渐清晰
-    clearBootFocus();
-    startupSharpen();
   };
   img.onerror = () => {
     if (gen !== bgGen) return; // 壁纸已换，本次探测作废
     crumb("probe error");
     bootFocusPending = false;
+    const startup = startupProbeActive;
+    startupProbeActive = false;
     if (state.bgFailed) return;
+    // 启动「固定模式」探测失败：自动换一张新鲜的壁纸自愈，而不是把背景整个关掉
+    // （避免"壁纸出现一下又消失、回到没开壁纸"的观感；用户主动换图失败仍走 toast+关闭）
+    if (startup && !state.bgAutoSwitch && state.bgEnabled) {
+      crumb("probe error @startup → self-heal shuffle");
+      shuffleBackground().catch(() => {
+        state.bgFailed = true;
+        applyBackground();
+        showToast("背景图加载失败，已自动关闭背景", "warning");
+      });
+      return;
+    }
     state.bgFailed = true;
     applyBackground();
     if (!state.bgSilentProbe) {
@@ -804,6 +815,10 @@ async function shuffleBackground() {
 // 避免迟到的回调把新壁纸覆盖回旧壁纸（否则预览与实际会出现不一致）。
 let bgGen = 0;
 
+// 启动「固定模式」探测激活标记：启动时探测失败会自动换一张自愈（见 probeBackground onerror），
+// 而非把背景整个关掉。仅启动路径设置，用户手动换图/开关不触发自愈。
+let startupProbeActive = false;
+
 async function _applyNewBg(url) {
   const gen = ++bgGen;
   // 随机配色模式：每次换图（含刷新）都重新生成配色
@@ -926,20 +941,24 @@ export async function initAppearance() {
         await autoSwitchOnStartup();
       } else if (state.bgUrl) {
         // 固定壁纸：若持久化地址仍是随机端点（旧数据/被回退破坏），先迁移到稳定地址；
-        // 未发生迁移则正常探测当前地址是否仍可用
+        // 未发生迁移则正常探测当前地址是否仍可用；探测失败会自动换一张自愈
+        startupProbeActive = true;
         const migrated = await migratePinnedEndpoint();
         if (!migrated) {
           try {
             probeBackground();
           } catch (e) {
+            startupProbeActive = false;
             console.error(e);
           }
         }
       } else {
         // 固定模式但从未加载过图：取一张（此后保持固定，刷新不再换图）
+        startupProbeActive = true;
         try {
           await shuffleBackground();
         } catch (e) {
+          startupProbeActive = false;
           console.error(e);
         }
       }
