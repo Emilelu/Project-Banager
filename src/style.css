@@ -44,12 +44,12 @@
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
 /* 挂载前 initAppearance 不再 await 网络解析，首帧内容立即渲染。
-   在样式引擎应用完成前（<500ms），去掉一切动画类，让内容直接呈现而不是"先透明后淡入"；
-   引擎就绪后移除本类，重挂动画过渡（fade/入场等按原配置播放）。 */
+   启动瞬间只禁装饰动画（脉冲/漂浮等），避免抢首帧；不再禁 transition——
+   主区 fade 淡入（appear）在启动时正常播放，内容随淡入平滑呈现（挂载已不阻塞，
+   无"先透明后淡入"的白屏窗口）。引擎就绪后移除本类。 */
 html.pre-app-ready body #app > *,
 html.pre-app-ready body #app > * * {
   animation: none !important;
-  transition: none !important;
 }
 
 /* ==================== 背景图 ==================== */
@@ -103,13 +103,17 @@ body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
-/* 壁纸模式下侧边栏与主区**完全一致**：主区的「模糊壁纸 + 遮罩」层
-   （body.with-bg::before z:-2 / ::after z:-1）本来就是全屏 fixed，覆盖包括侧栏在内的
-   整个视口——毛玻璃（非液态）侧栏只需 background: transparent 透出它们，
-   不再自叠 scrim 或 backdrop-filter（任何叠加都会让侧栏比主区更浓/更雾，
-   看起来不一致）。液态玻璃侧栏有独立玻璃样式，不受此规则影响。 */
-body.with-bg:not([data-glass='liquid']) .sidebar-bg {
-  background: transparent;
+/* 毛玻璃模式：侧边栏与主区 .glass 卡片**同款毛玻璃**（浅色半透明白 + 12px 模糊 /
+   暗色半透明深紫黑）。液态侧栏有独立玻璃样式（见下方 body[data-glass='liquid'] 规则），
+   两者互斥，各自与对应主区玻璃一致。壁纸有无、明暗深浅均生效。 */
+body:not([data-glass='liquid']) .sidebar-bg {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark body:not([data-glass='liquid']) .sidebar-bg {
+  background: rgba(20, 15, 40, 0.8);
 }
 
 /* ==================== 全局响应式缩放 ==================== */
@@ -490,6 +494,33 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   }
 }
 
+/* 首屏数据等待（数据驱动的淡入）：视图挂载后先同步应用外观（无动画的瞬时就位），
+   等该视图数据加载完成再整体淡入。与路由 fade 的区别：fade 播出的是"数据还没回来"的
+   首帧内容（空周历/空列表），数据到位是第二帧的直接替换——对内容型页面那是突兀的硬切。
+   .view-fade-target 平时恒为透明待命（同步 class，挂载首帧即透明，无二次闪烁），
+   数据就绪（.view-in）后一次性播 0.35s 淡入 + 8px 位移动画；opacity 用 0.01 而非 0：
+   opacity:0 的元素被浏览器视为不可见，会跳过 backdrop-filter 合成，淡入中后段玻璃才
+   "突兀"出现；0.01 视觉等同 0 但首帧即参与合成（复用 .fade-enter-from 的既有策略）。
+   路由切换时视图卸载/重挂，组件内 dataLoaded 重置为 false，class 同步回 .view-fade-target
+   （无离场动画需求：Vue transition out-in 已负责旧视图离场淡出）。 */
+.view-fade-target {
+  opacity: 0.01;
+}
+.view-fade-target.view-in {
+  animation: view-fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0.01;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 页面切换动画 */
 .fade-enter-active,
 .fade-leave-active {
@@ -497,37 +528,43 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 }
 
 .fade-enter-from {
-  opacity: 0;
+  opacity: 0.01; /* 不用 0：opacity:0 的元素被浏览器视为不可见，会跳过 backdrop-filter
+                    合成，淡入中后段玻璃才“突兀”出现；0.01 视觉等同 0 但首帧即参与合成 */
   transform: translateY(8px);
 }
 
 .fade-leave-to {
-  opacity: 0;
+  opacity: 0.01;
   transform: translateY(-8px);
 }
 
 /* 切页时玻璃卡片的模糊同样与淡入/位移动画同步渐显，避免切页结束才“啪”地出现模糊。
    要点：
-   ① 起始模糊取目标值的小比例（毛玻璃 4px / 液态 6px）而非 0——Chrome 对
-      backdrop-filter 从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
+   ① 起始模糊取目标值的小比例（毛玻璃 4px）而非 0——Chrome 对 backdrop-filter
+      从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
       非零起始能保证淡入期间持续有模糊并平滑升到目标；
    ② 起始值保留 saturate(1)，避免“从无 saturate 瞬间切到有 saturate”的跳变；
-   ③ !important 压过液态覆盖（body[data-glass='liquid'] .glass 特异性更高，
-      否则液态下起始值被目标值覆盖、过渡失效）。 */
+   ③ !important 压过玻璃风格覆盖（body[data-glass='liquid'] .glass 特异性更高）；
+   ④ will-change: backdrop-filter 在动画期间提示浏览器稳定合成（backdrop 采样
+      不因淡入触发层重建），动画结束类移除自动释放 */
 .fade-enter-active .glass,
 .fade-leave-active .glass {
   transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: backdrop-filter;
 }
-.fade-enter-from .glass,
-.fade-leave-to .glass {
+/* 毛玻璃：起始小幅模糊，随淡入平滑升到目标（避免结束才“啪”出现） */
+body:not([data-glass='liquid']) .fade-enter-from .glass,
+body:not([data-glass='liquid']) .fade-leave-to .glass {
   backdrop-filter: blur(4px) saturate(1) !important;
   -webkit-backdrop-filter: blur(4px) saturate(1) !important;
 }
+/* 液态玻璃：组件一出现就是完整玻璃质感（起始即目标值 blur(20px) saturate(1.65)），
+   只做透明度/位移动画——“先有模糊再淡入”，淡入期间玻璃效果始终完整，无需模糊渐变 */
 body[data-glass='liquid'] .fade-enter-from .glass,
 body[data-glass='liquid'] .fade-leave-to .glass {
-  backdrop-filter: blur(6px) saturate(1) !important;
-  -webkit-backdrop-filter: blur(6px) saturate(1) !important;
+  backdrop-filter: blur(20px) saturate(1.65) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.65) !important;
 }
 
 /* 滑入动画 */

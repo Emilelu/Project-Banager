@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5 flex flex-col min-h-full">
+  <div class="space-y-5 flex flex-col min-h-full view-fade-target" :class="{ 'view-in': dataLoaded }">
     <!-- 等番本月提示 -->
     <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3 shrink-0">
       <div class="flex items-center justify-between">
@@ -78,8 +78,8 @@
       </div>
     </div>
 
-    <!-- 空状态引导 -->
-    <div v-if="watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-8 text-center shrink-0">
+    <!-- 空状态引导：dataLoaded 为 false 时不渲染，避免"有数据用户"首帧闪一下空状态 -->
+    <div v-if="dataLoaded && watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-8 text-center shrink-0">
       <div class="text-4xl mb-2 animate-float">📺</div>
       <p class="text-sm text-gray-500 mb-4">还没有追番记录，从添加第一部番剧或导入 Excel 开始吧</p>
       <div class="flex items-center justify-center gap-3">
@@ -389,6 +389,10 @@ const weekDays = ['周一','周二','周三','周四','周五','周六','周日'
 const dayIcons = ['🌙','🔥','🌊','⚡','🌸','🎉','☀️']
 
 const SELECTED_KEY = 'watching_selected_id'
+
+// 数据就绪门闩：初始为 false，首帧不渲染空状态引导（避免有数据用户一闪而过）；
+// 首次 fetchData 完成后置 true，同时触发主区淡入（view-in）
+const dataLoaded = ref(false)
 
 const watchingList = ref([])
 const remainingList = ref([])
@@ -702,7 +706,9 @@ const fetchData = async () => {
     // 同时获取等番数据
     const remRes = await remainingApi.getAll()
     if (remRes.data.success) remainingList.value = remRes.data.data
-  } catch { showToast('获取数据失败','error') }
+  } catch { showToast('获取数据失败','error') } finally {
+    dataLoaded.value = true
+  }
 }
 
 const selectItem = (item) => { selected.value = item }
