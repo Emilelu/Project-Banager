@@ -411,6 +411,13 @@ body.with-bg.adaptive .sidebar-bg [class*="text-white"]:hover {
 body.adaptive main :is(.text-gray-300,.text-gray-400,.text-gray-500):not(.glass *):not([class*="glass"]) {
   color: rgb(var(--txt-main-400)) !important;
 }
+/* 液态玻璃 + 浅色 + 无壁纸：侧栏是白玻璃，白字不可读，需按自适应亮度取深色字 */
+html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [class*="text-white"] {
+  color: rgb(var(--txt-sb-400)) !important;
+}
+html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [class*="text-white"]:hover {
+  color: rgb(var(--txt-sb-500)) !important;
+}
 
 /* 页面切换动画 */
 .fade-enter-active,

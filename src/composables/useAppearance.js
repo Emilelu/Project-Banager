@@ -206,9 +206,10 @@ function applyAdaptiveText() {
       effYSb = (1 - sbAlpha) * yWall + sbAlpha * 0.02;
     }
   } else {
-    // 无壁纸：取固定底色亮度（body 渐变 / 侧栏渐变）
+    // 无壁纸：取固定底色亮度（body 渐变 / 侧栏渐变）。
+    // 侧栏随玻璃风格区分：液态玻璃浅色是白玻璃（亮，需深字），磨砂/深色是深底（需浅字）
     effYMain = dark ? 0.07 : 0.93;
-    effYSb = dark ? 0.12 : 0.55;
+    effYSb = dark ? 0.12 : state.glass === "liquid" ? 0.85 : 0.16;
   }
   document.body.classList.add("adaptive");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
