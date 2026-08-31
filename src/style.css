@@ -103,13 +103,17 @@ body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
-/* 壁纸模式下侧边栏与主区**完全一致**：主区的「模糊壁纸 + 遮罩」层
-   （body.with-bg::before z:-2 / ::after z:-1）本来就是全屏 fixed，覆盖包括侧栏在内的
-   整个视口——毛玻璃（非液态）侧栏只需 background: transparent 透出它们，
-   不再自叠 scrim 或 backdrop-filter（任何叠加都会让侧栏比主区更浓/更雾，
-   看起来不一致）。液态玻璃侧栏有独立玻璃样式，不受此规则影响。 */
-body.with-bg:not([data-glass='liquid']) .sidebar-bg {
-  background: transparent;
+/* 毛玻璃模式：侧边栏与主区 .glass 卡片**同款毛玻璃**（浅色半透明白 + 12px 模糊 /
+   暗色半透明深紫黑）。液态侧栏有独立玻璃样式（见下方 body[data-glass='liquid'] 规则），
+   两者互斥，各自与对应主区玻璃一致。壁纸有无、明暗深浅均生效。 */
+body:not([data-glass='liquid']) .sidebar-bg {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark body:not([data-glass='liquid']) .sidebar-bg {
+  background: rgba(20, 15, 40, 0.8);
 }
 
 /* ==================== 全局响应式缩放 ==================== */

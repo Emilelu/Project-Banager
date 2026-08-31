@@ -253,18 +253,14 @@ function applyAdaptiveText() {
     const bgDim = clamp(state.bgDim, 0, 0.9);
     const scrimLum = dark ? 0.02 : 0.9;
     effYMain = (1 - bgDim) * yWall + bgDim * scrimLum;
-    if (state.glass === "liquid") {
-      // 液态玻璃底色随模式：浅色亮玻璃 / 深色暗玻璃，文字色需相应翻转
-      effYSb = dark ? 0.1 : 0.86;
-    } else {
-      // 毛玻璃：侧栏遮罩与主区一致（同一 scrim + 同一 --bg-dim），有效亮度相同
-      effYSb = effYMain;
-    }
+    // 侧栏是固定玻璃底色（毛玻璃 0.7 白 / 0.8 深紫黑；液态白/黑渐变），
+    // 有效亮度与壁纸亮度无关，取常数——保证侧栏文字色不随壁纸明暗翻转
+    effYSb = dark ? 0.12 : 0.85;
   } else {
-    // 无壁纸：取固定底色亮度（body 渐变 / 侧栏渐变）。
-    // 侧栏随玻璃风格区分：液态玻璃浅色是白玻璃（亮，需深字），磨砂/深色是深底（需浅字）
+    // 无壁纸：取固定底色亮度（body 渐变 / 侧栏玻璃）。
+    // 侧栏毛玻璃与液态同为固定玻璃底色（浅色亮玻璃需深字 / 暗色暗玻璃需浅字）
     effYMain = dark ? 0.07 : 0.93;
-    effYSb = dark ? 0.12 : state.glass === "liquid" ? 0.85 : 0.16;
+    effYSb = dark ? 0.12 : 0.85;
   }
   document.body.classList.add("adaptive");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
