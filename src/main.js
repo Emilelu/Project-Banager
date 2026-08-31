@@ -5,6 +5,17 @@ import './style.css'
 import { initAppearance } from './composables/useAppearance'
 import { initTheme } from './composables/useTheme'
 
+// 动态 Dark Reader 锁（兜底）：index.html 已有静态 <meta name="darkreader-lock">，
+// 但 DR 的 content script 在 document_start 注入，可能早于静态 meta 解析。
+// 此处再动态追加一次（官方文档方式），确保任何时机都能禁用 DR——
+// 本应用自带 .dark 深色模式，且壁纸用伪元素背景，DR 动态模式会剥掉
+// ::before/::after 导致壁纸消失，必须整站禁用 DR。
+try {
+  const lock = document.createElement('meta')
+  lock.name = 'darkreader-lock'
+  document.head.appendChild(lock)
+} catch {}
+
 // 全局错误兜底：同步异常 / 未处理的 Promise 都打到控制台，便于定位"白屏/卡死"
 window.addEventListener('error', (e) =>
   console.error('[boot] window error:', e.message, e.error || ''),

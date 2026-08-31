@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="./favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 声明禁用 Dark Reader（插件官方支持的"DR lock"）：
+         本应用已自带完善深色模式（.dark），壁纸层使用 CSS 伪元素背景，
+         DR 动态模式会剥掉 ::before/::after 规则导致壁纸消失，故整站禁用 DR。 -->
+    <meta name="darkreader-lock">
     <title>Project Banager</title>
   </head>
   <body>
