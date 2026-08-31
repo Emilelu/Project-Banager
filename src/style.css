@@ -61,13 +61,6 @@ body.with-bg.bg-focus::before {
   transform: scale(1.13);
 }
 
-/* 弹窗关闭同步：关闭过渡一开始就挂 modal-closing，让壁纸缩放/模糊用与弹窗关闭
-   一致的 0.25s cubic-bezier(.4,0,1,1) 同步回桌面态（不再等元素移除后才启动缩放） */
-body.with-bg.modal-closing::before {
-  transition: filter 0.25s cubic-bezier(0.4, 0, 1, 1),
-    transform 0.25s cubic-bezier(0.4, 0, 1, 1);
-}
-
 @media (prefers-reduced-motion: reduce) {
   body.with-bg::before {
     transition: none;

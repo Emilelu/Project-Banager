@@ -433,14 +433,12 @@ function startFocusObserver() {
       // 减少动效模式：无聚焦模糊
       if (state.bgNoFx) {
         document.body.classList.remove("bg-focus");
-        document.body.classList.remove("modal-closing");
         return;
       }
       const closing = hasClosingModal();
       const open = hasFullscreenDialog() && !closing;
-      // 关闭过渡一开始就摘掉 bg-focus，并挂 modal-closing 让壁纸缩放与弹窗关闭同步进行
-      // （先挂 modal-closing 再改 bg-focus，浏览器同一帧内按新时长应用过渡）
-      document.body.classList.toggle("modal-closing", closing);
+      // 关闭过渡一开始就摘掉 bg-focus（不等元素移除），壁纸缩放/模糊用与打开一致的
+      // 0.8s 缓动回桌面态，呈现自然平缓的过渡（不再用 0.25s 快进）
       document.body.classList.toggle("bg-focus", open);
     } catch (e) {
       console.error(e);
@@ -633,15 +631,17 @@ function extractPaletteFromImage(url) {
 
 // ========== 壁纸取色（含跨域代理回退） ==========
 
-// 部分图源（dmoe / 自定义直链）不返回 CORS 许可，直连 canvas 取色会被污染而失败。
-// 依次走这些图片代理拿到「带 CORS 头、像素可读」的副本再取色。
+// 部分图源（dmoe / 自定义直链 / alcy 稳定图床地址 tc.alcy.cc）不返回 CORS 许可，
+// 直连 canvas 取色会被污染而失败。依次走这些图片代理拿到「带 CORS 头、像素可读」的副本再取色。
+// 顺序按「实测可用性」排列：cors.sh 对 tc.alcy.cc 稳定返回 200 + ACAO:*（置顶）；
+// weserv 对 tc.alcy.cc 实测返回 400，故降到兜底位。
 const CORS_PROXIES = [
-  // weserv：专为图片设计、稳定且返回 Access-Control-Allow-Origin: *，需去掉协议头
-  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ""))}`,
-  // cors.sh：经验证稳定返回 200 + ACAO:*（可读像素）
+  // cors.sh：经验证稳定返回 200 + ACAO:*（可读像素），alcy 稳定地址实测可用
   (u) => `https://proxy.cors.sh/${u}`,
   // allorigins：通用代理，返回原始字节并带 CORS 头（偶发不稳定，兜底）
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  // weserv：专为图片设计、返回 ACAO:*，但需去掉协议头；对 tc.alcy.cc 实测 400，仅兜底
+  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ""))}`,
 ];
 
 /**
