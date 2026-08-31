@@ -396,6 +396,16 @@ function hasFullscreenDialog() {
   return !!document.querySelector("body > .fixed.inset-0.z-50");
 }
 
+// 弹窗是否处于「关闭过渡」中：Vue 的 <transition name="modal|modal-overlay"> 在 v-if 置 false 时
+// 会先给元素挂 modal-leave-active / modal-leave-from 类跑完 0.25s 离场动画，之后才把元素从 DOM 移除。
+// 壁纸缩放必须在「离场动画开始」那一刻就同步启动，而不是等元素移除。
+function hasClosingModal() {
+  return !!document.querySelector(
+    "body > .fixed.inset-0.z-50.modal-leave-from, body > .fixed.inset-0.z-50.modal-leave-active, " +
+      "body > .fixed.inset-0.z-50.modal-overlay-leave-from, body > .fixed.inset-0.z-50.modal-overlay-leave-active",
+  );
+}
+
 function startFocusObserver() {
   if (
     focusObserverStarted ||
@@ -414,9 +424,15 @@ function startFocusObserver() {
       // 减少动效模式：无聚焦模糊
       if (state.bgNoFx) {
         document.body.classList.remove("bg-focus");
+        document.body.classList.remove("modal-closing");
         return;
       }
-      document.body.classList.toggle("bg-focus", hasFullscreenDialog());
+      const closing = hasClosingModal();
+      const open = hasFullscreenDialog() && !closing;
+      // 关闭过渡一开始就摘掉 bg-focus，并挂 modal-closing 让壁纸缩放与弹窗关闭同步进行
+      // （先挂 modal-closing 再改 bg-focus，浏览器同一帧内按新时长应用过渡）
+      document.body.classList.toggle("modal-closing", closing);
+      document.body.classList.toggle("bg-focus", open);
     } catch (e) {
       console.error(e);
     }
