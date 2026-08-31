@@ -766,6 +766,20 @@ async function extractPaletteFromImage(src) {
   }
 }
 
+// ========== 跨域判断工具（供取色/预览/下载共用） ==========
+// 图床（tc.alcy.cc 等）不返回 Access-Control-Allow-Origin，页面 fetch 必被 CORS 拦截。
+// 判断图片地址是否为跨域：与当前站点 origin 不同即算跨域，直接走代理链、跳过必败的直连
+// （避免 console 刷 CORS 红错，也省一次注定失败的请求）。相对地址/blob 视为同源。
+export function isCrossOrigin(url) {
+  if (typeof location === "undefined" || !url) return false;
+  try {
+    const u = new URL(url, location.href);
+    return u.origin !== location.origin;
+  } catch {
+    return true; // 解析失败按跨域处理，走代理兜底
+  }
+}
+
 // ========== 壁纸取色（含跨域代理回退） ==========
 
 // 部分图源（dmoe / 自定义直链 / alcy 稳定图床地址 tc.alcy.cc）不返回 CORS 许可，
@@ -797,14 +811,20 @@ async function analyzeWallpaper(url) {
     return true;
   };
   let paletteDone = false;
-  try {
-    await attempt(url);
-    paletteDone = true;
-    crumb("wallpaper palette: direct ok");
-  } catch (e) {
-    crumb(`wallpaper palette direct failed: ${e?.message || e}`);
+  // 跨域图床（tc.alcy.cc 等无 CORS 头）直连 fetch 必被拦截：直接跳过直连、走代理链，
+  // 避免 console 刷 CORS 红错、也省一次注定失败的请求；同源（自定义同站图片）才直连。
+  if (!isCrossOrigin(url)) {
+    try {
+      await attempt(url);
+      paletteDone = true;
+      crumb("wallpaper palette: direct ok");
+    } catch (e) {
+      crumb(`wallpaper palette direct failed: ${e?.message || e}`);
+    }
+  } else {
+    crumb("wallpaper palette: cross-origin, go proxy directly");
   }
-  // 直连失败 → 依次走代理（仍会写入 state.effYWall 供文字取色）
+  // 直连失败或跨域 → 依次走代理（仍会写入 state.effYWall 供文字取色）
   if (!paletteDone) {
     for (const make of CORS_PROXIES) {
       try {
