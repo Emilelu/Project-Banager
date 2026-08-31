@@ -399,15 +399,16 @@ body {
 }
 
 /* ==================== 自适应文字取色 ==================== */
-/* 壁纸激活（body.with-bg.adaptive）时，直接压在壁纸/玻璃上的文字按背景亮度自动取
-   深/浅色，保证任意亮度壁纸下都可读。玻璃卡片（.glass）内部的文字保持自身配色，不在此列。 */
+/* body.adaptive 时，直接压在壁纸/玻璃上的文字按背景亮度自动取深/浅色，保证可读。
+   侧栏仅在壁纸激活（with-bg）时覆盖：无壁纸时侧栏保持紫渐变 + 白字的设计配色。
+   玻璃卡片（.glass）内部的文字保持自身配色，不在此列。 */
 body.with-bg.adaptive .sidebar-bg [class*="text-white"] {
   color: rgb(var(--txt-sb-400)) !important;
 }
 body.with-bg.adaptive .sidebar-bg [class*="text-white"]:hover {
   color: rgb(var(--txt-sb-500)) !important;
 }
-body.with-bg.adaptive main :is(.text-gray-300,.text-gray-400,.text-gray-500):not(.glass *):not([class*="glass"]) {
+body.adaptive main :is(.text-gray-300,.text-gray-400,.text-gray-500):not(.glass *):not([class*="glass"]) {
   color: rgb(var(--txt-main-400)) !important;
 }
 

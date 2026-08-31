@@ -5,7 +5,7 @@
  */
 import { reactive, watch } from "vue";
 import { showToast } from "./useToast";
-import { relLum, deriveTextScale } from "./colorMath.js";
+import { relLum, deriveTextScale, contrast } from "./colorMath.js";
 
 const STORAGE_KEY = "banager_appearance";
 
@@ -179,39 +179,50 @@ function applyGlass() {
   if (state.glass === "liquid") document.body.dataset.glass = "liquid";
   else delete document.body.dataset.glass;
   // 玻璃风格影响侧栏背景亮度，需重算自适应文字色
-  applyAdaptiveText(state.effYWall);
+  applyAdaptiveText();
 }
 
-// ========== 自适应文字取色（保证任意亮度壁纸上文字都可读） ==========
-// 壁纸加载后由 extractPaletteFromImage 写入 state.effYWall（平均相对亮度）。
-// 按「玻璃 + 遮罩 + 壁纸」合成出各区域有效亮度，再用 colorMath.deriveTextScale
-// 推导出该背景下可读的文字色阶（深/浅自适应），写入 --txt-* 变量。
-function applyAdaptiveText(effYWall) {
+// ========== 自适应文字取色（保证任意背景上文字都可读） ==========
+// 分「有壁纸 / 无壁纸」两种背景建模：有壁纸时按「玻璃 + 遮罩 + 壁纸」合成各区域
+// 有效亮度；无壁纸时用各区域固定底色的亮度常数；壁纸亮度未知（取色失败）时按中值
+// 估计——遮罩主导下文字色仍随明暗模式保持可读。再用 colorMath.deriveTextScale
+// 推导出可读文字色阶（深/浅自适应），写入 --txt-* 变量并挂 body.adaptive。
+function applyAdaptiveText() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  const active = state.bgEnabled && state.bgUrl && !state.bgFailed;
-  if (effYWall == null || !active) {
-    // 无壁纸或未取得亮度：关闭自适应，回退组件自带文字色
-    document.body.classList.remove("adaptive");
-    return;
+  const dark = root.classList.contains("dark");
+  const withBg = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  const yWall = state.effYWall == null ? 0.5 : state.effYWall;
+  let effYMain, effYSb;
+  if (withBg) {
+    const bgDim = clamp(state.bgDim, 0, 0.9);
+    const scrimLum = dark ? 0.02 : 0.9;
+    effYMain = (1 - bgDim) * yWall + bgDim * scrimLum;
+    if (state.glass === "liquid") {
+      // 液态玻璃底色随模式：浅色亮玻璃 / 深色暗玻璃，文字色需相应翻转
+      effYSb = dark ? 0.1 : 0.86;
+    } else {
+      const sbAlpha = dark ? 0.78 : 0.62;
+      effYSb = (1 - sbAlpha) * yWall + sbAlpha * 0.02;
+    }
+  } else {
+    // 无壁纸：取固定底色亮度（body 渐变 / 侧栏渐变）
+    effYMain = dark ? 0.07 : 0.93;
+    effYSb = dark ? 0.12 : 0.55;
   }
   document.body.classList.add("adaptive");
-  const dark = document.documentElement.classList.contains("dark");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
-  const cfg = { target: 4.5, r400: 0.8, r300: 0.62, min: 0.02, max: 0.98 };
-  // 主内容区背景亮度 = 遮罩(scrim) 与壁纸的合成
-  const bgDim = clamp(state.bgDim, 0, 0.9);
-  const scrimLum = dark ? 0.02 : 0.9;
-  const effYMain = (1 - bgDim) * effYWall + bgDim * scrimLum;
-  // 侧栏背景亮度：液态玻璃为亮玻璃；毛玻璃为深色 scrim
-  let effYSb;
-  if (state.glass === "liquid") effYSb = 0.86;
-  else {
-    const sbAlpha = dark ? 0.78 : 0.62;
-    effYSb = (1 - sbAlpha) * effYWall + sbAlpha * 0.02;
-  }
-  const main = deriveTextScale(effYMain, base, cfg, effYMain > 0.45);
-  const sb = deriveTextScale(effYSb, base, cfg, effYSb > 0.45);
+  const cfg = { target: 4.6, r400: 0.8, r300: 0.62, min: 0, max: 0.98 };
+  // 深/浅两个方向都算一遍，取对比度更高的一组：中间亮度区（约 0.18~0.45）单独任一
+  // 方向都够不到 4.5，选对比度大者至少保证可读
+  const pick = (effY) => {
+    const darkScale = deriveTextScale(effY, base, cfg, true);
+    const lightScale = deriveTextScale(effY, base, cfg, false);
+    const cr = (g) => contrast(relLum(g.split(" ").map(Number)), effY);
+    return cr(darkScale[2]) >= cr(lightScale[2]) ? darkScale : lightScale;
+  };
+  const main = pick(effYMain);
+  const sb = pick(effYSb);
   root.style.setProperty("--txt-main-300", main[0]);
   root.style.setProperty("--txt-main-400", main[1]);
   root.style.setProperty("--txt-main-500", main[2]);
@@ -238,7 +249,7 @@ function applyBackground() {
     root.setProperty("--bg-dim", "0");
   }
   // 壁纸开关变化后同步自适应文字取色状态
-  applyAdaptiveText(state.effYWall);
+  applyAdaptiveText();
 }
 
 // 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
@@ -625,7 +636,7 @@ async function analyzeWallpaper(url) {
     applyPalette();
   }
   // 自适应文字取色：只要拿到壁纸亮度就应用，与 paletteMode 无关（固定/随机配色下文字仍需可读）
-  applyAdaptiveText(state.effYWall);
+  applyAdaptiveText();
   if (!paletteDone && state.paletteMode === "auto") {
     crumb("wallpaper palette: all methods failed, keep current theme");
   }
@@ -738,7 +749,7 @@ export function initAppearance() {
   startFocusObserver();
   // 暗色模式切换会改 scrim 亮度，需重算自适应文字色
   try {
-    new MutationObserver(() => applyAdaptiveText(state.effYWall)).observe(
+    new MutationObserver(() => applyAdaptiveText()).observe(
       document.documentElement,
       { attributes: true, attributeFilter: ["class"] },
     );
