@@ -16,7 +16,7 @@ const state = reactive({
   effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
   bgEnabled: true, // 随机壁纸背景默认开启
   bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
-  bgAutoSwitch: false, // 默认固定当前壁纸（刷新不换图）；用户可在设置中开启"每次打开自动换一张"
+  bgAutoSwitch: true, // 默认"每次打开自动换一张"（刷新/重开换新壁纸）；用户可在设置中切为固定当前壁纸
   bgCustomUrl: "",
   bgDim: 0.25, // 遮罩浓度 0~0.9（默认 25%）
   bgBlur: 5, // 背景模糊 0~20px（默认 5px）
@@ -941,6 +941,9 @@ export async function initAppearance() {
       // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
       if (!saved.bgProvider || saved.bgProvider === "wallhaven")
         saved.bgProvider = "alcy";
+      // 新默认（用户要求）：「每次打开自动换一张」；老用户持久化的 bgAutoSwitch=false
+      // 是旧默认「固定当前壁纸」，这里强制翻转为 true，使所有用户统一走自动换图
+      if (saved.bgAutoSwitch === false) saved.bgAutoSwitch = true;
       Object.assign(state, saved);
     }
   } catch (e) {
