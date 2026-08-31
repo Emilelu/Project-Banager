@@ -317,13 +317,18 @@ function applyBackground() {
   document.body.classList.toggle("bg-custom", state.bgProvider === "custom");
   ensureBlurLayer();
   const root = document.documentElement.style;
+  const img = document.getElementById("bg-wallpaper");
+  const scrim = document.getElementById("bg-scrim");
   if (active) {
-    // 显示层直接使用原图（不压缩不变形；用户可下载/跳原链接，质量优先）
-    root.setProperty("--bg-image", `url("${state.bgUrl}")`);
+    // 真实 <img> 壁纸层：直接加载原图（质量优先）；DR 深色模式下 <img> 不被改写，
+    // 壁纸依然显示（伪元素方案会被 DR 剥掉 ::before 改写导致壁纸消失，故不用伪元素）
+    if (img) img.src = state.bgUrl;
+    if (scrim) scrim.style.opacity = "1";
     root.setProperty("--bg-blur", `${state.bgBlur}px`);
     root.setProperty("--bg-dim", String(clamp(state.bgDim, 0, 0.9)));
   } else {
-    root.setProperty("--bg-image", "none");
+    if (img) img.removeAttribute("src");
+    if (scrim) scrim.style.opacity = "0";
     root.setProperty("--bg-blur", "0px");
     root.setProperty("--bg-dim", "0");
   }
@@ -342,14 +347,23 @@ function revealWallpaper() {
   } catch {}
 }
 
-// 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
-// 全程合成器处理，避免全屏 blur 动画每帧重栅格化拖垮 4K 渲染
+// 壁纸层（#bg-wallpaper / #bg-scrim）：用真实元素而非伪元素，Dark Reader 兼容关键——
+// DR 动态模式会剥掉 ::before/::after 改写规则（伪元素背景被整条丢弃，壁纸消失），
+// 而 <img> 图片元素是 DR 明确不动的对象（跨域图床原样保留）→ 深色模式下壁纸依然显示。
+// 元素已在 index.html 静态存在（首帧即可用），此处仅兜底（如未来被移除/老缓存页面）。
 function ensureBlurLayer() {
   if (typeof document === "undefined" || !document.body) return;
-  if (!document.getElementById("bg-blur-layer")) {
-    const el = document.createElement("div");
-    el.id = "bg-blur-layer";
-    document.body.insertBefore(el, document.body.firstChild);
+  if (!document.getElementById("bg-wallpaper")) {
+    const img = document.createElement("img");
+    img.id = "bg-wallpaper";
+    img.alt = "";
+    img.draggable = false;
+    document.body.insertBefore(img, document.body.firstChild);
+  }
+  if (!document.getElementById("bg-scrim")) {
+    const div = document.createElement("div");
+    div.id = "bg-scrim";
+    document.body.insertBefore(div, document.body.firstChild);
   }
 }
 

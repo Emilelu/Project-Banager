@@ -26,7 +26,6 @@
   --c-lavender: 196 181 253;
 
   /* 背景图系统（useAppearance.js 控制） */
-  --bg-image: none;
   --bg-blur: 5px; /* 默认模糊 5px（与 useAppearance 默认一致） */
   --bg-dim: 0.25; /* 默认遮罩 25%（与 useAppearance 默认一致） */
   --bg-scrim-light: 245 243 255; /* 与日间渐变底色一致 */
@@ -53,53 +52,61 @@ html.pre-app-ready body #app > * * {
 }
 
 /* ==================== 背景图 ==================== */
-/* 图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
-body.with-bg::before {
-  content: '';
+/* 壁纸层用真实 <img>（#bg-wallpaper）而非伪元素，关键原因——Dark Reader 兼容：
+   ① DR 动态模式会禁用原样式表并注入改写副本，含 ::before/::after 的规则会被
+      剥掉伪元素段再改写（如 body.with-bg::before 被改写成命中 body.with-bg），
+      伪元素壁纸层因此整条丢失 → 深色模式下壁纸消失；
+   ② 而 <img> 图片元素是 DR 明确不动的对象（canFilterImage 仅处理同源与 data: 图，
+      跨域图床如 tc.alcy.cc 原样保留）→ 壁纸在 DR 深色模式下依然显示。
+   图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
+#bg-wallpaper {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   z-index: -2;
-  background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
   transition: opacity 0.4s ease, filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 启动"壁纸入场"：后台就绪后一次性应用新壁纸，从透明淡入（纯 opacity，合成器属性，不重栅格化） */
-body.with-bg.bg-reveal::before {
+body.with-bg.bg-reveal #bg-wallpaper {
   opacity: 0;
 }
 
 /* iOS 风格聚焦态：弹窗打开 / 启动入场时壁纸加深模糊，关闭后渐清晰 */
-body.with-bg.bg-focus::before {
+body.with-bg.bg-focus #bg-wallpaper {
   filter: blur(calc(var(--bg-blur) + 16px));
   transform: scale(1.13);
 }
 
 /* 自定义壁纸（通常是大图直链）：弹窗聚焦降级——不再叠加额外模糊
    （避免全屏大图每帧重栅格化造成卡顿），仅轻微缩放；其余壁纸保持原聚焦效果 */
-body.with-bg.bg-custom.bg-focus::before {
+body.with-bg.bg-custom.bg-focus #bg-wallpaper {
   filter: blur(var(--bg-blur));
   transform: scale(1.10);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.with-bg::before,
-  body.with-bg.bg-focus::before,
-  body.with-bg.bg-custom.bg-focus::before {
+  #bg-wallpaper,
+  body.with-bg.bg-focus #bg-wallpaper,
+  body.with-bg.bg-custom.bg-focus #bg-wallpaper {
     transition: none;
   }
 }
 
-body.with-bg::after {
-  content: '';
+/* 遮罩层同改为真实元素 #bg-scrim（理由同 #bg-wallpaper：DR 会剥伪元素改写，
+   用元素承载背景色即可在 DR 深色模式下保持遮罩）；z-index -1 在壁纸层之上 */
+#bg-scrim {
   position: fixed;
   inset: 0;
   z-index: -1;
   background: rgb(var(--bg-scrim-light) / var(--bg-dim));
 }
 
-.dark body.with-bg::after {
+.dark #bg-scrim {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 

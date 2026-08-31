@@ -7,6 +7,10 @@
     <title>Project Banager</title>
   </head>
   <body>
+    <!-- 壁纸层先于 #app 存在：首帧即由 JS 写入 src/挂类（body.with-bg），
+         配合 #bg-wallpaper 的 <img> 层实现“内容渲染时壁纸已在”。 -->
+    <img id="bg-wallpaper" alt="" draggable="false" aria-hidden="true" />
+    <div id="bg-scrim" aria-hidden="true"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
