@@ -309,15 +309,6 @@ function scheduleAdaptiveText() {
 // 等后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）。仅启动路径设置。
 let bgDeferred = false;
 
-// 显示壁纸降采样：持久化的 state.bgUrl 始终是原图地址（可下载 / 取色 / 刷新还原），
-// 而全屏壁纸层（body.with-bg::before 的 --bg-image）改用后台生成的 ≤MAX_WALL_SIDE
-// 降采样 blob URL——原图分辨率过高（4K/8K）时，全屏 blur/缩放每帧栅格化的开销是偶现
-// 卡顿来源，缩小后肉眼无感知差异（壁纸恒有 ≥5px 模糊，细节本就被抹掉）。
-// blob URL 不持久化，刷新后重新生成；生成期间回退原图显示（现行为，不破坏功能）。
-let bgDisplayUrl = "";    // 当前显示用降采样 blob URL（不持久化）
-let bgDisplayGen = 0;     // 代际：换图/刷新后迟到的生成结果直接丢弃
-const MAX_WALL_SIDE = 2560;
-
 function applyBackground() {
   if (typeof document === "undefined") return;
   // 图片加载失败或延迟应用期间，彻底回到原渐变底色，不留遮罩层影响可读性
@@ -330,10 +321,8 @@ function applyBackground() {
   ensureBlurLayer();
   const root = document.documentElement.style;
   if (active) {
-    root.setProperty(
-      "--bg-image",
-      `url("${bgDisplayUrl || state.bgUrl}")`,
-    );
+    // 显示层直接使用原图（不压缩不变形；用户可下载/跳原链接，质量优先）
+    root.setProperty("--bg-image", `url("${state.bgUrl}")`);
     root.setProperty("--bg-blur", `${state.bgBlur}px`);
     root.setProperty("--bg-dim", String(clamp(state.bgDim, 0, 0.9)));
   } else {
@@ -365,75 +354,6 @@ function ensureBlurLayer() {
     el.id = "bg-blur-layer";
     document.body.insertBefore(el, document.body.firstChild);
   }
-}
-
-// 后台生成「显示用」降采样壁纸：直连取原图 blob（custom/blob/同源可直接取），
-// 无 CORS 许可时走与取色一致的代理链（CORS_PROXIES，调用时才解析避免声明前置）。
-// 离主线程解码 → 任一边 > MAX_WALL_SIDE 时等比缩小 → canvas 编码 webp → blob URL。
-// 成功后若仍是当前代际：替换旧 blob、重新 applyBackground 让 --bg-image 生效。
-// 任何一步失败都静默回退（维持原图显示），不打断功能。
-async function buildDisplayWallpaper(url) {
-  if (typeof createImageBitmap !== "function" || !url) return;
-  const gen = ++bgDisplayGen;
-  const grab = async (u) => {
-    const r = await fetch(u);
-    if (!r.ok) throw new Error("fetch failed");
-    return r.blob();
-  };
-  let blob = null;
-  try {
-    blob = await grab(url);
-  } catch {
-    for (const make of CORS_PROXIES) {
-      try {
-        blob = await grab(make(url));
-        if (blob) break;
-      } catch {}
-    }
-  }
-  if (gen !== bgDisplayGen || !blob) return;
-  let u = "";
-  try {
-    let bmp = await createImageBitmap(blob);
-    if (gen !== bgDisplayGen) {
-      bmp.close();
-      return;
-    }
-    if (bmp.width > MAX_WALL_SIDE || bmp.height > MAX_WALL_SIDE) {
-      const small = await createImageBitmap(bmp, {
-        resizeWidth: MAX_WALL_SIDE,
-        resizeHeight: MAX_WALL_SIDE,
-        resizeQuality: "medium",
-      });
-      bmp.close();
-      bmp = small;
-    }
-    if (gen !== bgDisplayGen) {
-      bmp.close();
-      return;
-    }
-    const cv = document.createElement("canvas");
-    cv.width = bmp.width;
-    cv.height = bmp.height;
-    cv.getContext("2d").drawImage(bmp, 0, 0);
-    bmp.close();
-    const smallBlob = await new Promise((res) =>
-      cv.toBlob(res, "image/webp", 0.85),
-    );
-    if (gen !== bgDisplayGen || !smallBlob) return;
-    u = URL.createObjectURL(smallBlob);
-  } catch {
-    return;
-  }
-  if (gen !== bgDisplayGen) {
-    URL.revokeObjectURL(u);
-    return;
-  }
-  if (bgDisplayUrl) URL.revokeObjectURL(bgDisplayUrl);
-  bgDisplayUrl = u;
-  try {
-    applyBackground();
-  } catch {}
 }
 
 // ========== 壁纸加载探测 ==========
@@ -1000,21 +920,6 @@ watch(
     } catch {}
   },
   { deep: true },
-);
-
-// 壁纸地址变化（换一张 / 迁移稳定地址 / 自定义应用 / 启动还原）→ 后台重建显示用降采样。
-// 立即作废旧显示 blob：降采样生成期间回退显示新原图（原行为），生成成功后由
-// buildDisplayWallpaper 替换——即使生成失败也不会把旧图一直留在屏幕上。
-watch(
-  () => state.bgUrl,
-  (url) => {
-    if (!url) return;
-    if (bgDisplayUrl) {
-      URL.revokeObjectURL(bgDisplayUrl);
-      bgDisplayUrl = "";
-    }
-    buildDisplayWallpaper(url);
-  },
 );
 
 // 取色完成后可能正好赶上弹窗开启/主题切换，用空闲队列分帧回写（见 analyzeWallpaper）。

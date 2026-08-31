@@ -126,8 +126,11 @@
                   </div>
                   <div class="flex items-center gap-2 mt-1.5">
                     <p v-if="bgFailed" class="text-xs text-danger flex-1">⚠️ 图片加载失败，请换一张</p>
+                    <button @click="openOriginal"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
+                      title="在新标签页打开原图链接预览">🔗 原链接预览</button>
                     <button @click="downloadOriginal"
-                      class="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
                       title="下载当前壁纸原图（非缩略图）">⬇ 下载原图</button>
                   </div>
                 </div>
@@ -230,11 +233,12 @@ async function buildPreview(url) {
       return
     }
     if (bmp.width > MAX_PREVIEW_SIDE || bmp.height > MAX_PREVIEW_SIDE) {
-      const small = await createImageBitmap(bmp, {
-        resizeWidth: MAX_PREVIEW_SIDE,
-        resizeHeight: MAX_PREVIEW_SIDE,
-        resizeQuality: 'medium',
-      })
+      // 只传较长边做等比缩放：resizeWidth 与 resizeHeight 同时传会独立缩放导致变形
+      const opts =
+        bmp.width >= bmp.height
+          ? { resizeWidth: MAX_PREVIEW_SIDE, resizeQuality: 'medium' }
+          : { resizeHeight: MAX_PREVIEW_SIDE, resizeQuality: 'medium' }
+      const small = await createImageBitmap(bmp, opts)
       bmp.close()
       bmp = small
     }
@@ -387,6 +391,13 @@ const onFinish = async () => {
 const onBgError = () => {
   bgFailed.value = true
   showToast('背景图片加载失败，请换一张', 'error')
+}
+
+// 在新标签页打开原图链接预览（window.open 走浏览器直连，不受页面 CORS 限制）
+const openOriginal = () => {
+  const url = state.bgUrl
+  if (!url) return
+  window.open(url, '_blank', 'noopener')
 }
 
 // 下载原图：预览区展示的是降采样缩略图，右键另存只能存到小图；
