@@ -44,12 +44,12 @@
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
 /* 挂载前 initAppearance 不再 await 网络解析，首帧内容立即渲染。
-   在样式引擎应用完成前（<500ms），去掉一切动画类，让内容直接呈现而不是"先透明后淡入"；
-   引擎就绪后移除本类，重挂动画过渡（fade/入场等按原配置播放）。 */
+   启动瞬间只禁装饰动画（脉冲/漂浮等），避免抢首帧；不再禁 transition——
+   主区 fade 淡入（appear）在启动时正常播放，内容随淡入平滑呈现（挂载已不阻塞，
+   无"先透明后淡入"的白屏窗口）。引擎就绪后移除本类。 */
 html.pre-app-ready body #app > *,
 html.pre-app-ready body #app > * * {
   animation: none !important;
-  transition: none !important;
 }
 
 /* ==================== 背景图 ==================== */
@@ -491,6 +491,33 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   }
   body.adaptive .sidebar-bg [class*="text-white"]:hover {
     color: rgb(var(--txt-sb-300)) !important;
+  }
+}
+
+/* 首屏数据等待（数据驱动的淡入）：视图挂载后先同步应用外观（无动画的瞬时就位），
+   等该视图数据加载完成再整体淡入。与路由 fade 的区别：fade 播出的是"数据还没回来"的
+   首帧内容（空周历/空列表），数据到位是第二帧的直接替换——对内容型页面那是突兀的硬切。
+   .view-fade-target 平时恒为透明待命（同步 class，挂载首帧即透明，无二次闪烁），
+   数据就绪（.view-in）后一次性播 0.35s 淡入 + 8px 位移动画；opacity 用 0.01 而非 0：
+   opacity:0 的元素被浏览器视为不可见，会跳过 backdrop-filter 合成，淡入中后段玻璃才
+   "突兀"出现；0.01 视觉等同 0 但首帧即参与合成（复用 .fade-enter-from 的既有策略）。
+   路由切换时视图卸载/重挂，组件内 dataLoaded 重置为 false，class 同步回 .view-fade-target
+   （无离场动画需求：Vue transition out-in 已负责旧视图离场淡出）。 */
+.view-fade-target {
+  opacity: 0.01;
+}
+.view-fade-target.view-in {
+  animation: view-fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes view-fade-in {
+  from {
+    opacity: 0.01;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
