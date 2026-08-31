@@ -419,15 +419,16 @@ body {
 }
 
 /* ==================== 配色切换平滑过渡 ==================== */
-/* 短暂挂类（~0.36s）让全树色彩过渡平滑，应对取色完成 / 切换模式 / 随机化等
-   突然换主色场景；非动画期间不挂类，避免给每个交互响应都补上 0.3s 延迟 */
+/* 短暂挂类（~0.18s）让全树色彩过渡平滑，应对取色完成 / 切换模式 / 随机化等
+   突然换主色场景；非动画期间不挂类，避免给每个交互响应都补上 0.3s 延迟。
+   仅过渡三个最常用的颜色属性（fill/stroke/box-shadow 用得少且重绘贵，不参与），
+   时长已收窄：过长会拉长“变色期间操作掉帧”的窗口，过短则失去平滑感。 */
 body.palette-animating,
 body.palette-animating *,
 body.palette-animating *::before,
 body.palette-animating *::after {
-  transition: background-color 0.3s ease, color 0.3s ease,
-    border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease,
-    box-shadow 0.3s ease !important;
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease !important;
 }
 
 /* ==================== 自适应文字取色 ==================== */
@@ -561,8 +562,8 @@ body.modal-active .palette-animating,
 body.modal-active .palette-animating *,
 body.modal-active .palette-animating *::before,
 body.modal-active .palette-animating *::after {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
-    fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease !important;
 }
 
 /* 自适应文字元素（--txt-* 驱动的灰阶与侧栏白字）在取色变色时直接跳变，不参与全树

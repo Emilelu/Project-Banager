@@ -184,14 +184,15 @@ function applyPalette() {
   const key = `${p[0]},${p[1]},${p[2]}|${s[0]},${s[1]},${s[2]}`;
   if (key === applyPalette._lastKey) return;
   applyPalette._lastKey = key;
-  // 配色变更时短暂挂 .palette-animating，让全树色彩过渡 ~0.3s 平滑切换，
-  // 避免取色/切换模式/随机化时子元素硬跳。350ms 后自动卸下。
+  // 配色变更时短暂挂 .palette-animating，让全树色彩过渡平滑切换，
+  // 避免取色/切换模式/随机化时子元素硬跳。时长已收窄（0.18s，见 style.css）——
+  // 过长会拉长“变色期间操作掉帧”的窗口，过短则失去平滑感。240ms 后自动卸下。
   if (typeof document !== "undefined") {
     document.body.classList.add("palette-animating");
     if (applyPalette._t) clearTimeout(applyPalette._t);
     applyPalette._t = setTimeout(() => {
       document.body.classList.remove("palette-animating");
-    }, 360);
+    }, 240);
   }
   root.setProperty("--c-primary", hslToRgbTriplet(p));
   root.setProperty(
@@ -676,86 +677,97 @@ function applyCustomBackground() {
 }
 
 /**
- * 通用 canvas 取色：跨域加载图片副本 → 缩样 → 按色相桶统计饱和度权重 →
+ * 通用取色：把图源（url 或 Blob）缩成 64x64 采样图，按色相桶统计饱和度权重，
  * 取主峰为主色、相距 ≥30° 的次峰为副色。
  * 纯取色器：resolve 返回色板 { p, s }，并写入 state.effYWall（平均亮度），
  * **不**直接改 state.palette / 应用主题——是否应用由 analyzeWallpaper 按模式决定。
- * 图源未返回 CORS 许可时浏览器会拒绝读取像素，reject 并说明原因
+ * 性能：解码用 createImageBitmap（离主线程，且 resize 在解码管线内直接缩到 256，
+ * 不占全尺寸位图开销）——替代旧的 new Image() 主线程解码整张高清原图（4K/8K
+ * 时解码即掉帧源）。主线程只做 64x64 绘制 + 色相统计（微秒级）。
+ * src 为 url 时先 fetch（无 CORS 许可会 reject，由 analyzeWallpaper 走代理）；为 Blob 时直接用。
  */
-function extractPaletteFromImage(url) {
-  return new Promise((resolve, reject) => {
-    if (typeof Image === "undefined" || typeof document === "undefined") {
-      reject(new Error("当前环境不支持取色"));
-      return;
-    }
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const size = 64;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, size, size);
-        const { data } = ctx.getImageData(0, 0, size, size);
-        // 平均亮度（供自适应文字取色）：取全像素均值，代表壁纸整体明暗。
-        // 必须在取色逻辑之前计算——即便壁纸“太素”取不到主色，亮度仍可用于文字可读性。
-        {
-          let sumR = 0, sumG = 0, sumB = 0;
-          for (let i = 0; i < data.length; i += 4) {
-            sumR += data[i];
-            sumG += data[i + 1];
-            sumB += data[i + 2];
-          }
-          const px = data.length / 4;
-          state.effYWall = relLum([sumR / px, sumG / px, sumB / px]);
-        }
-        const bins = new Array(36).fill(0);
-        const binStat = new Array(36)
-          .fill(null)
-          .map(() => ({ s: 0, l: 0, n: 0 }));
-        for (let i = 0; i < data.length; i += 4) {
-          const [h, s, l] = hexToHsl(
-            rgbToHex(data[i], data[i + 1], data[i + 2]),
-          );
-          if (s < 24 || l < 18 || l > 82) continue; // 跳过灰、黑、白
-          const b = Math.min(35, Math.floor(h / 10));
-          bins[b] += s;
-          binStat[b].s += s;
-          binStat[b].l += l;
-          binStat[b].n++;
-        }
-        const order = bins
-          .map((w, i) => [i, w])
-          .sort((a, b) => b[1] - a[1])
-          .filter(([, w]) => w > 0);
-        if (!order.length) {
-          reject(new Error("这张壁纸颜色太素，取不到合适配色"));
-          return;
-        }
-        const pBin = order[0][0];
-        const secBin = order.find(([i]) => {
-          const dh = Math.abs(i - pBin) * 10;
-          return dh >= 30 && dh <= 200;
-        });
-        const pick = (bin) => {
-          const st = binStat[bin];
-          return [bin * 10 + 5, clamp(st.s / st.n, 48, 85), safeL(st.l / st.n)];
-        };
-        const p = pick(pBin);
-        const s = secBin
-          ? pick(secBin[0])
-          : [(p[0] + 55) % 360, clamp(p[1], 48, 80), safeL(p[2] + 6)];
-        resolve({ p, s });
-      } catch (e) {
-        reject(new Error("该图源未开放跨域读取权限，无法取色"));
+async function extractPaletteFromImage(src) {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") {
+    throw new Error("当前环境不支持取色");
+  }
+  const blob =
+    typeof src === "string"
+      ? await fetch(src).then((r) => {
+          if (!r.ok) throw new Error("取色图片加载失败");
+          return r.blob();
+        })
+      : src;
+  let bmp;
+  try {
+    // 取色只看全局色彩分布，不关心几何比例：resize 同时传宽高做非等比缩放不影响统计结果
+    bmp = await createImageBitmap(blob, {
+      resizeWidth: 256,
+      resizeHeight: 256,
+      resizeQuality: "low",
+    });
+  } catch {
+    // 部分环境不支持 resize 选项：退化为全尺寸离线程解码（不阻塞主线程，仅内存略大）
+    bmp = await createImageBitmap(blob);
+  }
+  try {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bmp, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    // 平均亮度（供自适应文字取色）：取全像素均值，代表壁纸整体明暗。
+    // 必须在取色逻辑之前计算——即便壁纸“太素”取不到主色，亮度仍可用于文字可读性。
+    {
+      let sumR = 0, sumG = 0, sumB = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        sumR += data[i];
+        sumG += data[i + 1];
+        sumB += data[i + 2];
       }
+      const px = data.length / 4;
+      state.effYWall = relLum([sumR / px, sumG / px, sumB / px]);
+    }
+    const bins = new Array(36).fill(0);
+    const binStat = new Array(36)
+      .fill(null)
+      .map(() => ({ s: 0, l: 0, n: 0 }));
+    for (let i = 0; i < data.length; i += 4) {
+      const [h, s, l] = hexToHsl(
+        rgbToHex(data[i], data[i + 1], data[i + 2]),
+      );
+      if (s < 24 || l < 18 || l > 82) continue; // 跳过灰、黑、白
+      const b = Math.min(35, Math.floor(h / 10));
+      bins[b] += s;
+      binStat[b].s += s;
+      binStat[b].l += l;
+      binStat[b].n++;
+    }
+    const order = bins
+      .map((w, i) => [i, w])
+      .sort((a, b) => b[1] - a[1])
+      .filter(([, w]) => w > 0);
+    if (!order.length) {
+      throw new Error("这张壁纸颜色太素，取不到合适配色");
+    }
+    const pBin = order[0][0];
+    const secBin = order.find(([i]) => {
+      const dh = Math.abs(i - pBin) * 10;
+      return dh >= 30 && dh <= 200;
+    });
+    const pick = (bin) => {
+      const st = binStat[bin];
+      return [bin * 10 + 5, clamp(st.s / st.n, 48, 85), safeL(st.l / st.n)];
     };
-    img.onerror = () =>
-      reject(new Error("取色图片加载失败（图源未开放跨域权限或地址无效）"));
-    img.src = url;
-  });
+    const p = pick(pBin);
+    const s = secBin
+      ? pick(secBin[0])
+      : [(p[0] + 55) % 360, clamp(p[1], 48, 80), safeL(p[2] + 6)];
+    return { p, s };
+  } finally {
+    bmp.close();
+  }
 }
 
 // ========== 壁纸取色（含跨域代理回退） ==========
@@ -803,15 +815,11 @@ async function analyzeWallpaper(url) {
         const res = await fetch(make(url));
         if (!res.ok) continue;
         const blob = await res.blob();
-        const objUrl = URL.createObjectURL(blob);
-        try {
-          await attempt(objUrl);
-          paletteDone = true;
-          crumb("wallpaper palette: proxy ok");
-          break;
-        } finally {
-          URL.revokeObjectURL(objUrl);
-        }
+        // 直接把 blob 交给取色器（createImageBitmap 离线程解码，不再 objectURL + Image 主线程解码）
+        await attempt(blob);
+        paletteDone = true;
+        crumb("wallpaper palette: proxy ok");
+        break;
       } catch (e) {
         crumb(`wallpaper palette proxy failed: ${e?.message || e}`);
       }
