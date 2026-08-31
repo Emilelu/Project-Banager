@@ -10,16 +10,16 @@ import { relLum, deriveTextScale, contrast } from "./colorMath.js";
 const STORAGE_KEY = "banager_appearance";
 
 const state = reactive({
-  glass: "frost", // 'frost' 毛玻璃 | 'liquid' 液态玻璃
+  glass: "liquid", // 'frost' 毛玻璃 | 'liquid' 液态玻璃（默认）
   palette: null, // null = 默认樱紫；否则 { p: [h,s,l], s: [h,s,l] }
   paletteMode: "auto", // 'auto' 跟随壁纸取色 | 'random' 每次随机 | 'manual' 预设/自定义固定
   effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
-  bgEnabled: false,
+  bgEnabled: true, // 随机壁纸背景默认开启
   bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
-  bgAutoSwitch: false, // 每次打开页面自动换一张；默认关闭——刷新保持当前壁纸（用户可手动开启）
+  bgAutoSwitch: false, // 默认固定当前壁纸（刷新不换图）；用户可在设置中开启"每次打开自动换一张"
   bgCustomUrl: "",
-  bgDim: 0.55, // 遮罩浓度 0~0.9
-  bgBlur: 0, // 背景模糊 0~20px
+  bgDim: 0.25, // 遮罩浓度 0~0.9（默认 25%）
+  bgBlur: 5, // 背景模糊 0~20px（默认 5px）
   bgUrl: "", // 当前生效的图片地址
   bgLoading: false,
   bgFailed: false, // 运行时标记：当前图片加载失败（不持久化）
@@ -38,11 +38,15 @@ const PROVIDERS = {
 };
 
 // 把"随机端点"解析为"稳定图床地址"（固定壁纸用）。
-//   ① no-cors 跟随重定向：拿到 302 后的最终图床直链（最稳定）
-//   ② api 端点：alcy 的 api 接口返回 JSON 字符串形式 `https://tc...webp`（实测形态）
-//   ③ 兜底：返回原 URL（可能是端点本身，调用方应能感知仍可能刷新换图）
+//   ① 已是稳定图床直链（tc./img. 等）直接短路返回，避免多余网络往返（启动不再为已固定壁纸做无谓解析）
+//   ② no-cors 跟随重定向：拿到 302 后的最终图床直链（最稳定）
+//   ③ api 端点：alcy 的 api 接口返回 JSON 字符串形式 `https://tc...webp`（实测形态）
+//   ④ 兜底：返回原 URL（可能是端点本身，调用方应能感知仍可能刷新换图）
 async function resolveStableUrl(url, provider) {
   if (provider === "custom") return url || "";
+  // 已带图床域名/扩展名的直链无需再解析（例如 tc.alcy.cc/xxx.webp）
+  if (/^https?:\/\/[^/]+\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)/i.test(url))
+    return url;
   const p = PROVIDERS[provider] || PROVIDERS.alcy;
   // ① no-cors 跟随重定向：r.url 就是 302 后最终地址
   try {
@@ -69,16 +73,22 @@ async function resolveStableUrl(url, provider) {
   return url;
 }
 
-// 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址。
-// 关键：识别 alcy 的根端点本身 `t.alcy.cc/ycy[/?]` 而不依赖 ?t=... 参数（很多旧/被截断的链接没参数）
-async function migratePinnedEndpoint() {
-  if (!state.bgEnabled || !state.bgUrl || state.bgAutoSwitch) return;
-  const u = state.bgUrl;
-  const isRandom =
+// 该地址是否为「随机端点」（每次请求可能返回不同图）。用于启动时判断是否需要先解析/换图。
+function isRandomEndpoint(u) {
+  return (
     /t\.alcy\.cc\/ycy(\/?|\/?\?|\?|$)/.test(u) || // alcy 端点本体（含末尾/、?、?json）
     /dmoe\.cc\/random/.test(u) ||
-    /[?&]t=\d{8,}/.test(u);
-  if (!isRandom) return;
+    /[?&]t=\d{8,}/.test(u)
+  );
+}
+
+// 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址。
+// 关键：识别 alcy 的根端点本身 `t.alcy.cc/ycy[/?]` 而不依赖 ?t=... 参数（很多旧/被截断的链接没参数）
+// 返回是否发生了「迁移换图」（调用方据此决定是否还要再取一张/再探测）。
+async function migratePinnedEndpoint() {
+  if (!state.bgEnabled || !state.bgUrl || state.bgAutoSwitch) return false;
+  const u = state.bgUrl;
+  if (!isRandomEndpoint(u)) return false;
   try {
     const stable = await resolveStableUrl(u, state.bgProvider);
     if (stable && stable !== u) {
@@ -87,8 +97,10 @@ async function migratePinnedEndpoint() {
       state.bgFailed = false;
       applyBackground();
       probeBackground();
+      return true;
     }
   } catch {}
+  return false;
 }
 
 // 自动换图开关：关闭即“固定当前壁纸”——把当前随机端点解析为稳定地址再保存
@@ -163,6 +175,15 @@ function applyPalette() {
     ].forEach((v) => root.removeProperty(v));
     return;
   }
+  const [ph, ps, pl] = state.palette.p;
+  const [sh, ss, sl] = state.palette.s;
+  const p = [ph, clamp(ps, 45, 85), safeL(pl)];
+  const s = [sh, clamp(ss, 45, 85), safeL(sl)];
+  // 结果缓存：色板没变化（同一套主/副色）就直接返回，
+  // 不重复写 6 个 CSS 变量、不挂 .palette-animating 全树过渡类（取色/重算触发时可省下大量样式重算）
+  const key = `${p[0]},${p[1]},${p[2]}|${s[0]},${s[1]},${s[2]}`;
+  if (key === applyPalette._lastKey) return;
+  applyPalette._lastKey = key;
   // 配色变更时短暂挂 .palette-animating，让全树色彩过渡 ~0.3s 平滑切换，
   // 避免取色/切换模式/随机化时子元素硬跳。350ms 后自动卸下。
   if (typeof document !== "undefined") {
@@ -172,10 +193,6 @@ function applyPalette() {
       document.body.classList.remove("palette-animating");
     }, 360);
   }
-  const [ph, ps, pl] = state.palette.p;
-  const [sh, ss, sl] = state.palette.s;
-  const p = [ph, clamp(ps, 45, 85), safeL(pl)];
-  const s = [sh, clamp(ss, 45, 85), safeL(sl)];
   root.setProperty("--c-primary", hslToRgbTriplet(p));
   root.setProperty(
     "--c-primary-light",
@@ -200,8 +217,8 @@ function applyGlass() {
   if (typeof document === "undefined") return;
   if (state.glass === "liquid") document.body.dataset.glass = "liquid";
   else delete document.body.dataset.glass;
-  // 玻璃风格影响侧栏背景亮度，需重算自适应文字色
-  applyAdaptiveText();
+  // 玻璃风格影响侧栏背景亮度，需重算自适应文字色（合并到帧内，避免与其它动画叠加）
+  scheduleAdaptiveText();
 }
 
 // ========== 自适应文字取色（保证任意背景上文字都可读） ==========
@@ -213,8 +230,23 @@ function applyAdaptiveText() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const dark = root.classList.contains("dark");
-  const withBg = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  // 启动延迟应用背景期间（bgDeferred），背景图尚未显示，按"无壁纸"建模文字色
+  const withBg =
+    state.bgEnabled && state.bgUrl && !state.bgFailed && !bgDeferred;
   const yWall = state.effYWall == null ? 0.5 : state.effYWall;
+  // 高对比度模式（prefers-contrast: more）目标对比度提到 7:1（WCAG AAA）
+  // 系统/浏览器开启"高对比度"时自动启用，覆盖全组件、全模式、全场景
+  const targetContrast =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-contrast: more)").matches
+      ? 7
+      : 4.6;
+  // 结果缓存：输入（明暗/有无壁纸/玻璃风格/壁纸亮度/遮罩/目标对比度）不变就跳过，
+  // 避免取色、开关壁纸、切换模式等高频路径重复写 6 个 CSS 变量触发样式重算
+  const key = `${dark}|${withBg}|${state.glass}|${yWall}|${state.bgDim}|${targetContrast}`;
+  if (key === applyAdaptiveText._lastKey) return;
+  applyAdaptiveText._lastKey = key;
   let effYMain, effYSb;
   if (withBg) {
     const bgDim = clamp(state.bgDim, 0, 0.9);
@@ -224,8 +256,8 @@ function applyAdaptiveText() {
       // 液态玻璃底色随模式：浅色亮玻璃 / 深色暗玻璃，文字色需相应翻转
       effYSb = dark ? 0.1 : 0.86;
     } else {
-      const sbAlpha = dark ? 0.78 : 0.62;
-      effYSb = (1 - sbAlpha) * yWall + sbAlpha * 0.02;
+      // 毛玻璃：侧栏遮罩与主区一致（同一 scrim + 同一 --bg-dim），有效亮度相同
+      effYSb = effYMain;
     }
   } else {
     // 无壁纸：取固定底色亮度（body 渐变 / 侧栏渐变）。
@@ -235,14 +267,6 @@ function applyAdaptiveText() {
   }
   document.body.classList.add("adaptive");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
-  // 高对比度模式（prefers-contrast: more）目标对比度提到 7:1（WCAG AAA）
-  // 系统/浏览器开启"高对比度"时自动启用，覆盖全组件、全模式、全场景
-  const targetContrast =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-contrast: more)").matches
-      ? 7
-      : 4.6;
   const cfg = {
     target: targetContrast,
     r400: 0.8,
@@ -268,12 +292,32 @@ function applyAdaptiveText() {
   root.style.setProperty("--txt-sb-500", sb[2]);
 }
 
+// 自适应文字取色的 rAF 合并器：高频路径（遮罩/模糊滑块拖动、开关壁纸、明暗切换等）
+// 每帧最多重算一次。--txt-* 写在 :root 上会传播到所有引用它的元素，拖动滑块时
+// 每个 @input 事件同步触发一次全树样式重算，叠加在其它过渡动画上就是卡顿。
+// 合并后同一帧内的多次触发只落地一次（读取最新 state，天然幂等）。
+let _adaptRaf = 0;
+function scheduleAdaptiveText() {
+  if (_adaptRaf) return;
+  _adaptRaf = requestAnimationFrame(() => {
+    _adaptRaf = 0;
+    applyAdaptiveText();
+  });
+}
+
+// 启动"延迟应用背景"标记：启动需要换图/解析时，首屏先不显示旧壁纸（避免 A→B 硬切闪烁），
+// 等后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）。仅启动路径设置。
+let bgDeferred = false;
+
 function applyBackground() {
   if (typeof document === "undefined") return;
-  // 图片加载失败时彻底回到原渐变底色，不留遮罩层影响可读性
-  const active = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  // 图片加载失败或延迟应用期间，彻底回到原渐变底色，不留遮罩层影响可读性
+  const active =
+    state.bgEnabled && state.bgUrl && !state.bgFailed && !bgDeferred;
   document.body.classList.toggle("with-bg", active);
   document.body.classList.toggle("bg-nofx", !!state.bgNoFx);
+  // 自定义壁纸标记：弹窗聚焦时对自定义大图降级（不做额外模糊，见 style.css .bg-custom.bg-focus）
+  document.body.classList.toggle("bg-custom", state.bgProvider === "custom");
   ensureBlurLayer();
   const root = document.documentElement.style;
   if (active) {
@@ -285,8 +329,19 @@ function applyBackground() {
     root.setProperty("--bg-blur", "0px");
     root.setProperty("--bg-dim", "0");
   }
-  // 壁纸开关变化后同步自适应文字取色状态
-  applyAdaptiveText();
+  // 壁纸开关/遮罩/模糊变化后同步自适应文字取色状态（合并到帧内，滑块拖动不逐事件重算）
+  scheduleAdaptiveText();
+}
+
+// 壁纸"入场"：挂 bg-reveal（opacity:0）→ 双 rAF 摘除 → CSS 0.4s 淡入。
+// 纯 opacity 过渡（合成器属性），不触碰模糊/缩放，无重栅格化风险。
+function revealWallpaper() {
+  try {
+    document.body.classList.add("bg-reveal");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.body.classList.remove("bg-reveal")),
+    );
+  } catch {}
 }
 
 // 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
@@ -319,19 +374,31 @@ function probeBackground() {
   const img = new Image();
   img.onload = () => {
     if (gen !== bgGen) return; // 壁纸已换，本次探测作废
+    startupProbeActive = false;
     crumb("probe ok");
     state.bgFailed = false;
     applyBackground();
     // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
     analyzeWallpaper(url);
-    // 启动入场：壁纸就绪后由糊渐清晰
-    clearBootFocus();
   };
   img.onerror = () => {
     if (gen !== bgGen) return; // 壁纸已换，本次探测作废
     crumb("probe error");
     bootFocusPending = false;
+    const startup = startupProbeActive;
+    startupProbeActive = false;
     if (state.bgFailed) return;
+    // 启动「固定模式」探测失败：自动换一张新鲜的壁纸自愈，而不是把背景整个关掉
+    // （避免"壁纸出现一下又消失、回到没开壁纸"的观感；用户主动换图失败仍走 toast+关闭）
+    if (startup && !state.bgAutoSwitch && state.bgEnabled) {
+      crumb("probe error @startup → self-heal shuffle");
+      shuffleBackground().catch(() => {
+        state.bgFailed = true;
+        applyBackground();
+        showToast("背景图加载失败，已自动关闭背景", "warning");
+      });
+      return;
+    }
     state.bgFailed = true;
     applyBackground();
     if (!state.bgSilentProbe) {
@@ -437,6 +504,8 @@ function startFocusObserver() {
       }
       const closing = hasClosingModal();
       const open = hasFullscreenDialog() && !closing;
+      // 弹窗打开期间挂 modal-active：CSS 据此让取色/文字变色在开窗动画期间平滑过渡
+      setModalActive(open);
       // 关闭过渡一开始就摘掉 bg-focus（不等元素移除），壁纸缩放/模糊用与打开一致的
       // 0.8s 缓动回桌面态，呈现自然平缓的过渡（不再用 0.25s 快进）
       document.body.classList.toggle("bg-focus", open);
@@ -492,6 +561,65 @@ function applyAll() {
   applyGlass();
   applyPalette();
   applyBackground();
+}
+
+// ========== 启动“内容先行、外观后续”时序 ==========
+// 背景图解析/取色是网络+画布异步，挂载前 await 会挡住首帧内容（白屏窗口）。
+// 改为：先同步应用「本地能立刻算出的外观」（玻璃/配色/自适应文字），再在空闲帧
+// 里异步补背景图与取色；应用过程中给 <html> 挂 pre-app-ready，禁止动画类，
+// 结束后摘除，让动画回放（切页 fade / 弹窗开合）自然生效。
+
+function prepAppReadyTag() {
+  try {
+    document.documentElement.classList.add("pre-app-ready");
+    setTimeout(
+      () => document.documentElement.classList.remove("pre-app-ready"),
+      600,
+    );
+  } catch {}
+}
+
+// 空闲执行：优先 requestIdleCallback（后台低优先级，不抢主线程），否则降级 setTimeout
+function scheduleIdle(fn, timeout = 150) {
+  if (typeof window !== "undefined" && window.requestIdleCallback) {
+    try {
+      window.requestIdleCallback(() => fn(), { timeout });
+      return;
+    } catch {}
+  }
+  setTimeout(fn, 1);
+}
+
+// 每帧最多做一件事的“空闲调度器”：把耗时回写（取色应用 / 文字变色应用）拆成
+// 多次 rAF（必要时穿插 IdleCallback），避免一次任务里连续触发多次样式重算，
+// 降低进入页面后“取色→改文字色”时的卡顿与变色延迟感。
+const frameQueue = [];
+let frameScheduled = false;
+function scheduleFrameTask(fn) {
+  frameQueue.push(fn);
+  if (frameScheduled) return;
+  frameScheduled = true;
+  const run = () => {
+    frameScheduled = false;
+    const next = frameQueue.shift();
+    if (next) {
+      try {
+        next();
+      } catch (e) {
+        console.error(e);
+      }
+      // 队列里若还有任务，继续放到下一帧执行（一次只做一件）
+      if (frameQueue.length) scheduleFrameTask(run);
+    }
+  };
+  requestAnimationFrame(run);
+}
+
+// 弹窗开启期间挂 class，供 CSS 让取色/文字色在弹窗打开动画期间平滑过渡
+function setModalActive(active) {
+  try {
+    document.body.classList.toggle("modal-active", !!active);
+  } catch {}
 }
 
 // ========== 对外操作 ==========
@@ -690,13 +818,26 @@ async function analyzeWallpaper(url) {
   }
   // 取色期间壁纸若已更换，丢弃本次结果，避免旧图配色覆盖新图
   if (gen !== bgGen) return;
-  // 应用取色：仅「跟随壁纸取色」模式把壁纸色板写为主题色
+  // 应用取色（与“弹窗开启”解耦）：不在这里同步连写两套 CSS 变量，
+  // 交给 rAF 空闲队列分帧回写——文字色一帧、主题色板一帧，互不抢占同一帧。
   if (got && state.paletteMode === "auto") {
-    state.palette = got;
-    applyPalette();
+    // auto：主色板 + 文字色都按取色结果更新
+    scheduleFrameTask(() => {
+      if (gen !== bgGen) return;
+      state.palette = got;
+      applyPalette();
+    });
+    scheduleFrameTask(() => {
+      if (gen !== bgGen) return;
+      applyAdaptiveText();
+    });
+  } else {
+    // 固定/随机/预设：只更新文字取色所需亮度，不覆盖用户主题色
+    scheduleFrameTask(() => {
+      if (gen !== bgGen) return;
+      applyAdaptiveText();
+    });
   }
-  // 自适应文字取色：只要拿到壁纸亮度就应用，与 paletteMode 无关（固定/随机配色下文字仍需可读）
-  applyAdaptiveText();
   if (!paletteDone && state.paletteMode === "auto") {
     crumb("wallpaper palette: all methods failed, keep current theme");
   }
@@ -721,6 +862,10 @@ async function shuffleBackground() {
 // onload/onerror、analyzeWallpaper）返回时若代际已变，说明有新壁纸取代了旧任务，丢弃本次结果，
 // 避免迟到的回调把新壁纸覆盖回旧壁纸（否则预览与实际会出现不一致）。
 let bgGen = 0;
+
+// 启动「固定模式」探测激活标记：启动时探测失败会自动换一张自愈（见 probeBackground onerror），
+// 而非把背景整个关掉。仅启动路径设置，用户手动换图/开关不触发自愈。
+let startupProbeActive = false;
 
 async function _applyNewBg(url) {
   const gen = ++bgGen;
@@ -776,38 +921,29 @@ watch(
   { deep: true },
 );
 
+// 取色完成后可能正好赶上弹窗开启/主题切换，用空闲队列分帧回写（见 analyzeWallpaper）。
 export async function initAppearance() {
   // ?nobg / #nobg 逃生通道：URL 带此标记时跳过整个背景系统，保证页面永远能打开
   const nobg =
     /[?&]nobg/.test(location.search) || /#.*[?&]nobg/.test(location.hash);
+
+  // —— 同步快路径：先应用「本地能立刻算出的外观」，不等待任何网络 ——
+  // 玻璃/配色/自适应文字都是纯计算，同步应用后首帧内容即为正确观感；
+  // 背景图与取色随后台异步补上，避免"已有底色但内容迟迟不出现"的白屏窗口。
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved) {
       // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
       if (!saved.bgProvider || saved.bgProvider === "wallhaven")
         saved.bgProvider = "alcy";
-      // 迁移：旧版默认「每次打开自动换一张」=true，导致刷新即换图；一次性改为固定（保留当前壁纸）。
-      // 之后用户仍可在设置里手动开启自动换图。
-      try {
-        if (!localStorage.getItem("banager_autoswitch_migrated")) {
-          if (saved.bgAutoSwitch === true) saved.bgAutoSwitch = false;
-          localStorage.setItem("banager_autoswitch_migrated", "1");
-        }
-      } catch {}
       Object.assign(state, saved);
-      // 关键修复：先 AWAIT 迁移到稳定地址，再 applyBackground。
-      // 否则首屏会用随机端点加载一张图，几百毫秒后迁移解析换稳定地址，
-      // 用户看到「刷新后壁纸突然从一张切到另一张」。
-      await migratePinnedEndpoint();
     }
-    crumb(
-      `config loaded: enabled=${state.bgEnabled} provider=${state.bgProvider} auto=${state.bgAutoSwitch} url=${state.bgUrl?.slice(0, 60) || "(empty)"}`,
-    );
   } catch (e) {
     console.error("外观配置读取失败，已重置", e);
   }
   state.bgLoading = false;
   state.bgFailed = false;
+
   if (nobg) {
     crumb("nobg escape active");
     state.bgEnabled = false;
@@ -816,23 +952,21 @@ export async function initAppearance() {
     startFocusObserver();
     return;
   }
-  // 自动换图模式：在首次 applyAll 之前先解析新图（await 完成），保证首屏只渲染一张壁纸，
-  // 不出现"先显示旧图、再瞬间切到新图"的双重渲染/自动切换
-  if (state.bgEnabled && state.bgAutoSwitch) {
-    try {
-      await autoSwitchOnStartup();
-    } catch (e) {
-      console.error(e);
-    }
-  }
-  crumb("applyAll");
+
+  // 首帧外观立即生效（内容先行）；pre-app-ready 在短暂窗口内禁止动画类，
+  // 避免"先透明后淡入"的二次闪烁，随后摘除恢复动画
+  prepAppReadyTag();
+  // 启动需要换图/解析稳定地址时，先不显示旧壁纸（避免"先旧图、后台换新图"的闪烁）：
+  // 保持渐变底色 + 内容即时渲染，后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）
+  bgDeferred =
+    state.bgEnabled &&
+    (state.bgAutoSwitch || !state.bgUrl || isRandomEndpoint(state.bgUrl));
   applyAll();
-  // 每次刷新随机配色：随机模式在每次加载时重新生成配色
   if (state.paletteMode === "random") randomizePalette();
   startFocusObserver();
   // 暗色模式切换会改 scrim 亮度，需重算自适应文字色
   try {
-    new MutationObserver(() => applyAdaptiveText()).observe(
+    new MutationObserver(() => scheduleAdaptiveText()).observe(
       document.documentElement,
       { attributes: true, attributeFilter: ["class"] },
     );
@@ -841,18 +975,61 @@ export async function initAppearance() {
   try {
     if (window.matchMedia) {
       const mq = window.matchMedia("(prefers-contrast: more)");
-      const handler = () => applyAdaptiveText();
+      const handler = () => scheduleAdaptiveText();
       if (mq.addEventListener) mq.addEventListener("change", handler);
       else if (mq.addListener) mq.addListener(handler);
     }
   } catch {}
-  // 启动时探测上次的壁纸是否仍然可用（接口停服 / 图片被删时自动关闭）
-  try {
-    probeBackground();
-  } catch (e) {
-    console.error(e);
-  }
-  crumb("init done (sync part)");
+  crumb(
+    `config loaded: enabled=${state.bgEnabled} provider=${state.bgProvider} auto=${state.bgAutoSwitch} url=${state.bgUrl?.slice(0, 60) || "(empty)"}`,
+  );
+  crumb("applyAll (sync fast path)");
+
+  // —— 后台网络步骤：不阻塞挂载，交给空闲/延时调度 ——
+  scheduleIdle(async () => {
+    try {
+      if (!state.bgEnabled) return;
+      if (state.bgAutoSwitch) {
+        // 自动换图：打开时换一张（内部含稳定性探测与失败回退）
+        await autoSwitchOnStartup();
+      } else if (state.bgUrl) {
+        // 固定壁纸：若持久化地址仍是随机端点（旧数据/被回退破坏），先迁移到稳定地址；
+        // 未发生迁移则正常探测当前地址是否仍可用；探测失败会自动换一张自愈
+        startupProbeActive = true;
+        const migrated = await migratePinnedEndpoint();
+        if (!migrated) {
+          try {
+            probeBackground();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      } else {
+        // 固定模式但从未加载过图：取一张（此后保持固定，刷新不再换图）
+        startupProbeActive = true;
+        try {
+          await shuffleBackground();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      // 结束延迟应用：新壁纸（或失败后的回退状态）一次性生效 + 淡入入场
+      startupProbeActive = false;
+      if (bgDeferred) {
+        bgDeferred = false;
+        try {
+          applyBackground();
+          revealWallpaper();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    crumb("init done (async part)");
+  });
 }
 
 export function useAppearance() {

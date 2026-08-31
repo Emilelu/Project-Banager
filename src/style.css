@@ -27,8 +27,8 @@
 
   /* 背景图系统（useAppearance.js 控制） */
   --bg-image: none;
-  --bg-blur: 0px;
-  --bg-dim: 0.55;
+  --bg-blur: 5px; /* 默认模糊 5px（与 useAppearance 默认一致） */
+  --bg-dim: 0.25; /* 默认遮罩 25%（与 useAppearance 默认一致） */
   --bg-scrim-light: 245 243 255; /* 与日间渐变底色一致 */
   --bg-scrim-dark: 15 10 26;     /* 与暗色渐变底色一致 */
 
@@ -42,6 +42,16 @@
   --txt-sb-500: 148 163 184;
 }
 
+/* ==================== 首屏就绪前（防白屏） ==================== */
+/* 挂载前 initAppearance 不再 await 网络解析，首帧内容立即渲染。
+   在样式引擎应用完成前（<500ms），去掉一切动画类，让内容直接呈现而不是"先透明后淡入"；
+   引擎就绪后移除本类，重挂动画过渡（fade/入场等按原配置播放）。 */
+html.pre-app-ready body #app > *,
+html.pre-app-ready body #app > * * {
+  animation: none !important;
+  transition: none !important;
+}
+
 /* ==================== 背景图 ==================== */
 /* 图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
 body.with-bg::before {
@@ -52,7 +62,12 @@ body.with-bg::before {
   background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
-  transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.4s ease, filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 启动"壁纸入场"：后台就绪后一次性应用新壁纸，从透明淡入（纯 opacity，合成器属性，不重栅格化） */
+body.with-bg.bg-reveal::before {
+  opacity: 0;
 }
 
 /* iOS 风格聚焦态：弹窗打开 / 启动入场时壁纸加深模糊，关闭后渐清晰 */
@@ -61,8 +76,17 @@ body.with-bg.bg-focus::before {
   transform: scale(1.13);
 }
 
+/* 自定义壁纸（通常是大图直链）：弹窗聚焦降级——不再叠加额外模糊
+   （避免全屏大图每帧重栅格化造成卡顿），仅轻微缩放；其余壁纸保持原聚焦效果 */
+body.with-bg.bg-custom.bg-focus::before {
+  filter: blur(var(--bg-blur));
+  transform: scale(1.10);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  body.with-bg::before {
+  body.with-bg::before,
+  body.with-bg.bg-focus::before,
+  body.with-bg.bg-custom.bg-focus::before {
     transition: none;
   }
 }
@@ -80,21 +104,17 @@ body.with-bg::after {
 }
 
 /* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来，
-   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读 */
+   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读。
+   遮罩颜色/浓度与主区（body.with-bg::after）完全一致：浅色 scrim / 深色 scrim，
+   深浅模式都同一套 --bg-dim，保证侧栏与主部分视觉统一。 */
 body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) * 0.55 + 0.28));
+  background: rgb(var(--bg-scrim-light) / var(--bg-dim));
   backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
   -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
 }
 
 .dark body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) * 0.55 + 0.28));
-}
-
-/* 浅色 + 壁纸（非液态玻璃）：侧栏底色变为浅色 scrim，白色导航文字会看不清；
-   覆一层深色半透明衬底保证可读。液态玻璃模式自身是白色玻璃 + 白字，无需此处理 */
-html:not(.dark) body:not([data-glass='liquid']).with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / 0.62);
+  background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
 /* ==================== 全局响应式缩放 ==================== */
@@ -533,6 +553,35 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 .modal-enter-from,
 .modal-leave-to {
   transform: scale(0.95) translateY(10px);
+}
+
+/* 弹窗开启期间允许取色/文字色平滑过渡：取色完成后回写的 --txt-* 与 --c-* 在
+   弹窗打开瞬间同步生效，不再“点开弹窗就卡一下”（取色与弹窗开启解耦）。 */
+body.modal-active .palette-animating,
+body.modal-active .palette-animating *,
+body.modal-active .palette-animating *::before,
+body.modal-active .palette-animating *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+    fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+/* 自适应文字元素（--txt-* 驱动的灰阶与侧栏白字）在取色变色时直接跳变，不参与全树
+   色彩过渡：否则每次取色重算都会让整页文字做 0.3s 颜色动画（全树绘制风暴），
+   叠加在弹窗开合 / 悬停 / 主题切换等过渡动画上就是肉眼可见的卡顿。
+   文字可读性瞬时跳变无感知；主题色（--c-* 驱动的渐变文字 / 按钮 / 边框）仍平滑过渡。
+   覆盖 modal-active 与普通 palette-animating 两个规则（特异性更高 + !important）。 */
+body.palette-animating.adaptive
+  main
+  :is(
+    .text-gray-300,
+    .text-gray-400,
+    .text-gray-500,
+    .text-gray-600,
+    .text-gray-700,
+    .text-gray-800
+  ):not(.glass *):not([class*="glass"]),
+body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
+  transition: none !important;
 }
 
 /* 弹窗玻璃模糊与开合动画同步：入场/出场时让内部 .glass 的 backdrop-filter 模糊值

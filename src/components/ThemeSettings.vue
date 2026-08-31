@@ -98,20 +98,32 @@
                   class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
                 <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">填写直链后点击「完成」即应用并保存，无需再点「换一张」。</p>
                 <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
+                <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
+                     点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
+                     不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
                 <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
-                  <button @click="setAutoSwitch(!state.bgAutoSwitch)"
+                  <button @click="setAutoSwitch(true)"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
                     :class="state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                    <span>{{ state.bgAutoSwitch ? '🔄' : '📌' }}</span>
-                    {{ state.bgAutoSwitch ? '每次打开自动换一张' : '已固定当前壁纸' }}
+                    🔄 每次打开自动换一张
                   </button>
-                  <button v-if="state.bgAutoSwitch" @click="setAutoSwitch(false)"
-                    class="px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press"
-                    title="关闭自动换图，固定当前这张壁纸">固定这张</button>
+                  <button @click="setAutoSwitch(false)"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="!state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                    📌 固定当前壁纸
+                  </button>
                 </div>
                 <div v-if="state.bgUrl" class="mt-3">
-                  <img :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"
-                    class="w-full h-28 object-cover rounded-xl border border-white/40" alt="背景预览" />
+                  <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
+                       这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
+                       生成中显示骨架，降级失败才回退原图直出 -->
+                  <div class="w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
+                    <img v-if="previewSrc" :src="previewSrc" @error="onBgError" @load="bgLoaded = true"
+                      loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
+                    <img v-else-if="previewFailed" :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"
+                      loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
+                    <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
+                  </div>
                   <p v-if="bgFailed" class="text-xs text-danger mt-1">⚠️ 图片加载失败，请换一张</p>
                 </div>
                 <div class="mt-3 space-y-2">
@@ -129,7 +141,7 @@
                   </label>
                 </div>
                 <div class="flex items-center justify-end mt-3">
-                  <button @click="resetBgTuning" title="恢复默认（遮罩 55%、无模糊）"
+                  <button @click="resetBgTuning" title="恢复默认（遮罩 25%、模糊 5px）"
                     class="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认（遮罩/模糊）</button>
                 </div>
               </template>
@@ -147,7 +159,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useAppearance, hexToHsl, hslCss } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 
@@ -158,6 +170,122 @@ const { state, setGlass, setPalette, setPaletteMode, setAutoSwitch, randomizePal
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
+
+// —— 预览图降采样：原图分辨率过高（4K/8K）时，弹窗打开会因解码整张位图而卡顿。
+// 这里把预览改为「离主线程解码 + 缩小到 1600px 内 + 编码为小尺寸 blob URL」的缩略图，
+// 弹窗内 <img> 只渲染小图，原图永远不在弹窗里解码。
+// 注意：tc.alcy.cc 等图床直链无 CORS 头，直接 fetch 会被拦，需走与取色一致的代理链兜底。
+const MAX_PREVIEW_SIDE = 1600
+const PREVIEW_PROXIES = [
+  (u) => `https://proxy.cors.sh/${u}`,
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ''))}`,
+]
+const previewSrc = ref('')       // 降采样后的预览地址（blob URL / 空=生成中）
+const previewFailed = ref(false) // 降采样不可用/失败 → 退回原图直出
+let previewGen = 0               // 代际计数：迟到的异步结果不覆盖新预览
+let previewUrl = ''              // 当前 blob URL，换图/卸载时 revoke
+
+async function buildPreview(url) {
+  // 太老的浏览器不支持 createImageBitmap：直接退回原图
+  if (typeof createImageBitmap !== 'function') {
+    previewFailed.value = true
+    return
+  }
+  const gen = ++previewGen
+  previewFailed.value = false
+  let blob = null
+  const grab = async (u) => {
+    const r = await fetch(u)
+    if (!r.ok) throw new Error('fetch failed')
+    return r.blob()
+  }
+  // 直连优先（同源 / custom / blob URL）；失败走代理链
+  try {
+    blob = await grab(url)
+  } catch {
+    for (const make of PREVIEW_PROXIES) {
+      try {
+        blob = await grab(make(url))
+        if (blob) break
+      } catch {}
+    }
+  }
+  if (gen !== previewGen) return
+  if (!blob) {
+    previewFailed.value = true
+    return
+  }
+  let u = ''
+  try {
+    // 离主线程解码原图，确认尺寸后再决定是否缩小（避免把小图放大糊掉）
+    let bmp = await createImageBitmap(blob)
+    if (gen !== previewGen) {
+      bmp.close()
+      return
+    }
+    if (bmp.width > MAX_PREVIEW_SIDE || bmp.height > MAX_PREVIEW_SIDE) {
+      const small = await createImageBitmap(bmp, {
+        resizeWidth: MAX_PREVIEW_SIDE,
+        resizeHeight: MAX_PREVIEW_SIDE,
+        resizeQuality: 'medium',
+      })
+      bmp.close()
+      bmp = small
+    }
+    if (gen !== previewGen) {
+      bmp.close()
+      return
+    }
+    // 编码为小尺寸 blob URL（webp 保留透明通道；不支持时浏览器自动退回 png）
+    const cv = document.createElement('canvas')
+    cv.width = bmp.width
+    cv.height = bmp.height
+    const ctx = cv.getContext('2d')
+    ctx.drawImage(bmp, 0, 0)
+    bmp.close()
+    const smallBlob = await new Promise((res) => cv.toBlob(res, 'image/webp', 0.9))
+    if (gen !== previewGen) return
+    if (!smallBlob) throw new Error('encode failed')
+    u = URL.createObjectURL(smallBlob)
+  } catch {
+    if (gen !== previewGen) return
+    previewFailed.value = true
+    return
+  }
+  if (gen !== previewGen) {
+    URL.revokeObjectURL(u)
+    return
+  }
+  if (previewUrl) URL.revokeObjectURL(previewUrl)
+  previewUrl = u
+  previewSrc.value = u
+  previewFailed.value = false
+}
+
+function resetPreview() {
+  previewGen++ // 作废在途降采样请求
+  previewSrc.value = ''
+  previewFailed.value = false
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl)
+    previewUrl = ''
+  }
+}
+
+watch(
+  () => (state.bgEnabled ? state.bgUrl : ''),
+  (url) => {
+    if (!url) {
+      resetPreview()
+      return
+    }
+    previewSrc.value = ''
+    buildPreview(url)
+  },
+)
+
+onUnmounted(resetPreview)
 
 // 记录打开面板时的图源，用于「完成」时判断是否切换了图源并立即应用
 const providerAtOpen = ref(state.bgProvider)
@@ -184,10 +312,10 @@ const applyCustom = () => {
   setPalette({ p: hexToHsl(customP.value), s: hexToHsl(customS.value) })
 }
 
-// 恢复遮罩/模糊默认值
+// 恢复遮罩/模糊默认值（与应用默认一致：25% / 5px）
 const resetBgTuning = () => {
-  state.bgDim = 0.55
-  state.bgBlur = 0
+  state.bgDim = 0.25
+  state.bgBlur = 5
   applyBackground()
   showToast('已恢复默认遮罩与模糊')
 }
