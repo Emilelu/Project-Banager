@@ -55,9 +55,21 @@
                   副色 <input type="color" v-model="customS" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
                 </label>
                 <button @click="applyCustom" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press">应用自定义</button>
-                <button @click="setPalette(null)" class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 transition btn-press">↺ 恢复默认</button>
+                <button @click="onReset" class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 transition btn-press">↺ 恢复默认</button>
               </div>
-              <p class="text-xs text-gray-400 mt-1.5">建议选中等亮度的颜色（保证白色文字可读）。开启背景图后可从壁纸取色。</p>
+              <div class="mt-3 flex items-center gap-2 flex-wrap">
+                <button @click="setPaletteMode('auto')"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                  :class="state.paletteMode === 'auto' ? 'bg-accent/10 border-accent/50 text-accent-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                  🎨 跟随壁纸取色
+                </button>
+                <button @click="setPaletteMode('random')"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                  :class="state.paletteMode === 'random' ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                  🎲 每次刷新随机配色
+                </button>
+              </div>
+              <p class="text-xs text-gray-400 mt-1.5">「跟随壁纸取色」会在换壁纸后自动提取主色调（默认开启）；「每次刷新随机」每次打开随机配色；选用下方预设或自定义则固定。</p>
             </section>
 
             <!-- 背景图 -->
@@ -77,22 +89,23 @@
                     <option value="dmoe">樱花随机壁纸 · dmoe</option>
                     <option value="custom">自定义图片地址</option>
                   </select>
-                  <button @click="onShuffle"
+                  <button v-if="state.bgProvider !== 'custom'" @click="onShuffle"
                     class="px-3 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-secondary to-secondary-light text-white hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">
                     🔄 换一张
                   </button>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" placeholder="https://... 直链图片地址"
                   class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
-                <!-- 自动换图 / 固定壁纸 -->
-                <div class="mt-2 flex items-center gap-2 flex-wrap">
-                  <button @click="state.bgAutoSwitch = !state.bgAutoSwitch"
+                <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">填写直链后点击「完成」即应用并保存，无需再点「换一张」。</p>
+                <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
+                <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
+                  <button @click="setAutoSwitch(!state.bgAutoSwitch)"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
                     :class="state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
                     <span>{{ state.bgAutoSwitch ? '🔄' : '📌' }}</span>
                     {{ state.bgAutoSwitch ? '每次打开自动换一张' : '已固定当前壁纸' }}
                   </button>
-                  <button v-if="state.bgAutoSwitch" @click="state.bgAutoSwitch = false"
+                  <button v-if="state.bgAutoSwitch" @click="setAutoSwitch(false)"
                     class="px-2 py-1.5 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press"
                     title="关闭自动换图，固定当前这张壁纸">固定这张</button>
                 </div>
@@ -115,15 +128,9 @@
                     <span class="w-10 text-right font-mono">{{ state.bgBlur }}px</span>
                   </label>
                 </div>
-                <div class="flex items-center gap-2 mt-3">
-                  <button @click="onPickFromBg" :disabled="!canPickFromBg"
-                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-accent to-accent-light text-white hover:shadow-lg hover:shadow-accent/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed">
-                    🎨 从壁纸取色
-                  </button>
-                  <span v-if="!canPickFromBg" class="text-xs text-gray-400">先获取一张壁纸</span>
-                  <span v-else class="text-xs text-gray-400">读取壁纸像素取色（图源需开放跨域权限）</span>
+                <div class="flex items-center justify-end mt-3">
                   <button @click="resetBgTuning" title="恢复默认（遮罩 55%、无模糊）"
-                    class="ml-auto px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认</button>
+                    class="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认（遮罩/模糊）</button>
                 </div>
               </template>
               <p v-else class="text-xs text-gray-400">开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。</p>
@@ -131,7 +138,7 @@
           </div>
 
           <div class="px-6 py-4 border-t border-white/20 flex justify-end sticky bottom-0 glass rounded-b-2xl">
-            <button @click="$emit('close')" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-light rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">完成</button>
+            <button @click="onFinish" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-light rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">完成</button>
           </div>
         </div>
       </div>
@@ -140,17 +147,23 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useAppearance, hexToHsl, hslCss } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 
-defineProps({ show: Boolean })
+const props = defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
-const { state, setGlass, setPalette, randomizePalette, extractPaletteFromImage, shuffleBackground, toggleBackground, applyBackground } = useAppearance()
+const { state, setGlass, setPalette, setPaletteMode, setAutoSwitch, randomizePalette, shuffleBackground, applyCustomBackground, toggleBackground, applyBackground } = useAppearance()
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
+
+// 记录打开面板时的图源，用于「完成」时判断是否切换了图源并立即应用
+const providerAtOpen = ref(state.bgProvider)
+watch(() => props.show, (v) => {
+  if (v) providerAtOpen.value = state.bgProvider
+})
 
 const presets = [
   { name: '樱紫（默认）', p: [263, 67, 55], s: [329, 81, 60] },
@@ -171,8 +184,6 @@ const applyCustom = () => {
   setPalette({ p: hexToHsl(customP.value), s: hexToHsl(customS.value) })
 }
 
-const canPickFromBg = computed(() => state.bgEnabled && !!state.bgUrl)
-
 // 恢复遮罩/模糊默认值
 const resetBgTuning = () => {
   state.bgDim = 0.55
@@ -182,8 +193,15 @@ const resetBgTuning = () => {
 }
 
 const onRandom = () => {
+  setPaletteMode('manual')
   randomizePalette()
   showToast('已随机配色 🎲')
+}
+
+// 恢复默认配色：回到「跟随壁纸」模式
+const onReset = () => {
+  setPaletteMode('auto')
+  showToast('已恢复默认配色（跟随壁纸）')
 }
 
 const toggleBg = async () => {
@@ -202,14 +220,35 @@ const onShuffle = async () => {
   }
 }
 
-const onPickFromBg = async () => {
-  // 读取壁纸像素取色（Alcy 源已开放跨域权限；图源无跨域许可时会明确提示）
-  try {
-    await extractPaletteFromImage(state.bgUrl)
-    showToast('已从壁纸取色 🎨')
-  } catch (e) {
-    showToast(e.message, 'warning')
+// 「完成」：图源或地址有变化时立即应用并持久化，无需刷新或点「换一张」
+const onFinish = async () => {
+  if (state.bgEnabled) {
+    if (state.bgProvider === 'custom') {
+      // 自定义图源：应用地址（为空则报错并留在面板内让用户补填）
+      const url = state.bgCustomUrl.trim()
+      if (!url) {
+        showToast('请先填写图片地址', 'error')
+        return
+      }
+      if (state.bgUrl !== url) {
+        applyCustomBackground()
+        bgFailed.value = false
+        showToast('自定义壁纸已应用 🖼️')
+      }
+    } else if (state.bgProvider !== providerAtOpen.value) {
+      // 随机图源：切换了图源，立即取一张
+      bgLoaded.value = false
+      bgFailed.value = false
+      try {
+        await shuffleBackground()
+        showToast('壁纸已更新 🖼️')
+      } catch (e) {
+        showToast(e.message || '获取壁纸失败', 'error')
+        return
+      }
+    }
   }
+  emit('close')
 }
 
 const onBgError = () => {

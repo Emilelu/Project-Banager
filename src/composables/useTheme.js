@@ -22,10 +22,19 @@ function resolveTheme() {
   return theme.value === 'dark'
 }
 
+// 在应用挂载前同步应用主题：避免首帧以错误主题渲染、挂载后再"突然变色"（液态玻璃下尤其突兀）
+export function initTheme() {
+  if (typeof document === 'undefined') return
+  try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'light' || saved === 'dark' || saved === 'auto') theme.value = saved
+  } catch {}
+  applyDark(resolveTheme())
+}
+
 export function useTheme() {
   onMounted(() => {
-    const saved = localStorage.getItem(THEME_KEY)
-    if (saved) theme.value = saved
+    // 兜底：确保与当前设置一致（重复应用无害）
     applyDark(resolveTheme())
 
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -36,7 +45,9 @@ export function useTheme() {
   })
 
   watch(theme, (val) => {
-    localStorage.setItem(THEME_KEY, val)
+    try {
+      localStorage.setItem(THEME_KEY, val)
+    } catch {}
     applyDark(resolveTheme())
   })
 

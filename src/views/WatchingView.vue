@@ -382,6 +382,7 @@ import { watchingApi, remainingApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput } from '../composables/useDatePicker'
 import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl } from '../composables/useEpisode'
 import { showToast } from '../composables/useToast'
+import { placeContextMenu } from '../composables/useContextMenu'
 import WatchingCard from '../components/WatchingCard.vue'
 
 const weekDays = ['周一','周二','周三','周四','周五','周六','周日']
@@ -600,7 +601,8 @@ const applyTemplate = () => {
 const contextMenu = ref({ show:false, x:0, y:0, item:null })
 const openContextMenu = (e, item) => {
   selected.value = item
-  contextMenu.value = { show:true, x:e.clientX, y:e.clientY, item }
+  // 贴边/贴底时自动翻转，避免菜单被视口裁掉
+  placeContextMenu(contextMenu, e, { item })
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }

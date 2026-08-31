@@ -361,6 +361,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
+import { placeContextMenu } from '../composables/useContextMenu'
 
 const years = ref([])
 const watchedList = ref([])
@@ -571,7 +572,8 @@ const yearForm = ref({ year_label:'' })
 const contextMenu = ref({ show:false, x:0, y:0, item:null })
 const openContextMenu = (e, item) => {
   selected.value = item
-  contextMenu.value = { show:true, x:e.clientX, y:e.clientY, item }
+  // 贴边/贴底时自动翻转，避免菜单被视口裁掉
+  placeContextMenu(contextMenu, e, { item })
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }

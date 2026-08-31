@@ -372,6 +372,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { remainingApi, batchApi } from '../db/api'
 import { dateInputToFormat, formatToDateInput, compareDateKey } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
+import { placeContextMenu } from '../composables/useContextMenu'
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
@@ -594,7 +595,8 @@ const moveForm = ref({ day_of_week: '', time_slot: '' })
 const contextMenu = ref({ show: false, x: 0, y: 0, item: null })
 const openContextMenu = (e, item) => {
   selected.value = item
-  contextMenu.value = { show: true, x: e.clientX, y: e.clientY, item }
+  // 贴边/贴底时自动翻转，避免菜单被视口裁掉
+  placeContextMenu(contextMenu, e, { item })
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }
