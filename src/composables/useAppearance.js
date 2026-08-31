@@ -336,14 +336,45 @@ function applyBackground() {
   scheduleAdaptiveText();
 }
 
-// 壁纸"入场"：挂 bg-reveal（opacity:0）→ 双 rAF 摘除 → CSS 0.4s 淡入。
+// 壁纸"入场"：挂 bg-reveal（opacity:0）→ 待图片就绪 → 双 rAF 摘除 → CSS 0.4s 淡入。
+// 为什么要「等图片就绪」：壁纸层是 <img>，设 src 后还要经过下载→解码→上屏，
+// 若在设 src 后立即播淡入，动画会在空元素上播完，图片晚到则"啪"地出现（淡入丢失）。
+// 图片 complete && naturalWidth>0 才是绘制完成的信号；已就绪则立即淡入，
+// else 挂 onload/onerror + 超时兜底（8s 未就绪直接摘除，避免壁纸永久透明）。
 // 纯 opacity 过渡（合成器属性），不触碰模糊/缩放，无重栅格化风险。
 function revealWallpaper() {
   try {
-    document.body.classList.add("bg-reveal");
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => document.body.classList.remove("bg-reveal")),
-    );
+    const img = document.getElementById("bg-wallpaper");
+    const ready = () => {
+      if (!img || img.complete) return true;
+      try {
+        return img.naturalWidth > 0;
+      } catch {
+        return false;
+      }
+    };
+    const play = () => {
+      const el = document.body;
+      el.classList.add("bg-reveal");
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => el.classList.remove("bg-reveal")),
+      );
+    };
+    if (ready()) {
+      play();
+      return;
+    }
+    let done = false;
+    const ensure = () => {
+      if (done) return;
+      done = true;
+      img.removeEventListener("load", ensure, true);
+      img.removeEventListener("error", ensure, true);
+      play();
+    };
+    img.addEventListener("load", ensure, true);
+    img.addEventListener("error", ensure, true);
+    setTimeout(ensure, 8000);
   } catch {}
 }
 
