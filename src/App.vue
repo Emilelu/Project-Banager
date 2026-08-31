@@ -20,7 +20,7 @@
       <!-- 导航菜单 -->
       <nav class="flex-1 py-4 space-y-1 px-3 relative z-10">
         <router-link v-for="(item, idx) in navItems" :key="item.path" :to="item.path"
-          class="flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group" :class="[
+          class="flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 group" :class="[
             $route.path === item.path
               ? 'bg-white/20 text-white shadow-lg shadow-black/10 backdrop-blur-sm scale-[1.02]'
               : 'text-white/60 hover:bg-white/10 hover:text-white'
