@@ -398,6 +398,18 @@ body {
   background: linear-gradient(180deg, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
 }
 
+/* ==================== 配色切换平滑过渡 ==================== */
+/* 短暂挂类（~0.36s）让全树色彩过渡平滑，应对取色完成 / 切换模式 / 随机化等
+   突然换主色场景；非动画期间不挂类，避免给每个交互响应都补上 0.3s 延迟 */
+body.palette-animating,
+body.palette-animating *,
+body.palette-animating *::before,
+body.palette-animating *::after {
+  transition: background-color 0.3s ease, color 0.3s ease,
+    border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease,
+    box-shadow 0.3s ease !important;
+}
+
 /* ==================== 自适应文字取色 ==================== */
 /* body.adaptive 时，直接压在壁纸/玻璃上的文字按背景亮度自动取深/浅色，保证可读。
    侧栏仅在壁纸激活（with-bg）时覆盖：无壁纸时侧栏保持紫渐变 + 白字的设计配色。

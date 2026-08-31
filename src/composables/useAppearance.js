@@ -158,6 +158,15 @@ function applyPalette() {
     ].forEach((v) => root.removeProperty(v));
     return;
   }
+  // 配色变更时短暂挂 .palette-animating，让全树色彩过渡 ~0.3s 平滑切换，
+  // 避免取色/切换模式/随机化时子元素硬跳。350ms 后自动卸下。
+  if (typeof document !== "undefined") {
+    document.body.classList.add("palette-animating");
+    if (applyPalette._t) clearTimeout(applyPalette._t);
+    applyPalette._t = setTimeout(() => {
+      document.body.classList.remove("palette-animating");
+    }, 360);
+  }
   const [ph, ps, pl] = state.palette.p;
   const [sh, ss, sl] = state.palette.s;
   const p = [ph, clamp(ps, 45, 85), safeL(pl)];
