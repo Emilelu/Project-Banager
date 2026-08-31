@@ -413,14 +413,25 @@ body.palette-animating *::after {
 /* ==================== 自适应文字取色 ==================== */
 /* body.adaptive 时，直接压在壁纸/玻璃上的文字按背景亮度自动取深/浅色，保证可读。
    侧栏仅在壁纸激活（with-bg）时覆盖：无壁纸时侧栏保持紫渐变 + 白字的设计配色。
-   玻璃卡片（.glass）内部的文字保持自身配色，不在此列。 */
+   玻璃卡片（.glass）内部的文字保持自身配色，不在此列。
+   覆盖范围：text-gray-300/400/500/600/700/800 全套灰阶，确保任意玻璃 + 任意模式 +
+   任意壁纸亮度下文字均可读。 */
 body.with-bg.adaptive .sidebar-bg [class*="text-white"] {
   color: rgb(var(--txt-sb-400)) !important;
 }
 body.with-bg.adaptive .sidebar-bg [class*="text-white"]:hover {
   color: rgb(var(--txt-sb-500)) !important;
 }
-body.adaptive main :is(.text-gray-300,.text-gray-400,.text-gray-500):not(.glass *):not([class*="glass"]) {
+body.adaptive
+  main
+  :is(
+    .text-gray-300,
+    .text-gray-400,
+    .text-gray-500,
+    .text-gray-600,
+    .text-gray-700,
+    .text-gray-800
+  ):not(.glass *):not([class*="glass"]) {
   color: rgb(var(--txt-main-400)) !important;
 }
 /* 液态玻璃 + 浅色 + 无壁纸：侧栏是白玻璃，白字不可读，需按自适应亮度取深色字 */
@@ -429,6 +440,38 @@ html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [cl
 }
 html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [class*="text-white"]:hover {
   color: rgb(var(--txt-sb-500)) !important;
+}
+/* 磨砂玻璃 + 浅色 + 无壁纸：侧栏是浅紫渐变（白光字对比度边缘），同样走自适应 */
+html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-bg [class*="text-white"] {
+  color: rgb(var(--txt-sb-400)) !important;
+}
+html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-bg [class*="text-white"]:hover {
+  color: rgb(var(--txt-sb-500)) !important;
+}
+
+/* 高对比度模式（prefers-contrast: more）：把目标对比度提到 7:1（WCAG AAA），
+   同时把覆盖范围扩展到 App.vue 内的次级文字与边界灰阶 */
+@media (prefers-contrast: more) {
+  body.adaptive
+    main
+    :is(
+      .text-gray-300,
+      .text-gray-400,
+      .text-gray-500,
+      .text-gray-600,
+      .text-gray-700,
+      .text-gray-800,
+      .text-gray-200
+    ):not(.glass *):not([class*="glass"]) {
+    /* 由 JS 端将 cfg.target 提到 7 计算的 --txt-main-* 已是高对比色 */
+    color: rgb(var(--txt-main-500)) !important;
+  }
+  body.adaptive .sidebar-bg [class*="text-white"] {
+    color: rgb(var(--txt-sb-500)) !important;
+  }
+  body.adaptive .sidebar-bg [class*="text-white"]:hover {
+    color: rgb(var(--txt-sb-300)) !important;
+  }
 }
 
 /* 页面切换动画 */

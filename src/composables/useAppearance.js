@@ -230,7 +230,21 @@ function applyAdaptiveText() {
   }
   document.body.classList.add("adaptive");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
-  const cfg = { target: 4.6, r400: 0.8, r300: 0.62, min: 0, max: 0.98 };
+  // 高对比度模式（prefers-contrast: more）目标对比度提到 7:1（WCAG AAA）
+  // 系统/浏览器开启"高对比度"时自动启用，覆盖全组件、全模式、全场景
+  const targetContrast =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-contrast: more)").matches
+      ? 7
+      : 4.6;
+  const cfg = {
+    target: targetContrast,
+    r400: 0.8,
+    r300: 0.62,
+    min: 0,
+    max: 0.98,
+  };
   // 深/浅两个方向都算一遍，取对比度更高的一组：中间亮度区（约 0.18~0.45）单独任一
   // 方向都够不到 4.5，选对比度大者至少保证可读
   const pick = (effY) => {
@@ -778,6 +792,15 @@ export async function initAppearance() {
       document.documentElement,
       { attributes: true, attributeFilter: ["class"] },
     );
+  } catch {}
+  // 系统"高对比度"开关变化（prefers-contrast: more）也需重算（target 由 4.6 改 7）
+  try {
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-contrast: more)");
+      const handler = () => applyAdaptiveText();
+      if (mq.addEventListener) mq.addEventListener("change", handler);
+      else if (mq.addListener) mq.addListener(handler);
+    }
   } catch {}
   // 启动时探测上次的壁纸是否仍然可用（接口停服 / 图片被删时自动关闭）
   try {
