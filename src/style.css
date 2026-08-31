@@ -104,19 +104,18 @@ body.with-bg::after {
 }
 
 /* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来。
-   遮罩颜色/浓度与主区（body.with-bg::after）完全一致：浅色 scrim / 深色 scrim，
-   深浅模式都同一套 --bg-dim，保证侧栏与主部分视觉统一。
-   毛玻璃模式下侧栏 backdrop-filter 与主区壁纸层（body.with-bg::before）同为
-   blur(var(--bg-blur))——不再额外 +10px / saturate，避免侧栏区域壁纸更糊更饱和、
-   看起来“遮罩浓度和主区不一样” */
+   backdrop-filter 与主区壁纸层（body.with-bg::before）同为 blur(var(--bg-blur))，
+   保证模糊强度一致；遮罩叠加色在 --bg-dim 基础上额外加浓一点
+   （浅色加白 / 深色加黑）：侧栏是常驻导航区，略浓的 scrim 让文字更稳、与主区
+   视觉协调，避免侧栏看起来“缺一层遮罩色” */
 body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-light) / var(--bg-dim));
+  background: rgb(var(--bg-scrim-light) / calc(var(--bg-dim) + 0.1));
   backdrop-filter: blur(var(--bg-blur));
   -webkit-backdrop-filter: blur(var(--bg-blur));
 }
 
 .dark body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
+  background: rgb(var(--bg-scrim-dark) / calc(var(--bg-dim) + 0.1));
 }
 
 /* ==================== 全局响应式缩放 ==================== */
