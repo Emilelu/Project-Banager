@@ -3,6 +3,3 @@ node_modules
 **/uploads/*
 **/.vscode
 **/bangumi.db
-
-# 本地诊断/测试残留（不入库）
-.workbuddy/dr-test/
