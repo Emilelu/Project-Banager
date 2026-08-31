@@ -483,6 +483,8 @@ function applyCustomBackground() {
 /**
  * 通用 canvas 取色：跨域加载图片副本 → 缩样 → 按色相桶统计饱和度权重 →
  * 取主峰为主色、相距 ≥30° 的次峰为副色。
+ * 纯取色器：resolve 返回色板 { p, s }，并写入 state.effYWall（平均亮度），
+ * **不**直接改 state.palette / 应用主题——是否应用由 analyzeWallpaper 按模式决定。
  * 图源未返回 CORS 许可时浏览器会拒绝读取像素，reject 并说明原因
  */
 function extractPaletteFromImage(url) {
@@ -550,9 +552,7 @@ function extractPaletteFromImage(url) {
         const s = secBin
           ? pick(secBin[0])
           : [(p[0] + 55) % 360, clamp(p[1], 48, 80), safeL(p[2] + 6)];
-        state.palette = { p, s };
-        applyPalette();
-        resolve(true);
+        resolve({ p, s });
       } catch (e) {
         reject(new Error("该图源未开放跨域读取权限，无法取色"));
       }
@@ -580,13 +580,19 @@ const CORS_PROXIES = [
  * 跟随壁纸取色：壁纸加载成功后提取主色并应用到主题（仅 paletteMode==='auto' 时）。
  * 直连 crossOrigin 取色失败（图源未开放 CORS）时，依次走图片代理再取色；
  * 全部失败则静默放弃（不抛错、不改动当前主题）。
+ * 随机/预设/自定义模式下**不**覆盖当前配色，只更新亮度（effYWall）供文字自适应。
  */
 async function analyzeWallpaper(url) {
   if (!url) return;
-  const extract = (src) => extractPaletteFromImage(src).then(() => true);
+  let got = null;
+  const attempt = async (src) => {
+    const pal = await extractPaletteFromImage(src);
+    got = pal;
+    return true;
+  };
   let paletteDone = false;
   try {
-    await extract(url);
+    await attempt(url);
     paletteDone = true;
     crumb("wallpaper palette: direct ok");
   } catch (e) {
@@ -601,7 +607,7 @@ async function analyzeWallpaper(url) {
         const blob = await res.blob();
         const objUrl = URL.createObjectURL(blob);
         try {
-          await extract(objUrl);
+          await attempt(objUrl);
           paletteDone = true;
           crumb("wallpaper palette: proxy ok");
           break;
@@ -612,6 +618,11 @@ async function analyzeWallpaper(url) {
         crumb(`wallpaper palette proxy failed: ${e?.message || e}`);
       }
     }
+  }
+  // 应用取色：仅「跟随壁纸取色」模式把壁纸色板写为主题色
+  if (got && state.paletteMode === "auto") {
+    state.palette = got;
+    applyPalette();
   }
   // 自适应文字取色：只要拿到壁纸亮度就应用，与 paletteMode 无关（固定/随机配色下文字仍需可读）
   applyAdaptiveText(state.effYWall);
