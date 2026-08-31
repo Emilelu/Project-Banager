@@ -473,9 +473,10 @@ html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [cl
   transition: all 0.25s cubic-bezier(0.4, 0, 1, 1);
 }
 
+/* 弹窗只动 transform、不动 opacity：opacity<1 会形成 backdrop root，
+   内部 .glass 的 backdrop-filter 在动画期间失效，出现“透明间隙”、动画结束才复原 */
 .modal-enter-from,
 .modal-leave-to {
-  opacity: 0;
   transform: scale(0.95) translateY(10px);
 }
 
