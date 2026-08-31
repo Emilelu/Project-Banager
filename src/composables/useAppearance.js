@@ -73,17 +73,22 @@ async function resolveStableUrl(url, provider) {
   return url;
 }
 
+// 该地址是否为「随机端点」（每次请求可能返回不同图）。用于启动时判断是否需要先解析/换图。
+function isRandomEndpoint(u) {
+  return (
+    /t\.alcy\.cc\/ycy(\/?|\/?\?|\?|$)/.test(u) || // alcy 端点本体（含末尾/、?、?json）
+    /dmoe\.cc\/random/.test(u) ||
+    /[?&]t=\d{8,}/.test(u)
+  );
+}
+
 // 启动时若已持久化的 bgUrl 仍是随机端点（旧配置/被回退破坏），自动重新解析为稳定地址。
 // 关键：识别 alcy 的根端点本身 `t.alcy.cc/ycy[/?]` 而不依赖 ?t=... 参数（很多旧/被截断的链接没参数）
 // 返回是否发生了「迁移换图」（调用方据此决定是否还要再取一张/再探测）。
 async function migratePinnedEndpoint() {
   if (!state.bgEnabled || !state.bgUrl || state.bgAutoSwitch) return false;
   const u = state.bgUrl;
-  const isRandom =
-    /t\.alcy\.cc\/ycy(\/?|\/?\?|\?|$)/.test(u) || // alcy 端点本体（含末尾/、?、?json）
-    /dmoe\.cc\/random/.test(u) ||
-    /[?&]t=\d{8,}/.test(u);
-  if (!isRandom) return false;
+  if (!isRandomEndpoint(u)) return false;
   try {
     const stable = await resolveStableUrl(u, state.bgProvider);
     if (stable && stable !== u) {
@@ -170,6 +175,15 @@ function applyPalette() {
     ].forEach((v) => root.removeProperty(v));
     return;
   }
+  const [ph, ps, pl] = state.palette.p;
+  const [sh, ss, sl] = state.palette.s;
+  const p = [ph, clamp(ps, 45, 85), safeL(pl)];
+  const s = [sh, clamp(ss, 45, 85), safeL(sl)];
+  // 结果缓存：色板没变化（同一套主/副色）就直接返回，
+  // 不重复写 6 个 CSS 变量、不挂 .palette-animating 全树过渡类（取色/重算触发时可省下大量样式重算）
+  const key = `${p[0]},${p[1]},${p[2]}|${s[0]},${s[1]},${s[2]}`;
+  if (key === applyPalette._lastKey) return;
+  applyPalette._lastKey = key;
   // 配色变更时短暂挂 .palette-animating，让全树色彩过渡 ~0.3s 平滑切换，
   // 避免取色/切换模式/随机化时子元素硬跳。350ms 后自动卸下。
   if (typeof document !== "undefined") {
@@ -179,10 +193,6 @@ function applyPalette() {
       document.body.classList.remove("palette-animating");
     }, 360);
   }
-  const [ph, ps, pl] = state.palette.p;
-  const [sh, ss, sl] = state.palette.s;
-  const p = [ph, clamp(ps, 45, 85), safeL(pl)];
-  const s = [sh, clamp(ss, 45, 85), safeL(sl)];
   root.setProperty("--c-primary", hslToRgbTriplet(p));
   root.setProperty(
     "--c-primary-light",
@@ -220,8 +230,23 @@ function applyAdaptiveText() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const dark = root.classList.contains("dark");
-  const withBg = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  // 启动延迟应用背景期间（bgDeferred），背景图尚未显示，按"无壁纸"建模文字色
+  const withBg =
+    state.bgEnabled && state.bgUrl && !state.bgFailed && !bgDeferred;
   const yWall = state.effYWall == null ? 0.5 : state.effYWall;
+  // 高对比度模式（prefers-contrast: more）目标对比度提到 7:1（WCAG AAA）
+  // 系统/浏览器开启"高对比度"时自动启用，覆盖全组件、全模式、全场景
+  const targetContrast =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-contrast: more)").matches
+      ? 7
+      : 4.6;
+  // 结果缓存：输入（明暗/有无壁纸/玻璃风格/壁纸亮度/遮罩/目标对比度）不变就跳过，
+  // 避免取色、开关壁纸、切换模式等高频路径重复写 6 个 CSS 变量触发样式重算
+  const key = `${dark}|${withBg}|${state.glass}|${yWall}|${state.bgDim}|${targetContrast}`;
+  if (key === applyAdaptiveText._lastKey) return;
+  applyAdaptiveText._lastKey = key;
   let effYMain, effYSb;
   if (withBg) {
     const bgDim = clamp(state.bgDim, 0, 0.9);
@@ -242,14 +267,6 @@ function applyAdaptiveText() {
   }
   document.body.classList.add("adaptive");
   const base = [100, 116, 139]; // 继承蓝灰色相/饱和，避免变成中性灰
-  // 高对比度模式（prefers-contrast: more）目标对比度提到 7:1（WCAG AAA）
-  // 系统/浏览器开启"高对比度"时自动启用，覆盖全组件、全模式、全场景
-  const targetContrast =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-contrast: more)").matches
-      ? 7
-      : 4.6;
   const cfg = {
     target: targetContrast,
     r400: 0.8,
@@ -275,12 +292,19 @@ function applyAdaptiveText() {
   root.style.setProperty("--txt-sb-500", sb[2]);
 }
 
+// 启动"延迟应用背景"标记：启动需要换图/解析时，首屏先不显示旧壁纸（避免 A→B 硬切闪烁），
+// 等后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）。仅启动路径设置。
+let bgDeferred = false;
+
 function applyBackground() {
   if (typeof document === "undefined") return;
-  // 图片加载失败时彻底回到原渐变底色，不留遮罩层影响可读性
-  const active = state.bgEnabled && state.bgUrl && !state.bgFailed;
+  // 图片加载失败或延迟应用期间，彻底回到原渐变底色，不留遮罩层影响可读性
+  const active =
+    state.bgEnabled && state.bgUrl && !state.bgFailed && !bgDeferred;
   document.body.classList.toggle("with-bg", active);
   document.body.classList.toggle("bg-nofx", !!state.bgNoFx);
+  // 自定义壁纸标记：弹窗聚焦时对自定义大图降级（不做额外模糊，见 style.css .bg-custom.bg-focus）
+  document.body.classList.toggle("bg-custom", state.bgProvider === "custom");
   ensureBlurLayer();
   const root = document.documentElement.style;
   if (active) {
@@ -294,6 +318,17 @@ function applyBackground() {
   }
   // 壁纸开关变化后同步自适应文字取色状态
   applyAdaptiveText();
+}
+
+// 壁纸"入场"：挂 bg-reveal（opacity:0）→ 双 rAF 摘除 → CSS 0.4s 淡入。
+// 纯 opacity 过渡（合成器属性），不触碰模糊/缩放，无重栅格化风险。
+function revealWallpaper() {
+  try {
+    document.body.classList.add("bg-reveal");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.body.classList.remove("bg-reveal")),
+    );
+  } catch {}
 }
 
 // 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
@@ -908,6 +943,11 @@ export async function initAppearance() {
   // 首帧外观立即生效（内容先行）；pre-app-ready 在短暂窗口内禁止动画类，
   // 避免"先透明后淡入"的二次闪烁，随后摘除恢复动画
   prepAppReadyTag();
+  // 启动需要换图/解析稳定地址时，先不显示旧壁纸（避免"先旧图、后台换新图"的闪烁）：
+  // 保持渐变底色 + 内容即时渲染，后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）
+  bgDeferred =
+    state.bgEnabled &&
+    (state.bgAutoSwitch || !state.bgUrl || isRandomEndpoint(state.bgUrl));
   applyAll();
   if (state.paletteMode === "random") randomizePalette();
   startFocusObserver();
@@ -948,7 +988,6 @@ export async function initAppearance() {
           try {
             probeBackground();
           } catch (e) {
-            startupProbeActive = false;
             console.error(e);
           }
         }
@@ -958,12 +997,23 @@ export async function initAppearance() {
         try {
           await shuffleBackground();
         } catch (e) {
-          startupProbeActive = false;
           console.error(e);
         }
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      // 结束延迟应用：新壁纸（或失败后的回退状态）一次性生效 + 淡入入场
+      startupProbeActive = false;
+      if (bgDeferred) {
+        bgDeferred = false;
+        try {
+          applyBackground();
+          revealWallpaper();
+        } catch (e) {
+          console.error(e);
+        }
+      }
     }
     crumb("init done (async part)");
   });

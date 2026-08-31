@@ -62,7 +62,12 @@ body.with-bg::before {
   background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
-  transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.4s ease, filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 启动"壁纸入场"：后台就绪后一次性应用新壁纸，从透明淡入（纯 opacity，合成器属性，不重栅格化） */
+body.with-bg.bg-reveal::before {
+  opacity: 0;
 }
 
 /* iOS 风格聚焦态：弹窗打开 / 启动入场时壁纸加深模糊，关闭后渐清晰 */
@@ -71,9 +76,17 @@ body.with-bg.bg-focus::before {
   transform: scale(1.13);
 }
 
+/* 自定义壁纸（通常是大图直链）：弹窗聚焦降级——不再叠加额外模糊
+   （避免全屏大图每帧重栅格化造成卡顿），仅轻微缩放；其余壁纸保持原聚焦效果 */
+body.with-bg.bg-custom.bg-focus::before {
+  filter: blur(var(--bg-blur));
+  transform: scale(1.10);
+}
+
 @media (prefers-reduced-motion: reduce) {
   body.with-bg::before,
-  body.with-bg.bg-focus::before {
+  body.with-bg.bg-focus::before,
+  body.with-bg.bg-custom.bg-focus::before {
     transition: none;
   }
 }
