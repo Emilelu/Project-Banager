@@ -16,7 +16,7 @@ const state = reactive({
   effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
   bgEnabled: true, // 随机壁纸背景默认开启
   bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
-  bgAutoSwitch: false, // 默认固定当前壁纸（刷新不换图）；用户可在设置中开启"每次打开自动换一张"
+  bgAutoSwitch: true, // 默认"每次打开自动换一张"（刷新/重开换新壁纸）；用户可在设置中切为固定当前壁纸
   bgCustomUrl: "",
   bgDim: 0.25, // 遮罩浓度 0~0.9（默认 25%）
   bgBlur: 5, // 背景模糊 0~20px（默认 5px）
@@ -317,13 +317,18 @@ function applyBackground() {
   document.body.classList.toggle("bg-custom", state.bgProvider === "custom");
   ensureBlurLayer();
   const root = document.documentElement.style;
+  const img = document.getElementById("bg-wallpaper");
+  const scrim = document.getElementById("bg-scrim");
   if (active) {
-    // 显示层直接使用原图（不压缩不变形；用户可下载/跳原链接，质量优先）
-    root.setProperty("--bg-image", `url("${state.bgUrl}")`);
+    // 真实 <img> 壁纸层：直接加载原图（质量优先）；DR 深色模式下 <img> 不被改写，
+    // 壁纸依然显示（伪元素方案会被 DR 剥掉 ::before 改写导致壁纸消失，故不用伪元素）
+    if (img) img.src = state.bgUrl;
+    if (scrim) scrim.style.opacity = "1";
     root.setProperty("--bg-blur", `${state.bgBlur}px`);
     root.setProperty("--bg-dim", String(clamp(state.bgDim, 0, 0.9)));
   } else {
-    root.setProperty("--bg-image", "none");
+    if (img) img.removeAttribute("src");
+    if (scrim) scrim.style.opacity = "0";
     root.setProperty("--bg-blur", "0px");
     root.setProperty("--bg-dim", "0");
   }
@@ -342,14 +347,23 @@ function revealWallpaper() {
   } catch {}
 }
 
-// 常驻模糊层（见 style.css #bg-blur-layer）：与清晰层做 opacity 交叉淡入淡出，
-// 全程合成器处理，避免全屏 blur 动画每帧重栅格化拖垮 4K 渲染
+// 壁纸层（#bg-wallpaper / #bg-scrim）：用真实元素而非伪元素，Dark Reader 兼容关键——
+// DR 动态模式会剥掉 ::before/::after 改写规则（伪元素背景被整条丢弃，壁纸消失），
+// 而 <img> 图片元素是 DR 明确不动的对象（跨域图床原样保留）→ 深色模式下壁纸依然显示。
+// 元素已在 index.html 静态存在（首帧即可用），此处仅兜底（如未来被移除/老缓存页面）。
 function ensureBlurLayer() {
   if (typeof document === "undefined" || !document.body) return;
-  if (!document.getElementById("bg-blur-layer")) {
-    const el = document.createElement("div");
-    el.id = "bg-blur-layer";
-    document.body.insertBefore(el, document.body.firstChild);
+  if (!document.getElementById("bg-wallpaper")) {
+    const img = document.createElement("img");
+    img.id = "bg-wallpaper";
+    img.alt = "";
+    img.draggable = false;
+    document.body.insertBefore(img, document.body.firstChild);
+  }
+  if (!document.getElementById("bg-scrim")) {
+    const div = document.createElement("div");
+    div.id = "bg-scrim";
+    document.body.insertBefore(div, document.body.firstChild);
   }
 }
 
@@ -766,6 +780,20 @@ async function extractPaletteFromImage(src) {
   }
 }
 
+// ========== 跨域判断工具（供取色/预览/下载共用） ==========
+// 图床（tc.alcy.cc 等）不返回 Access-Control-Allow-Origin，页面 fetch 必被 CORS 拦截。
+// 判断图片地址是否为跨域：与当前站点 origin 不同即算跨域，直接走代理链、跳过必败的直连
+// （避免 console 刷 CORS 红错，也省一次注定失败的请求）。相对地址/blob 视为同源。
+export function isCrossOrigin(url) {
+  if (typeof location === "undefined" || !url) return false;
+  try {
+    const u = new URL(url, location.href);
+    return u.origin !== location.origin;
+  } catch {
+    return true; // 解析失败按跨域处理，走代理兜底
+  }
+}
+
 // ========== 壁纸取色（含跨域代理回退） ==========
 
 // 部分图源（dmoe / 自定义直链 / alcy 稳定图床地址 tc.alcy.cc）不返回 CORS 许可，
@@ -797,14 +825,20 @@ async function analyzeWallpaper(url) {
     return true;
   };
   let paletteDone = false;
-  try {
-    await attempt(url);
-    paletteDone = true;
-    crumb("wallpaper palette: direct ok");
-  } catch (e) {
-    crumb(`wallpaper palette direct failed: ${e?.message || e}`);
+  // 跨域图床（tc.alcy.cc 等无 CORS 头）直连 fetch 必被拦截：直接跳过直连、走代理链，
+  // 避免 console 刷 CORS 红错、也省一次注定失败的请求；同源（自定义同站图片）才直连。
+  if (!isCrossOrigin(url)) {
+    try {
+      await attempt(url);
+      paletteDone = true;
+      crumb("wallpaper palette: direct ok");
+    } catch (e) {
+      crumb(`wallpaper palette direct failed: ${e?.message || e}`);
+    }
+  } else {
+    crumb("wallpaper palette: cross-origin, go proxy directly");
   }
-  // 直连失败 → 依次走代理（仍会写入 state.effYWall 供文字取色）
+  // 直连失败或跨域 → 依次走代理（仍会写入 state.effYWall 供文字取色）
   if (!paletteDone) {
     for (const make of CORS_PROXIES) {
       try {

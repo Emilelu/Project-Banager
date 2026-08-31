@@ -168,7 +168,7 @@
 
 <script setup>
 import { ref, watch, onUnmounted } from 'vue'
-import { useAppearance, hexToHsl, hslCss } from '../composables/useAppearance'
+import { useAppearance, hexToHsl, hslCss, isCrossOrigin } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 
 const props = defineProps({ show: Boolean })
@@ -208,16 +208,16 @@ async function buildPreview(url) {
     if (!r.ok) throw new Error('fetch failed')
     return r.blob()
   }
-  // 直连优先（同源 / custom / blob URL）；失败走代理链
-  try {
-    blob = await grab(url)
-  } catch {
-    for (const make of PREVIEW_PROXIES) {
-      try {
-        blob = await grab(make(url))
-        if (blob) break
-      } catch {}
-    }
+  // 直连仅用于同源（custom / blob URL）；跨域图床（tc.alcy.cc 等无 CORS 头）直接走代理链，
+  // 跳过必败的直连 fetch——避免 console 刷 CORS 红错
+  const sources = isCrossOrigin(url)
+    ? PREVIEW_PROXIES.map((make) => make(url))
+    : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+  for (const u of sources) {
+    try {
+      blob = await grab(u)
+      if (blob) break
+    } catch {}
   }
   if (gen !== previewGen) return
   if (!blob) {
@@ -407,16 +407,15 @@ const downloadOriginal = async () => {
   if (!url) return
   showToast('正在下载原图…')
   let blob = null
-  try {
-    blob = await (await fetch(url)).blob()
-  } catch {}
-  if (!blob) {
-    for (const make of PREVIEW_PROXIES) {
-      try {
-        blob = await (await fetch(make(url))).blob()
-        if (blob) break
-      } catch {}
-    }
+  // 跨域图床（tc.alcy.cc 等无 CORS 头）直连必被拦：直接走代理链，跳过必败的直连
+  const sources = isCrossOrigin(url)
+    ? PREVIEW_PROXIES.map((make) => make(url))
+    : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+  for (const u of sources) {
+    try {
+      blob = await (await fetch(u)).blob()
+      if (blob) break
+    } catch {}
   }
   if (!blob) {
     showToast('下载失败，请稍后重试', 'error')
