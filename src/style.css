@@ -103,18 +103,13 @@ body.with-bg::after {
   background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
 }
 
-/* 壁纸模式下侧边栏不再使用实色渐变，让壁纸+遮罩延伸过来，
-   并叠加毛玻璃模糊与跟随遮罩浓度的衬底，保证导航文字在任意壁纸上可读。
-   遮罩颜色/浓度与主区（body.with-bg::after）完全一致：浅色 scrim / 深色 scrim，
-   深浅模式都同一套 --bg-dim，保证侧栏与主部分视觉统一。 */
-body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-light) / var(--bg-dim));
-  backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
-  -webkit-backdrop-filter: blur(calc(var(--bg-blur) + 10px)) saturate(1.15);
-}
-
-.dark body.with-bg .sidebar-bg {
-  background: rgb(var(--bg-scrim-dark) / var(--bg-dim));
+/* 壁纸模式下侧边栏与主区**完全一致**：主区的「模糊壁纸 + 遮罩」层
+   （body.with-bg::before z:-2 / ::after z:-1）本来就是全屏 fixed，覆盖包括侧栏在内的
+   整个视口——毛玻璃（非液态）侧栏只需 background: transparent 透出它们，
+   不再自叠 scrim 或 backdrop-filter（任何叠加都会让侧栏比主区更浓/更雾，
+   看起来不一致）。液态玻璃侧栏有独立玻璃样式，不受此规则影响。 */
+body.with-bg:not([data-glass='liquid']) .sidebar-bg {
+  background: transparent;
 }
 
 /* ==================== 全局响应式缩放 ==================== */
@@ -419,15 +414,16 @@ body {
 }
 
 /* ==================== 配色切换平滑过渡 ==================== */
-/* 短暂挂类（~0.36s）让全树色彩过渡平滑，应对取色完成 / 切换模式 / 随机化等
-   突然换主色场景；非动画期间不挂类，避免给每个交互响应都补上 0.3s 延迟 */
+/* 短暂挂类（~0.18s）让全树色彩过渡平滑，应对取色完成 / 切换模式 / 随机化等
+   突然换主色场景；非动画期间不挂类，避免给每个交互响应都补上 0.3s 延迟。
+   仅过渡三个最常用的颜色属性（fill/stroke/box-shadow 用得少且重绘贵，不参与），
+   时长已收窄：过长会拉长“变色期间操作掉帧”的窗口，过短则失去平滑感。 */
 body.palette-animating,
 body.palette-animating *,
 body.palette-animating *::before,
 body.palette-animating *::after {
-  transition: background-color 0.3s ease, color 0.3s ease,
-    border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease,
-    box-shadow 0.3s ease !important;
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease !important;
 }
 
 /* ==================== 自适应文字取色 ==================== */
@@ -510,17 +506,28 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   transform: translateY(-8px);
 }
 
-/* 切页时玻璃卡片的模糊同样与位移动画同步渐显，避免切页结束才“啪”地出现模糊。
-   时长/曲线与 .fade 一致（0.3s cubic-bezier(.4,0,.2,1)）。 */
+/* 切页时玻璃卡片的模糊同样与淡入/位移动画同步渐显，避免切页结束才“啪”地出现模糊。
+   要点：
+   ① 起始模糊取目标值的小比例（毛玻璃 4px / 液态 6px）而非 0——Chrome 对
+      backdrop-filter 从 blur(0) 起步的过渡常在动画结束后才完整采样（“淡入完模糊才出现”），
+      非零起始能保证淡入期间持续有模糊并平滑升到目标；
+   ② 起始值保留 saturate(1)，避免“从无 saturate 瞬间切到有 saturate”的跳变；
+   ③ !important 压过液态覆盖（body[data-glass='liquid'] .glass 特异性更高，
+      否则液态下起始值被目标值覆盖、过渡失效）。 */
 .fade-enter-active .glass,
 .fade-leave-active .glass {
-  transition: backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    -webkit-backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .fade-enter-from .glass,
 .fade-leave-to .glass {
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(4px) saturate(1) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(1) !important;
+}
+body[data-glass='liquid'] .fade-enter-from .glass,
+body[data-glass='liquid'] .fade-leave-to .glass {
+  backdrop-filter: blur(6px) saturate(1) !important;
+  -webkit-backdrop-filter: blur(6px) saturate(1) !important;
 }
 
 /* 滑入动画 */
@@ -561,8 +568,8 @@ body.modal-active .palette-animating,
 body.modal-active .palette-animating *,
 body.modal-active .palette-animating *::before,
 body.modal-active .palette-animating *::after {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease,
-    fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease !important;
 }
 
 /* 自适应文字元素（--txt-* 驱动的灰阶与侧栏白字）在取色变色时直接跳变，不参与全树

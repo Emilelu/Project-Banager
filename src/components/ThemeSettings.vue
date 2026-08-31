@@ -124,7 +124,15 @@
                       loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
-                  <p v-if="bgFailed" class="text-xs text-danger mt-1">⚠️ 图片加载失败，请换一张</p>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    <p v-if="bgFailed" class="text-xs text-danger flex-1">⚠️ 图片加载失败，请换一张</p>
+                    <button @click="openOriginal"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
+                      title="在新标签页打开原图链接预览">🔗 原链接预览</button>
+                    <button @click="downloadOriginal"
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
+                      title="下载当前壁纸原图（非缩略图）">⬇ 下载原图</button>
+                  </div>
                 </div>
                 <div class="mt-3 space-y-2">
                   <label class="flex items-center gap-3 text-xs text-gray-500">
@@ -225,11 +233,12 @@ async function buildPreview(url) {
       return
     }
     if (bmp.width > MAX_PREVIEW_SIDE || bmp.height > MAX_PREVIEW_SIDE) {
-      const small = await createImageBitmap(bmp, {
-        resizeWidth: MAX_PREVIEW_SIDE,
-        resizeHeight: MAX_PREVIEW_SIDE,
-        resizeQuality: 'medium',
-      })
+      // 只传较长边做等比缩放：resizeWidth 与 resizeHeight 同时传会独立缩放导致变形
+      const opts =
+        bmp.width >= bmp.height
+          ? { resizeWidth: MAX_PREVIEW_SIDE, resizeQuality: 'medium' }
+          : { resizeHeight: MAX_PREVIEW_SIDE, resizeQuality: 'medium' }
+      const small = await createImageBitmap(bmp, opts)
       bmp.close()
       bmp = small
     }
@@ -382,6 +391,48 @@ const onFinish = async () => {
 const onBgError = () => {
   bgFailed.value = true
   showToast('背景图片加载失败，请换一张', 'error')
+}
+
+// 在新标签页打开原图链接预览（window.open 走浏览器直连，不受页面 CORS 限制）
+const openOriginal = () => {
+  const url = state.bgUrl
+  if (!url) return
+  window.open(url, '_blank', 'noopener')
+}
+
+// 下载原图：预览区展示的是降采样缩略图，右键另存只能存到小图；
+// 这里直连取原图字节（无 CORS 许可时走与预览同一代理链），经 blob URL 触发下载。
+const downloadOriginal = async () => {
+  const url = state.bgUrl
+  if (!url) return
+  showToast('正在下载原图…')
+  let blob = null
+  try {
+    blob = await (await fetch(url)).blob()
+  } catch {}
+  if (!blob) {
+    for (const make of PREVIEW_PROXIES) {
+      try {
+        blob = await (await fetch(make(url))).blob()
+        if (blob) break
+      } catch {}
+    }
+  }
+  if (!blob) {
+    showToast('下载失败，请稍后重试', 'error')
+    return
+  }
+  const objUrl = URL.createObjectURL(blob)
+  const m = url.match(/\.(jpg|jpeg|png|webp|gif|avif)/i)
+  const ext = m ? m[1].toLowerCase() : 'jpg'
+  const a = document.createElement('a')
+  a.href = objUrl
+  a.download = `banager-wallpaper-${Date.now()}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(objUrl), 60000)
+  showToast('原图下载已开始 🖼️')
 }
 
 // 切换图源后提示重新换图
