@@ -565,6 +565,25 @@ body.modal-active .palette-animating *::after {
     fill 0.3s ease, stroke 0.3s ease, box-shadow 0.3s ease !important;
 }
 
+/* 自适应文字元素（--txt-* 驱动的灰阶与侧栏白字）在取色变色时直接跳变，不参与全树
+   色彩过渡：否则每次取色重算都会让整页文字做 0.3s 颜色动画（全树绘制风暴），
+   叠加在弹窗开合 / 悬停 / 主题切换等过渡动画上就是肉眼可见的卡顿。
+   文字可读性瞬时跳变无感知；主题色（--c-* 驱动的渐变文字 / 按钮 / 边框）仍平滑过渡。
+   覆盖 modal-active 与普通 palette-animating 两个规则（特异性更高 + !important）。 */
+body.palette-animating.adaptive
+  main
+  :is(
+    .text-gray-300,
+    .text-gray-400,
+    .text-gray-500,
+    .text-gray-600,
+    .text-gray-700,
+    .text-gray-800
+  ):not(.glass *):not([class*="glass"]),
+body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
+  transition: none !important;
+}
+
 /* 弹窗玻璃模糊与开合动画同步：入场/出场时让内部 .glass 的 backdrop-filter 模糊值
    随外层 transform 进度从 0 渐显到目标值，消除“动画播完才突然叠加模糊”的突兀感。
    时长/曲线与弹窗开合严格一致（开 0.35s / 关 0.25s），不动画曲线本身。 */

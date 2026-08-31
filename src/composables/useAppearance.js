@@ -217,8 +217,8 @@ function applyGlass() {
   if (typeof document === "undefined") return;
   if (state.glass === "liquid") document.body.dataset.glass = "liquid";
   else delete document.body.dataset.glass;
-  // 玻璃风格影响侧栏背景亮度，需重算自适应文字色
-  applyAdaptiveText();
+  // 玻璃风格影响侧栏背景亮度，需重算自适应文字色（合并到帧内，避免与其它动画叠加）
+  scheduleAdaptiveText();
 }
 
 // ========== 自适应文字取色（保证任意背景上文字都可读） ==========
@@ -292,6 +292,19 @@ function applyAdaptiveText() {
   root.style.setProperty("--txt-sb-500", sb[2]);
 }
 
+// 自适应文字取色的 rAF 合并器：高频路径（遮罩/模糊滑块拖动、开关壁纸、明暗切换等）
+// 每帧最多重算一次。--txt-* 写在 :root 上会传播到所有引用它的元素，拖动滑块时
+// 每个 @input 事件同步触发一次全树样式重算，叠加在其它过渡动画上就是卡顿。
+// 合并后同一帧内的多次触发只落地一次（读取最新 state，天然幂等）。
+let _adaptRaf = 0;
+function scheduleAdaptiveText() {
+  if (_adaptRaf) return;
+  _adaptRaf = requestAnimationFrame(() => {
+    _adaptRaf = 0;
+    applyAdaptiveText();
+  });
+}
+
 // 启动"延迟应用背景"标记：启动需要换图/解析时，首屏先不显示旧壁纸（避免 A→B 硬切闪烁），
 // 等后台就绪后一次性应用新壁纸 + 淡入（revealWallpaper）。仅启动路径设置。
 let bgDeferred = false;
@@ -316,8 +329,8 @@ function applyBackground() {
     root.setProperty("--bg-blur", "0px");
     root.setProperty("--bg-dim", "0");
   }
-  // 壁纸开关变化后同步自适应文字取色状态
-  applyAdaptiveText();
+  // 壁纸开关/遮罩/模糊变化后同步自适应文字取色状态（合并到帧内，滑块拖动不逐事件重算）
+  scheduleAdaptiveText();
 }
 
 // 壁纸"入场"：挂 bg-reveal（opacity:0）→ 双 rAF 摘除 → CSS 0.4s 淡入。
@@ -953,7 +966,7 @@ export async function initAppearance() {
   startFocusObserver();
   // 暗色模式切换会改 scrim 亮度，需重算自适应文字色
   try {
-    new MutationObserver(() => applyAdaptiveText()).observe(
+    new MutationObserver(() => scheduleAdaptiveText()).observe(
       document.documentElement,
       { attributes: true, attributeFilter: ["class"] },
     );
@@ -962,7 +975,7 @@ export async function initAppearance() {
   try {
     if (window.matchMedia) {
       const mq = window.matchMedia("(prefers-contrast: more)");
-      const handler = () => applyAdaptiveText();
+      const handler = () => scheduleAdaptiveText();
       if (mq.addEventListener) mq.addEventListener("change", handler);
       else if (mq.addListener) mq.addListener(handler);
     }
