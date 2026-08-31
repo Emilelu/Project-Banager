@@ -111,6 +111,7 @@
                 </div>
                 <div v-if="state.bgUrl" class="mt-3">
                   <img :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"
+                    loading="lazy" decoding="async"
                     class="w-full h-28 object-cover rounded-xl border border-white/40" alt="背景预览" />
                   <p v-if="bgFailed" class="text-xs text-danger mt-1">⚠️ 图片加载失败，请换一张</p>
                 </div>
