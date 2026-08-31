@@ -16,7 +16,7 @@ const state = reactive({
   effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
   bgEnabled: false,
   bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
-  bgAutoSwitch: true, // 每次打开页面自动换一张；关闭即固定当前壁纸
+  bgAutoSwitch: false, // 每次打开页面自动换一张；默认关闭——刷新保持当前壁纸（用户可手动开启）
   bgCustomUrl: "",
   bgDim: 0.55, // 遮罩浓度 0~0.9
   bgBlur: 0, // 背景模糊 0~20px
@@ -722,6 +722,14 @@ export function initAppearance() {
       // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
       if (!saved.bgProvider || saved.bgProvider === "wallhaven")
         saved.bgProvider = "alcy";
+      // 迁移：旧版默认「每次打开自动换一张」=true，导致刷新即换图；一次性改为固定（保留当前壁纸）。
+      // 之后用户仍可在设置里手动开启自动换图。
+      try {
+        if (!localStorage.getItem("banager_autoswitch_migrated")) {
+          if (saved.bgAutoSwitch === true) saved.bgAutoSwitch = false;
+          localStorage.setItem("banager_autoswitch_migrated", "1");
+        }
+      } catch {}
       Object.assign(state, saved);
       // 固定壁纸：若持久化的是旧随机端点，启动时自动解析为稳定地址
       migratePinnedEndpoint();
