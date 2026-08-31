@@ -632,26 +632,36 @@ async function analyzeWallpaper(url) {
 }
 
 /** 按当前源换一张随机背景图 */
-function shuffleBackground() {
+async function shuffleBackground() {
   if (state.bgProvider === "custom") {
     if (!state.bgCustomUrl.trim()) throw new Error("请先填写图片地址");
-    _applyNewBg(state.bgCustomUrl.trim());
+    await _applyNewBg(state.bgCustomUrl.trim());
     return;
   }
   if (state.bgProvider === "dmoe") {
-    _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`);
+    await _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`);
     return;
   }
   // 樱花 Alcy 源（默认）：全链路带跨域许可，背景与取色都可用
-  _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
+  await _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
 }
 
-function _applyNewBg(url) {
+async function _applyNewBg(url) {
   state.bgUrl = url;
   state.bgFailed = false;
   applyBackground();
   // 随机配色模式：每次换图（含刷新）都重新生成配色
   if (state.paletteMode === "random") randomizePalette();
+  // 解析为稳定地址：弹窗预览 <img> 与背景 ::before 共用同一 URL 才保证同图。
+  // 若保留随机端点，二者各自请求会命中不同图片，预览与实际背景不一致。
+  try {
+    const stable = await resolveStableUrl(url, state.bgProvider);
+    if (stable && stable !== state.bgUrl) {
+      state.bgUrl = stable;
+      state.bgFailed = false;
+      applyBackground();
+    }
+  } catch {}
   probeBackground();
 }
 
