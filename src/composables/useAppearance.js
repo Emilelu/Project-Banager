@@ -12,15 +12,24 @@ const STORAGE_KEY = "banager_appearance";
 const state = reactive({
   glass: "liquid", // 'frost' 毛玻璃 | 'liquid' 液态玻璃（默认）
   palette: null, // null = 默认樱紫；否则 { p: [h,s,l], s: [h,s,l] }
-  paletteMode: "auto", // 'auto' 跟随壁纸取色 | 'random' 每次随机 | 'manual' 预设/自定义固定
+  // 默认「跟随壁纸取色」：接入自建代理（CUSTOM_PROXY）后取色能力已恢复，
+  // 故回到最能体现壁纸氛围的模式。无代理时该模式会取色失败并静默保持默认配色。
+  paletteMode: "auto", // 'auto' 跟随壁纸取色（默认） | 'random' 每次刷新随机 | 'manual' 预设/自定义固定
   effYWall: null, // 当前壁纸平均相对亮度（0~1），供自适应文字取色使用
   bgEnabled: true, // 随机壁纸背景默认开启
-  bgProvider: "alcy", // 'alcy' 樱花Alcy(默认,可取色) | 'dmoe' | 'custom'
+  // 默认 alcy：图质最佳（用户实测对比后选定）。代价是该图源无 CORS 头，
+  // 取色与「一键下载」不可用，只能降级为打开原图后另存。
+  // 'alcy' 樱花(默认) | 'dmoe' | 'loliapi' ACG(带 CORS，可取色/下载，但图库较旧) | 'custom'
+  bgProvider: "alcy",
   bgAutoSwitch: true, // 默认"每次打开自动换一张"（刷新/重开换新壁纸）；用户可在设置中切为固定当前壁纸
   bgCustomUrl: "",
   bgDim: 0.25, // 遮罩浓度 0~0.9（默认 25%）
   bgBlur: 5, // 背景模糊 0~20px（默认 5px）
-  bgUrl: "", // 当前生效的图片地址
+  bgUrl: "", // 当前生效的图片地址（原始地址，用于持久化）
+  // 运行时：壁纸字节的 blob URL（带 CORS 图源抓取而来），**不持久化**。
+  // 存在 state 中是为了让它「就绪」这一事件能驱动下游——显示/预览/下载都等它，
+  // 从而彻底避免「预览先跑、字节后到」的时序空窗。
+  bgBlobUrl: "",
   bgLoading: false,
   bgFailed: false, // 运行时标记：当前图片加载失败（不持久化）
 });
@@ -28,12 +37,22 @@ const state = reactive({
 // ========== 壁纸图源配置 ==========
 // entry：随机端点（每次返回不同图）；api：地址接口（返回最终稳定图床 URL，全程 CORS 许可）。
 // 固定壁纸时把随机端点解析成稳定地址，刷新不再换图。
+// cors 标记：该图源是否返回 Access-Control-Allow-Origin（决定能否直连 fetch/取色/下载）。
+//   2026-09-14 实测：alcy 与 dmoe 全链路（含其 json api 端点）**均无 ACAO 头**，
+//   而原注释误标为「全链路带跨域许可」，导致取色与「下载原图」长期静默失败。
+//   loliapi 实测返回 `access-control-allow-origin: *`，可直连 fetch → 取色/下载/字节缓存全部可用。
 const PROVIDERS = {
+  loliapi: {
+    entry: () => `https://www.loliapi.com/acg/`,
+    cors: true,
+  },
   alcy: {
     api: () => `https://t.alcy.cc/ycy/?json=true`,
+    cors: false,
   },
   dmoe: {
     api: () => `https://www.dmoe.cc/random.php?json`,
+    cors: false,
   },
 };
 
@@ -48,7 +67,18 @@ async function resolveStableUrl(url, provider) {
   if (/^https?:\/\/[^/]+\/[^\s"<>]+\.(?:jpg|jpeg|png|webp|gif|avif)/i.test(url))
     return url;
   const p = PROVIDERS[provider] || PROVIDERS.alcy;
-  // ① no-cors 跟随重定向：r.url 就是 302 后最终地址
+  // ① 自建代理（CUSTOM_PROXY）：它跟随 302 后把最终图床地址用 X-Final-Url 回传 ——
+  //    这是唯一可靠的途径。注意下面 ② 的 no-cors 方案其实拿不到 r.url：
+  //    opaque response 的 url 按 Fetch 规范是**空字符串**，这正是此前
+  //    「固定当前壁纸」始终失效的根因（不是功能设计问题）。
+  if (CUSTOM_PROXY) {
+    try {
+      const res = await fetch(CUSTOM_PROXY + encodeURIComponent(url));
+      const final = res.headers.get("X-Final-Url");
+      if (final && /^https?:\/\//.test(final) && final !== url) return final;
+    } catch {}
+  }
+  // ② no-cors 跟随重定向（对同源等场景仍可能有效，保留作兜底）
   try {
     const r = await fetch(url, { mode: "no-cors", redirect: "follow" });
     if (r.url && /^https?:\/\//.test(r.url) && r.url !== url) return r.url;
@@ -78,6 +108,7 @@ function isRandomEndpoint(u) {
   return (
     /t\.alcy\.cc\/ycy(\/?|\/?\?|\?|$)/.test(u) || // alcy 端点本体（含末尾/、?、?json）
     /dmoe\.cc\/random/.test(u) ||
+    /loliapi\.com\/acg/.test(u) || // loliapi 随机端点（无稳定地址接口，每次请求换图）
     /[?&]t=\d{8,}/.test(u)
   );
 }
@@ -130,6 +161,34 @@ function hslToRgbTriplet([h, s, l]) {
     l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
   const to255 = (v) => Math.round(v * 255);
   return `${to255(f(0))} ${to255(f(8))} ${to255(f(4))}`;
+}
+
+// 把 HSL 换算成相对亮度——用于按「实际亮度」而非 HSL 的 L 来判断可读性。
+// 为什么必须这样：同样的 L=50，黄色系的相对亮度远高于蓝色系。只按 L 做加减来派生
+// 深/浅变体，会让黄、青系配色下的 text-primary-dark 压在浅色玻璃卡片上直接糊掉
+// （用户实测：随机配色转到某些色相时，选中按钮与星期表头的文字看不清）。
+function hslRelLum([h, s, l]) {
+  return relLum(hslToRgbTriplet([h, s, l]).split(" ").map(Number));
+}
+
+/** 朝暗处收敛，直到在 bgY 亮度的背景上达到 target 对比度 */
+function darkenToContrast(hsl, bgY, target = 4.5, minL = 14) {
+  const out = [hsl[0], hsl[1], hsl[2]];
+  for (let i = 0; i < 60 && out[2] > minL; i++) {
+    if (contrast(hslRelLum(out), bgY) >= target) break;
+    out[2] -= 2;
+  }
+  return out;
+}
+
+/** 朝亮处收敛，直到在 bgY 亮度的背景上达到 target 对比度（供暗色背景使用） */
+function lightenToContrast(hsl, bgY, target = 4.5, maxL = 88) {
+  const out = [hsl[0], hsl[1], hsl[2]];
+  for (let i = 0; i < 60 && out[2] < maxL; i++) {
+    if (contrast(hslRelLum(out), bgY) >= target) break;
+    out[2] += 2;
+  }
+  return out;
 }
 
 function hexToHsl(hex) {
@@ -195,22 +254,36 @@ function applyPalette() {
     }, 240);
   }
   root.setProperty("--c-primary", hslToRgbTriplet(p));
+  // 派生变体不再用「固定加减 L」，而是各自朝目标背景亮度收敛到可读：
+  //   · light 变体服务于**深色**玻璃卡片（相对亮度约 0.12）→ 朝亮收敛
+  //   · dark  变体服务于**浅色**玻璃卡片（约 0.82，与 --txt-card-* 的推导同源）→ 朝暗收敛
+  // 这样无论随机配色抽到黄、青还是紫，选中态按钮与星期表头的文字都能保持可读。
+  const DARK_BG_Y = 0.12;
+  const LIGHT_BG_Y = 0.82;
   root.setProperty(
     "--c-primary-light",
-    hslToRgbTriplet([p[0], p[1] * 0.9, Math.min(p[2] + 14, 74)]),
+    hslToRgbTriplet(
+      lightenToContrast([p[0], p[1] * 0.9, Math.min(p[2] + 14, 74)], DARK_BG_Y),
+    ),
   );
   root.setProperty(
     "--c-primary-dark",
-    hslToRgbTriplet([p[0], p[1], Math.max(p[2] - 10, 28)]),
+    hslToRgbTriplet(
+      darkenToContrast([p[0], p[1], Math.max(p[2] - 10, 28)], LIGHT_BG_Y),
+    ),
   );
   root.setProperty("--c-secondary", hslToRgbTriplet(s));
   root.setProperty(
     "--c-secondary-light",
-    hslToRgbTriplet([s[0], s[1] * 0.9, Math.min(s[2] + 12, 74)]),
+    hslToRgbTriplet(
+      lightenToContrast([s[0], s[1] * 0.9, Math.min(s[2] + 12, 74)], DARK_BG_Y),
+    ),
   );
   root.setProperty(
     "--c-secondary-dark",
-    hslToRgbTriplet([s[0], s[1], Math.max(s[2] - 10, 28)]),
+    hslToRgbTriplet(
+      darkenToContrast([s[0], s[1], Math.max(s[2] - 10, 28)], LIGHT_BG_Y),
+    ),
   );
 }
 
@@ -287,6 +360,17 @@ function applyAdaptiveText() {
   root.style.setProperty("--txt-sb-300", sb[0]);
   root.style.setProperty("--txt-sb-400", sb[1]);
   root.style.setProperty("--txt-sb-500", sb[2]);
+  // —— 玻璃卡片内的文字色阶 ——
+  // 卡片底色是半透明白，其**有效亮度**并非壁纸亮度：需按不透明度把「卡片底色」与「壁纸亮度」混合。
+  // 液态玻璃沿 135° 从 0.62 渐变到 0.30，取最不利的 0.30（壁纸透上来最多、卡片最暗的角落）计算，
+  // 保证卡片最暗处依然可读；毛玻璃是 0.70 更亮，套用同一结果只会更安全。
+  // 仅用于浅色模式（暗色模式的卡片是深紫底，由 .dark 规则的浅色字接管）。
+  const wallY = typeof state.effYWall === "number" ? state.effYWall : 0.5;
+  const effYCard = 0.3 * 1.0 + 0.7 * wallY;
+  const card = pick(effYCard);
+  root.style.setProperty("--txt-card-300", card[0]);
+  root.style.setProperty("--txt-card-400", card[1]);
+  root.style.setProperty("--txt-card-500", card[2]);
 }
 
 // 自适应文字取色的 rAF 合并器：高频路径（遮罩/模糊滑块拖动、开关壁纸、明暗切换等）
@@ -300,6 +384,91 @@ function scheduleAdaptiveText() {
     _adaptRaf = 0;
     applyAdaptiveText();
   });
+}
+
+// ========== 壁纸字节缓存 ==========
+// 目的：让「背景显示 / 取色 / 弹窗预览 / 下载原图」四者使用**同一份字节**。
+// 背景：图源多为随机端点（同一 URL 每次请求返回不同图），仅凭 URL 无法复现同一张，
+//   直接导致「预览/下载拿到的图 ≠ 当前背景」。带 CORS 的图源可 fetch 成 blob 缓存，
+//   四者共用该 blob 即可彻底一致；无 CORS 图源（alcy/dmoe）跳过缓存，退回旧行为。
+// blob URL 本体存放在 state.bgBlobUrl（响应式，用于驱动预览/显示重建）；
+// 这里只保留**非响应式**的 Blob 引用——避免 Vue 深度代理一个 Blob 对象。
+let bgBlobObj = null; // 对应的 Blob 对象，供 createImageBitmap 直接离线程解码取色
+let bgBlobType = ""; // 图片 MIME，供下载时决定文件扩展名
+let bgBlobGen = 0; // 代际：换图时递增，使在途的缓存结果作废
+
+function providerHasCors(p) {
+  return !!(PROVIDERS[p] && PROVIDERS[p].cors);
+}
+
+/**
+ * 该图源是否「明确不支持」跨域取色（无 ACAO 头 → 像素不可读，取色必然失败）。
+ * custom 未标记，按「未知」处理 —— 允许用户尝试（可能同源，也可能图床给了 CORS）。
+ */
+export function providerBlocksPalette(p) {
+  // 已配置自建代理时，无 CORS 的图源也能经代理取到像素 → 不再视为「不可取色」，
+  // 「跟随壁纸取色」按钮因此不会禁用（代理是这一切能力的前提）。
+  if (CUSTOM_PROXY) return false;
+  const cfg = PROVIDERS[p];
+  return !!cfg && cfg.cors === false;
+}
+
+/** 供弹窗预览 / 下载读取当前壁纸字节；无缓存返回 null（调用方退回旧逻辑） */
+export function getWallpaperBlob() {
+  return state.bgBlobUrl
+    ? { url: state.bgBlobUrl, type: bgBlobType, blob: bgBlobObj }
+    : null;
+}
+
+function clearWallpaperBlob() {
+  bgBlobGen++;
+  const prev = state.bgBlobUrl;
+  state.bgBlobUrl = "";
+  bgBlobObj = null;
+  bgBlobType = "";
+  // 延迟 revoke：立即撤销会让仍在引用该 blob 的 CSS 背景在「清除 → 新图就绪」的空窗里失效
+  // （表现为换图瞬间壁纸闪没）。延迟到新图早该就绪之后再回收。
+  if (prev)
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(prev);
+      } catch {}
+    }, 3000);
+}
+
+/** 抓取壁纸字节并缓存为 blob URL。仅供带 CORS 的图源调用。 */
+async function cacheWallpaperBlob(url) {
+  const gen = bgBlobGen;
+  // 先直连（带 CORS 的图源一步到位）；失败且已配置自建代理时，经代理再取一次。
+  // 这样 alcy / dmoe 这类**无 CORS 图源**也能把字节缓存下来 ——
+  // 「显示 / 取色 / 预览 / 下载」共用同一份字节，预览与背景自然就是同一张。
+  // 跨域图源（tc.alcy.cc 等无 CORS 头）直连必被拦 → 直接走代理，省一次注定失败的请求；
+  // 同源则先直连、失败再经代理兜底。
+  const viaProxy = CUSTOM_PROXY ? CUSTOM_PROXY + encodeURIComponent(url) : "";
+  const sources = (
+    isCrossOrigin(url) ? [viaProxy, url] : [url, viaProxy]
+  ).filter(Boolean);
+  for (const src of sources) {
+    try {
+      const res = await fetch(src, { mode: "cors", cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      if (!blob || !blob.size) throw new Error("empty blob");
+      if (gen !== bgBlobGen) return false; // 抓取期间已换图，丢弃本次结果
+      const prev = state.bgBlobUrl;
+      state.bgBlobUrl = URL.createObjectURL(blob);
+      bgBlobObj = blob;
+      bgBlobType = blob.type || "image/webp";
+      if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1000);
+      crumb(
+        `wallpaper blob cached: ${(blob.size / 1024).toFixed(0)}KB ${bgBlobType}`,
+      );
+      return true;
+    } catch (e) {
+      crumb(`wallpaper blob failed (${src.slice(0, 46)}): ${e?.message || e}`);
+    }
+  }
+  return false;
 }
 
 // 启动"延迟应用背景"标记：启动需要换图/解析时，首屏先不显示旧壁纸（避免 A→B 硬切闪烁），
@@ -318,8 +487,10 @@ function applyBackground() {
   ensureBlurLayer();
   const root = document.documentElement.style;
   if (active) {
-    // 显示层直接使用原图（不压缩不变形；用户可下载/跳原链接，质量优先）
-    root.setProperty("--bg-image", `url("${state.bgUrl}")`);
+    // 优先使用本地缓存的 blob（带 CORS 图源）：与预览/下载/取色同源同字节，
+    // 避免随机端点被二次请求时拿到另一张图；无缓存时退回原始 URL。
+    const src = state.bgBlobUrl || state.bgUrl;
+    root.setProperty("--bg-image", `url("${src}")`);
     root.setProperty("--bg-blur", `${state.bgBlur}px`);
     root.setProperty("--bg-dim", String(clamp(state.bgDim, 0, 0.9)));
   } else {
@@ -367,7 +538,9 @@ function probeBackground() {
   if (typeof Image === "undefined") return;
   if (!state.bgUrl) return;
   const gen = bgGen; // 捕获探测启动时的代际
-  const url = state.bgUrl;
+  // 有本地 blob 时探测 blob：同源必定成功，既避免对随机端点重复请求（会抽到另一张），
+  // 也避免网络抖动误判为「加载失败」而把好好的背景关掉。
+  const url = state.bgBlobUrl || state.bgUrl;
   crumb(`probe start: ${url.slice(0, 60)}`);
   const img = new Image();
   img.onload = () => {
@@ -786,12 +959,29 @@ export function isCrossOrigin(url) {
 // 直连 canvas 取色会被污染而失败。依次走这些图片代理拿到「带 CORS 头、像素可读」的副本再取色。
 // 顺序按「实测可用性」排列：cors.sh 对 tc.alcy.cc 稳定返回 200 + ACAO:*（置顶）；
 // weserv 对 tc.alcy.cc 实测返回 400，故降到兜底位。
+// ★ 自建 CORS 代理（推荐）：部署方法与代码见 .workbuddy/cors-worker.js（Cloudflare Worker，免费 5 分钟）。
+//   第三方免费代理都不可靠 —— weserv 策略屏蔽 alcy.cc、allorigins 常年超时、cors.sh 要 key、
+//   cors.lol / cors.eu.org 对数据中心 IP 限流。自建一个才能让
+//   「取色 / 下载原图 / 预览与背景一致 / 固定当前壁纸」**全部稳定恢复**。
+//   把 Worker 地址填进来（结尾的 /?url= 要保留），例如：
+//     const CUSTOM_PROXY = 'https://pbm-proxy.xxx.workers.dev/?url='
+//   留空则跳过，退回下面的第三方链。
+const CUSTOM_PROXY = "https://pbm-proxy.realemilelu.workers.dev/?url=";
+
 const CORS_PROXIES = [
-  // cors.sh：经验证稳定返回 200 + ACAO:*（可读像素），alcy 稳定地址实测可用
+  // 自建代理置顶：它还会用 X-Final-Url 回传「302 之后的稳定图床地址」，
+  // 这是「固定当前壁纸」唯一可靠的实现途径（详见 resolveStableUrl）。
+  ...(CUSTOM_PROXY ? [(u) => CUSTOM_PROXY + encodeURIComponent(u)] : []),
+  // 以下为第三方兜底，可用性不稳定
+  (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
+  (u) => `https://cors.eu.org/${u}`,
+  (u) => `https://test.cors.workers.dev/?${u}`,
+  // cors.sh：历史上稳定，需 API key 时可能 401
   (u) => `https://proxy.cors.sh/${u}`,
-  // allorigins：通用代理，返回原始字节并带 CORS 头（偶发不稳定，兜底）
+  // allorigins：通用代理（常超时）
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  // weserv：专为图片设计、返回 ACAO:*，但需去掉协议头；对 tc.alcy.cc 实测 400，仅兜底
+  // weserv：图片专用、返回 ACAO:*，但**策略性屏蔽 alcy.cc 域名**（400 Domain or TLD blocked
+  // by policy），对 alcy 无用；仅作其他图源的末位兜底
   (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ""))}`,
 ];
 
@@ -811,9 +1001,20 @@ async function analyzeWallpaper(url) {
     return true;
   };
   let paletteDone = false;
-  // 跨域图床（tc.alcy.cc 等无 CORS 头）直连 fetch 必被拦截：直接跳过直连、走代理链，
+  // ① 首选：本地已缓存的 blob（由带 CORS 的图源抓取而来）。同源不受 CORS 限制，
+  //    且与「背景显示 / 预览 / 下载」是同一张图，随机端点也能得到正确配色。
+  if (bgBlobObj) {
+    try {
+      await attempt(bgBlobObj);
+      paletteDone = true;
+      crumb("wallpaper palette: from cached blob");
+    } catch (e) {
+      crumb(`wallpaper palette blob failed: ${e?.message || e}`);
+    }
+  }
+  // ② 无缓存时：跨域图床（tc.alcy.cc 等无 CORS 头）直连 fetch 必被拦截：直接跳过直连、走代理链，
   // 避免 console 刷 CORS 红错、也省一次注定失败的请求；同源（自定义同站图片）才直连。
-  if (!isCrossOrigin(url)) {
+  if (!paletteDone && !isCrossOrigin(url)) {
     try {
       await attempt(url);
       paletteDone = true;
@@ -879,8 +1080,15 @@ async function shuffleBackground() {
     await _applyNewBg(`https://www.dmoe.cc/random.php?t=${Date.now()}`);
     return;
   }
-  // 樱花 Alcy 源（默认）：全链路带跨域许可，背景与取色都可用
-  await _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
+  if (state.bgProvider === "alcy") {
+    // 樱花 Alcy：实测全链路无 CORS 头 —— 仅能显示；取色/下载依赖的代理链已全部失效
+    await _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
+    return;
+  }
+  // loliapi ACG 随机图：返回 `access-control-allow-origin: *`，
+  // 可直连 fetch → 能抓字节缓存，从而实现取色 / 下载 / 预览与背景完全一致
+  // （图库偏旧，故不作默认；需要取色/下载时由用户主动选择）
+  await _applyNewBg(`https://www.loliapi.com/acg/?t=${Date.now()}`);
 }
 
 // 壁纸代际计数：每次「换图/迁移」递增。异步回调（resolveStableUrl、probeBackground 的
@@ -894,6 +1102,9 @@ let startupProbeActive = false;
 
 async function _applyNewBg(url) {
   const gen = ++bgGen;
+  // 换图先作废上一张的字节缓存 —— 否则 applyBackground 会继续优先渲染旧 blob，
+  // 出现「切了图源/点了换一张，背景纹丝不动」的假死现象（从带 CORS 图源切到无 CORS 图源时必现）。
+  clearWallpaperBlob();
   // 随机配色模式：每次换图（含刷新）都重新生成配色
   if (state.paletteMode === "random") randomizePalette();
   // 关键修复：先把随机端点解析成稳定地址，再 set state.bgUrl + applyBackground。
@@ -904,6 +1115,16 @@ async function _applyNewBg(url) {
     stable = (await resolveStableUrl(url, state.bgProvider)) || url;
   } catch {}
   if (gen !== bgGen) return; // 已被更新的换图请求取代，丢弃本次结果
+  // 带 CORS 的图源：先把字节抓成 blob，**再**写 bgUrl。
+  // 顺序是关键——下游（预览 / 显示 / 取色）都以 bgUrl 或 bgBlobUrl 的变化为触发点，
+  // 先抓后写可保证它们被触发时字节已就绪，不出现「预览先跑代理链失败、字节后到再重建」的中间态。
+  // 抓取失败则静默回退原始 URL 的旧行为。
+  // 有自建代理时，无 CORS 图源同样能取到字节（经代理），故一并启用缓存 ——
+  // 这是让「预览与背景一致」对 alcy / dmoe 也成立的唯一途径。
+  if (providerHasCors(state.bgProvider) || CUSTOM_PROXY) {
+    await cacheWallpaperBlob(stable);
+    if (gen !== bgGen) return;
+  }
   state.bgUrl = stable;
   state.bgFailed = false;
   applyBackground();
@@ -935,10 +1156,25 @@ async function toggleBackground() {
 
 // ========== 持久化与初始化 ==========
 
+// 切到「无法跨域取色」的图源时，若当前是「跟随壁纸取色」，自动改为「每次刷新随机」。
+// 否则该模式永远取不到色，用户只会看到主题色卡住不动，误以为功能坏了。
+watch(
+  () => state.bgProvider,
+  (p) => {
+    if (providerBlocksPalette(p) && state.paletteMode === "auto") {
+      // 改为「固定」而非「随机」：用户此刻看到的配色原样保留，只是不再尝试取色。
+      // 若改成随机，切换图源的瞬间主题色也会跟着跳变，像是一次改了俩设置。
+      state.paletteMode = "manual";
+      showToast("该图源不支持跨域取色，配色已改为固定（保持当前配色）", "warning");
+    }
+  },
+);
+
 watch(
   state,
   () => {
-    const { bgLoading, bgFailed, ...persisted } = state;
+    // bgBlobUrl 是页面级 blob URL，无法跨会话复用，不持久化
+    const { bgLoading, bgFailed, bgBlobUrl, ...persisted } = state;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {}
@@ -958,9 +1194,13 @@ export async function initAppearance() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved) {
-      // 归一化：Wallhaven API 无跨域许可已移除，历史配置迁移到樱花 Alcy 源
-      if (!saved.bgProvider || saved.bgProvider === "wallhaven")
+      // 仅迁移「已废弃」的图源值：wallhaven 早已下线，无有效地址可言。
+      // 其余一律**不做任何改写**——图源是用户的选择，代码不该在启动时替用户改主意
+      // （此前把 alcy 无条件迁到 loliapi 的写法，导致用户切回 alcy 后一刷新就被改走）。
+      if (saved.bgProvider === "wallhaven") {
         saved.bgProvider = "alcy";
+        if (saved.bgUrl && /wallhaven/i.test(saved.bgUrl)) saved.bgUrl = "";
+      }
       Object.assign(state, saved);
     }
   } catch (e) {
@@ -968,6 +1208,11 @@ export async function initAppearance() {
   }
   state.bgLoading = false;
   state.bgFailed = false;
+  // 启动路径的静默降级：配置为「跟随壁纸取色」但图源不支持取色时改为「固定配色」，
+  // 否则该模式永远取不到色、主题色会一直卡住。不弹 toast（非用户主动操作）。
+  if (providerBlocksPalette(state.bgProvider) && state.paletteMode === "auto") {
+    state.paletteMode = "manual";
+  }
 
   if (nobg) {
     crumb("nobg escape active");
@@ -1071,6 +1316,7 @@ export function useAppearance() {
     applyBackground,
     applyCustomBackground,
     analyzeWallpaper,
+    getWallpaperBlob,
   };
 }
 

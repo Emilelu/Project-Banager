@@ -5,13 +5,19 @@
     </transition>
     <transition name="modal">
       <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div class="relative glass rounded-2xl shadow-2xl w-[34rem] max-h-[85vh] overflow-y-auto border border-white/40 pointer-events-auto app-dialog">
-          <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 sticky top-0 glass rounded-t-2xl z-10">
+        <!-- 结构：外层 flex 列 + overflow-hidden；标题栏与底部栏在**滚动容器之外**，
+             只有中间内容区滚动。
+             此前标题/底部是 sticky、位于滚动容器内，宽度会被滚动条挤掉 6px，
+             右侧露出 track 底色 —— 看上去像弹窗上下缺了两块。
+             移出滚动容器后二者天然占满全宽，也就不再需要 sticky。 -->
+        <div class="relative glass rounded-2xl shadow-2xl w-[34rem] max-h-[85vh] border border-white/40 pointer-events-auto flex flex-col overflow-hidden">
+          <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 glass rounded-t-2xl shrink-0 z-10">
             <span class="text-xl">🎨</span>
             <h3 class="text-lg font-bold gradient-text">主题与背景</h3>
           </div>
 
-          <div class="px-6 py-5 space-y-6">
+          <!-- 唯一滚动容器：滚动条只出现在中间区域，不再与标题/底部栏争宽度 -->
+          <div class="flex-1 overflow-y-auto app-dialog px-6 py-5 space-y-6">
             <!-- 玻璃风格 -->
             <section>
               <h4 class="text-sm font-bold text-gray-700 mb-2">玻璃风格</h4>
@@ -58,10 +64,11 @@
                 <button @click="onReset" class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 transition btn-press">↺ 恢复默认</button>
               </div>
               <div class="mt-3 flex items-center gap-2 flex-wrap">
-                <button @click="setPaletteMode('auto')"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                  :class="state.paletteMode === 'auto' ? 'bg-accent/10 border-accent/50 text-accent-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                  🎨 跟随壁纸取色
+                <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
+                  :title="noCorsSource ? '当前图源无跨域许可，无法读取像素取色；如需取色请改用 Loliapi 或支持 CORS 的自定义图源' : '换壁纸后自动提取主色调'"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-inherit"
+                  :class="state.paletteMode === 'auto' && !noCorsSource ? 'bg-accent/10 border-accent/50 text-accent-dark' : 'bg-gray-100 border-transparent text-gray-500'">
+                  🎨 跟随壁纸取色{{ noCorsSource ? '（当前图源不可用）' : '' }}
                 </button>
                 <button @click="setPaletteMode('random')"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
@@ -69,7 +76,9 @@
                   🎲 每次刷新随机配色
                 </button>
               </div>
-              <p class="text-xs text-gray-400 mt-1.5">「跟随壁纸取色」会在换壁纸后自动提取主色调（默认开启）；「每次刷新随机」每次打开随机配色；选用下方预设或自定义则固定。</p>
+              <p class="text-xs text-gray-400 mt-1.5">「跟随壁纸取色」会在换壁纸后自动提取主色调；「每次刷新随机」每次打开随机配色；选用下方预设或自定义则固定。
+                <span v-if="noCorsSource" class="text-warning-dark/90">未配置跨域代理：当前图源像素不可读，取色无法进行 —— 部署 Cloudflare Worker 后即可恢复。</span>
+              </p>
             </section>
 
             <!-- 背景图 -->
@@ -85,8 +94,9 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <select v-model="state.bgProvider"
                     class="flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
-                    <option value="alcy">樱花随机二次元 · Alcy（默认，可取色）</option>
-                    <option value="dmoe">樱花随机壁纸 · dmoe</option>
+                    <option value="alcy">Alcy（默认｜图质最佳）</option>
+                    <option value="dmoe">dmoe</option>
+                    <option value="loliapi">Loliapi（图库较旧）</option>
                     <option value="custom">自定义图片地址</option>
                   </select>
                   <button v-if="state.bgProvider !== 'custom'" @click="onShuffle"
@@ -108,6 +118,7 @@
                     🔄 每次打开自动换一张
                   </button>
                   <button @click="setAutoSwitch(false)"
+                    title="固定为当前这张壁纸，刷新不再换图（需跨域代理可用才能解析出稳定图床地址）"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
                     :class="!state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
                     📌 固定当前壁纸
@@ -120,7 +131,7 @@
                   <div class="w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
                     <img v-if="previewSrc" :src="previewSrc" @error="onBgError" @load="bgLoaded = true"
                       loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
-                    <img v-else-if="previewFailed" :src="state.bgUrl" @error="onBgError" @load="bgLoaded = true"
+                    <img v-else-if="previewFailed" :src="state.bgBlobUrl || state.bgUrl" @error="onBgError" @load="bgLoaded = true"
                       loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
@@ -128,11 +139,14 @@
                     <p v-if="bgFailed" class="text-xs text-danger flex-1">⚠️ 图片加载失败，请换一张</p>
                     <button @click="openOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      title="在新标签页打开原图链接预览">🔗 原链接预览</button>
+                      title="在新标签页打开当前壁纸链接">🔗 原链接预览</button>
                     <button @click="downloadOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      title="下载当前壁纸原图（非缩略图）">⬇ 下载原图</button>
+                      title="下载当前壁纸原图；该图源不允许跨域读取时会自动在新标签页打开原图，供右键另存">⬇ 下载原图</button>
                   </div>
+                  <p v-if="noCorsSource" class="text-xs text-warning-dark/90 mt-1 leading-relaxed">
+                    ⓘ 未配置跨域代理：当前图源不返回跨域许可，取色、下载与「预览一致」均不可用 —— 部署 Cloudflare Worker 后即可全部恢复。
+                  </p>
                 </div>
                 <div class="mt-3 space-y-2">
                   <label class="flex items-center gap-3 text-xs text-gray-500">
@@ -157,7 +171,7 @@
             </section>
           </div>
 
-          <div class="px-6 py-4 border-t border-white/20 flex justify-end sticky bottom-0 glass rounded-b-2xl">
+          <div class="px-6 py-4 border-t border-white/20 flex justify-end glass rounded-b-2xl shrink-0">
             <button @click="onFinish" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-light rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">完成</button>
           </div>
         </div>
@@ -167,8 +181,8 @@
 </template>
 
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
-import { useAppearance, hexToHsl, hslCss, isCrossOrigin } from '../composables/useAppearance'
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 
 const props = defineProps({ show: Boolean })
@@ -178,6 +192,12 @@ const { state, setGlass, setPalette, setPaletteMode, setAutoSwitch, randomizePal
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
+
+// 当前图源是否「无跨域许可」（alcy/dmoe 不返回 ACAO 头）→ 三处影响：
+//   ① 取色不可用 → 禁用「跟随壁纸取色」（自动降级在 useAppearance 的 bgProvider watch 中）
+//   ② 无法读取字节 → 「下载原图」降级为打开原图后另存
+//   ③ 随机端点 + 无法读取重定向目标 → 预览/原链接打开的图无法保证与背景是同一张
+const noCorsSource = computed(() => providerBlocksPalette(state.bgProvider))
 
 // —— 预览图降采样：原图分辨率过高（4K/8K）时，弹窗打开会因解码整张位图而卡顿。
 // 这里把预览改为「离主线程解码 + 缩小到 1600px 内 + 编码为小尺寸 blob URL」的缩略图，
@@ -195,6 +215,29 @@ let previewGen = 0               // 代际计数：迟到的异步结果不覆�
 let previewUrl = ''              // 当前 blob URL，换图/卸载时 revoke
 
 async function buildPreview(url) {
+  // ① 已有主程序缓存的字节：直接把它的 blob URL 交给 <img> 即可，无需降采样。
+  //    降采样本意是「避免在弹窗里解码 4K 原图造成卡顿」，而这张图主背景早已解码，
+  //    浏览器会复用同一份位图 → 零额外开销，省掉 createImageBitmap + canvas 编码两趟活。
+  //    注意：cached.url 与主背景共用，**不可 revoke**，故不记入 previewUrl。
+  const cached = getWallpaperBlob()
+  if (cached?.url) {
+    previewGen++ // 作废在途的降采样任务
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+      previewUrl = ''
+    }
+    previewSrc.value = cached.url
+    previewFailed.value = false
+    return
+  }
+  // ② 无字节缓存（无 CORS 图源）：跨域图源既抓不到字节、代理链也已全部失效，
+  //    直接标记「原图直出」——<img> 加载跨域图不受 CORS 限制，照常显示。
+  //    顺带避免三次注定失败的代理请求刷满 console 红错。
+  if (isCrossOrigin(url)) {
+    previewFailed.value = true
+    return
+  }
+  // ③ 同源图：本地抓取 + 降采样（避免在弹窗里解码大图造成卡顿）
   // 太老的浏览器不支持 createImageBitmap：直接退回原图
   if (typeof createImageBitmap !== 'function') {
     previewFailed.value = true
@@ -202,22 +245,24 @@ async function buildPreview(url) {
   }
   const gen = ++previewGen
   previewFailed.value = false
-  let blob = null
+  let blob = getWallpaperBlob()?.blob || null
   const grab = async (u) => {
     const r = await fetch(u)
     if (!r.ok) throw new Error('fetch failed')
     return r.blob()
   }
-  // 直连仅用于同源（custom / blob URL）；跨域图床（tc.alcy.cc 等无 CORS 头）直接走代理链，
-  // 跳过必败的直连 fetch——避免 console 刷 CORS 红错
-  const sources = isCrossOrigin(url)
-    ? PREVIEW_PROXIES.map((make) => make(url))
-    : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
-  for (const u of sources) {
-    try {
-      blob = await grab(u)
-      if (blob) break
-    } catch {}
+  // ② 无缓存时再抓：直连仅用于同源（custom / blob URL）；跨域图床（tc.alcy.cc 等无 CORS 头）
+  //    直接走代理链，跳过必败的直连 fetch——避免 console 刷 CORS 红错
+  if (!blob) {
+    const sources = isCrossOrigin(url)
+      ? PREVIEW_PROXIES.map((make) => make(url))
+      : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+    for (const u of sources) {
+      try {
+        blob = await grab(u)
+        if (blob) break
+      } catch {}
+    }
   }
   if (gen !== previewGen) return
   if (!blob) {
@@ -283,7 +328,9 @@ function resetPreview() {
 }
 
 watch(
-  () => (state.bgEnabled ? state.bgUrl : ''),
+  // 监听「实际渲染用的地址」：带 CORS 图源抓取到字节后会更新 bgBlobUrl，此处随之重建预览，
+  // 确保预览用的是与背景同一份字节（随机端点才不会预览成另一张）。
+  () => (state.bgEnabled ? state.bgBlobUrl || state.bgUrl : ''),
   (url) => {
     if (!url) {
       resetPreview()
@@ -335,10 +382,10 @@ const onRandom = () => {
   showToast('已随机配色 🎲')
 }
 
-// 恢复默认配色：回到「跟随壁纸」模式
+// 恢复默认配色：回到默认模式「跟随壁纸取色」（须与 state.paletteMode 的默认值保持一致）
 const onReset = () => {
   setPaletteMode('auto')
-  showToast('已恢复默认配色（跟随壁纸）')
+  showToast('已恢复默认配色（跟随壁纸取色）')
 }
 
 const toggleBg = async () => {
@@ -393,37 +440,63 @@ const onBgError = () => {
   showToast('背景图片加载失败，请换一张', 'error')
 }
 
-// 在新标签页打开原图链接预览（window.open 走浏览器直连，不受页面 CORS 限制）
+// 在新标签页打开当前壁纸链接。
+// 有本地字节缓存（带 CORS 的图源）时用缓存的 blob —— 打开的必是背景这张；
+// 无缓存（无 CORS 图源）时打开原始链接，此时因服务端是随机端点，可能抽到另一张。
 const openOriginal = () => {
-  const url = state.bgUrl
+  const url = getWallpaperBlob()?.url || state.bgUrl
   if (!url) return
   window.open(url, '_blank', 'noopener')
 }
 
-// 下载原图：预览区展示的是降采样缩略图，右键另存只能存到小图；
-// 这里直连取原图字节（无 CORS 许可时走与预览同一代理链），经 blob URL 触发下载。
+// 下载原图：优先使用主程序缓存的壁纸字节——它与背景、预览是**同一张**，且无需任何代理。
+// 无缓存（无 CORS 图源）时才退回代理链；代理已全部失效，此时给出可执行的替代提示。
+const MIME_EXT = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+}
 const downloadOriginal = async () => {
-  const url = state.bgUrl
-  if (!url) return
   showToast('正在下载原图…')
-  let blob = null
-  // 跨域图床（tc.alcy.cc 等无 CORS 头）直连必被拦：直接走代理链，跳过必败的直连
-  const sources = isCrossOrigin(url)
-    ? PREVIEW_PROXIES.map((make) => make(url))
-    : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
-  for (const u of sources) {
-    try {
-      blob = await (await fetch(u)).blob()
-      if (blob) break
-    } catch {}
-  }
+  let blob = getWallpaperBlob()?.blob || null
   if (!blob) {
-    showToast('下载失败，请稍后重试', 'error')
+    const url = state.bgUrl
+    if (!url) return
+    // 跨域图床直连必被拦：走代理链兜底（当前三家代理均已失效，仅作最后尝试）
+    const sources = isCrossOrigin(url)
+      ? PREVIEW_PROXIES.map((make) => make(url))
+      : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+    for (const u of sources) {
+      try {
+        const r = await fetch(u)
+        if (!r.ok) continue
+        const b = await r.blob()
+        if (b && b.size) {
+          blob = b
+          break
+        }
+      } catch {}
+    }
+  }
+  if (!blob || !blob.size) {
+    // 跨域图源无法用 JS 取字节：能「渲染」不等于能「读取」（同源策略），
+    // 且跨域 <a download> 的 download 属性会被浏览器直接忽略；代理链也已全部失效。
+    // 降级为「打开原图」——浏览器能正常显示图片，用户右键另存即可，不再报错了事。
+    const fallback = state.bgUrl
+    if (fallback) {
+      window.open(fallback, '_blank', 'noopener')
+      showToast('该图源不允许直接下载，已在新标签页打开原图，请右键「图片另存为」', 'warning')
+    } else {
+      showToast('当前没有可下载的壁纸', 'error')
+    }
     return
   }
   const objUrl = URL.createObjectURL(blob)
-  const m = url.match(/\.(jpg|jpeg|png|webp|gif|avif)/i)
-  const ext = m ? m[1].toLowerCase() : 'jpg'
+  // 扩展名以实际 MIME 为准：URL 多数无扩展名，旧逻辑一律写 .jpg 与实际 webp 不符
+  const urlExt = (state.bgUrl.match(/\.(jpg|jpeg|png|webp|gif|avif)(?:\?|$)/i) || [])[1]
+  const ext = MIME_EXT[blob.type] || (urlExt ? urlExt.toLowerCase() : 'jpg')
   const a = document.createElement('a')
   a.href = objUrl
   a.download = `banager-wallpaper-${Date.now()}.${ext}`

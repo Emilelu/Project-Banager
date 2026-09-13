@@ -32,11 +32,11 @@
         </button>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-danger animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
         已选择 <span class="font-bold">{{ checkedIds.length }}</span> 项
       </div>
       <div v-if="selected && !batchMode" class="mt-3 text-sm text-gray-500 flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
         当前选中: <span class="font-bold gradient-text">{{ selected.name }}</span>
         <span class="text-primary font-bold">e{{ selected.current_episode }}</span>
         <span v-if="selected.day_of_week">{{ selected.day_of_week }}</span>
@@ -71,8 +71,11 @@
             @cancel-edit="cancelEdit"
             @increment="incrementEpisode(item)"
             @decrement="decrementEpisode(item)" />
+          <!-- ⚠️ 勿在此处加无限动画：本元素在 .glass（backdrop-filter）子树内，
+               动画会使这块占屏 62% 的玻璃每帧重新捕获背景并模糊，导致 GPU 持续满载。
+               详见 .workbuddy/memory/2026-09-13.md -->
           <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center text-gray-300 text-sm">
-            <span class="animate-pulse-soft">✨ 暂无</span>
+            <span>✨ 暂无</span>
           </div>
         </div>
       </div>
@@ -80,7 +83,7 @@
 
     <!-- 空状态引导：dataLoaded 为 false 时不渲染，避免"有数据用户"首帧闪一下空状态 -->
     <div v-if="dataLoaded && watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-8 text-center shrink-0">
-      <div class="text-4xl mb-2 animate-float">📺</div>
+      <div class="text-4xl mb-2">📺</div>
       <p class="text-sm text-gray-500 mb-4">还没有追番记录，从添加第一部番剧或导入 Excel 开始吧</p>
       <div class="flex items-center justify-center gap-3">
         <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加番剧</button>

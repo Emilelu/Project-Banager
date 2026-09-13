@@ -49,11 +49,11 @@
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-danger animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
         已选择 <span class="font-bold">{{ checkedIds.length }}</span> 项
       </div>
       <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
         当前选中: <span class="font-bold gradient-text">{{ selected.name }}</span>
       </div>
     </div>
@@ -82,7 +82,7 @@
         <tbody>
           <tr v-if="paginatedList.length === 0">
             <td :colspan="batchMode ? 5 : 4" class="py-16 text-center text-gray-400">
-              <div class="text-4xl mb-3 animate-float">📭</div>
+              <div class="text-4xl mb-3">📭</div>
               <div>{{ searchQuery ? '没有找到匹配的记录' : '暂无等番记录' }}</div>
             </td>
           </tr>

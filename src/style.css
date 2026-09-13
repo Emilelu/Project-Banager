@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== 可过渡的「玻璃显影」系数 ==================== */
+/* 切页过渡时用它让玻璃由透明渐显，而**不用 opacity**。
+   缘由：祖先 `opacity < 1` 会形成 backdrop root，令子树内 .glass 的 backdrop-filter
+   整段过渡失效 —— 表现就是「过渡播完，主区模糊才突然出现」。
+   改动画背景色的 alpha 则完全不触碰 backdrop root，于是既能保留淡入观感、模糊又全程在位。
+   这是毛玻璃类应用的通行解法（Radix/shadcn 那类库则是干脆不用 backdrop-filter 来规避）。
+   注：必须用 @property 注册成 <number> 才能参与 transition。 */
+@property --glass-fade {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
 /* ==================== 主题配色变量 ==================== */
 /* rgb 通道三元组形式，供 Tailwind 主题色与全局样式共用；
    运行时由 useAppearance.js 覆写（自定义/随机/背景图取色） */
@@ -40,6 +53,11 @@
   --txt-sb-300: 226 232 240;
   --txt-sb-400: 203 213 225;
   --txt-sb-500: 148 163 184;
+  /* 玻璃卡片内文字（浅色模式）：按「卡片有效亮度」而非壁纸亮度计算，见 applyAdaptiveText。
+     默认给深色系，适配不透明白玻璃卡片 */
+  --txt-card-300: 107 114 128;
+  --txt-card-400: 75 85 99;
+  --txt-card-500: 55 65 81;
 }
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
@@ -150,8 +168,18 @@ body {
 
 /* 玻璃效果 */
 .dark .glass {
-  background: rgba(20, 15, 40, 0.80);
+  background: rgba(20, 15, 40, calc(0.8 * var(--glass-fade, 1)));
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 派生色的取向是固定的（dark 变体服务浅底、light 变体服务深底），但模板里写死了
+   text-primary-dark / text-secondary-dark。暗色模式下用它压在深色玻璃上必然不可读，
+   故统一改指 light 变体。（JS 侧已保证 light 变体在深底上达到 4.5:1） */
+.dark .text-primary-dark {
+  color: rgb(var(--c-primary-light)) !important;
+}
+.dark .text-secondary-dark {
+  color: rgb(var(--c-secondary-light)) !important;
 }
 
 /* 渐变文字 */
@@ -454,6 +482,18 @@ body.adaptive
   ):not(.glass *):not([class*="glass"]) {
   color: rgb(var(--txt-main-400)) !important;
 }
+
+/* 玻璃卡片内的文字（上面那条选择器把卡片内部排除在外了，此处补上）。
+   问题：卡片是半透明玻璃（液态模式最低只有 30% 白），而卡片内的文字色是**固定的**：
+     · 浅色模式：text-gray-300(#d1d5db) 压在白色玻璃上 ≈ 1.4:1 —— 几乎不可读；
+     · 壁纸偏暗时卡片整体随之变暗，连 gray-500 一档都会掉到 2:1 上下。
+   解法：不猜固定值，改用 JS 按「卡片有效亮度」算出的 --txt-card-*——该亮度由
+   卡片底色（白）与壁纸亮度按不透明度混合得到（见 useAppearance 的 applyAdaptiveText）。
+   暗色模式的卡片是深紫底，交给 .dark 规则的浅色字，不在此列。 */
+html:not(.dark) body.adaptive .glass :is(.text-gray-300, .text-gray-400, .text-gray-500),
+html:not(.dark) body.adaptive :is(.text-gray-300, .text-gray-400, .text-gray-500).glass {
+  color: rgb(var(--txt-card-500)) !important;
+}
 /* 液态玻璃 + 浅色 + 无壁纸：侧栏是白玻璃，白字不可读，需按自适应亮度取深色字 */
 html:not(.dark) body[data-glass='liquid']:not(.with-bg).adaptive .sidebar-bg [class*="text-white"] {
   color: rgb(var(--txt-sb-400)) !important;
@@ -496,19 +536,28 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 
 
 /* 页面切换动画 */
+/* 切页过渡：容器**只做位移**，不再用 opacity；"淡入"改由 .glass 的背景 alpha 承担
+   （见 --glass-fade）。这样彻底避开 backdrop root —— 模糊全程在位，
+   不再有「过渡末尾模糊才出现」的空窗，同时保留「玻璃由透到实」的渐显观感。
+   参考做法：毛玻璃类应用普遍用背景 alpha 而非元素 opacity 做过场；
+   Radix/shadcn 那类库则是干脆不给 Dialog 用 backdrop-filter 来规避同一问题。 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* opacity 先跑完（0.15s），transform 继续到 0.3s。
+     opacity 必须**先行结束**：只要它 < 1，后代的 backdrop-filter 就整体失效，
+     模糊便无从「淡入」。让它尽早归位，模糊才有表演的窗口（见下方延迟过渡）。 */
+  transition:
+    opacity 0.15s ease-out,
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .fade-enter-from {
-  opacity: 0.01; /* 不用 0：opacity:0 的元素被浏览器视为不可见，会跳过 backdrop-filter
-                    合成，淡入中后段玻璃才“突兀”出现；0.01 视觉等同 0 但首帧即参与合成 */
+  opacity: 0;
   transform: translateY(8px);
 }
 
 .fade-leave-to {
-  opacity: 0.01;
+  opacity: 0;
   transform: translateY(-8px);
 }
 
@@ -521,24 +570,22 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
    ③ !important 压过玻璃风格覆盖（body[data-glass='liquid'] .glass 特异性更高）；
    ④ will-change: backdrop-filter 在动画期间提示浏览器稳定合成（backdrop 采样
       不因淡入触发层重建），动画结束类移除自动释放 */
+/* 模糊淡入：opacity 在 0.15s 归位后 backdrop 才恢复，故这里把模糊过渡**延迟 0.15s 启动**，
+   从 blur(0) 平滑升到目标值 —— 时序上正好接住 opacity，不会再有「模糊突然出现」。
+   will-change 提示浏览器在动画期间稳定该合成层，过渡类移除后自动释放。 */
 .fade-enter-active .glass,
 .fade-leave-active .glass {
-  transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    backdrop-filter 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+    -webkit-backdrop-filter 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;
   will-change: backdrop-filter;
 }
-/* 毛玻璃：起始小幅模糊，随淡入平滑升到目标（避免结束才“啪”出现） */
-body:not([data-glass='liquid']) .fade-enter-from .glass,
-body:not([data-glass='liquid']) .fade-leave-to .glass {
-  backdrop-filter: blur(4px) saturate(1) !important;
-  -webkit-backdrop-filter: blur(4px) saturate(1) !important;
-}
-/* 液态玻璃：组件一出现就是完整玻璃质感（起始即目标值 blur(20px) saturate(1.65)），
-   只做透明度/位移动画——“先有模糊再淡入”，淡入期间玻璃效果始终完整，无需模糊渐变 */
-body[data-glass='liquid'] .fade-enter-from .glass,
-body[data-glass='liquid'] .fade-leave-to .glass {
-  backdrop-filter: blur(20px) saturate(1.65) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.65) !important;
+/* 起始模糊为 0。用 blur(0px) 而非 none：保持该元素始终是 backdrop 参与方，
+   避免合成层在过渡中途重建。起始保留 saturate(1)，防止「从无 saturate 瞬间切到有」。 */
+.fade-enter-from .glass,
+.fade-leave-to .glass {
+  backdrop-filter: blur(0px) saturate(1);
+  -webkit-backdrop-filter: blur(0px) saturate(1);
 }
 
 /* 滑入动画 */
@@ -563,14 +610,26 @@ body[data-glass='liquid'] .fade-leave-to .glass {
 }
 
 .modal-leave-active {
-  transition: all 0.25s cubic-bezier(0.4, 0, 1, 1);
+  /* 业界通行做法（Material 3 / Radix / shadcn 的 Dialog）：**退场用 accelerate（ease-in）
+     + 150~250ms 短时长**，与「进场用 decelerate」成对 —— 这是有规范依据的标准姿势，
+     故回到 cubic-bezier(0.4, 0, 1, 1) 配 0.22s。
+     （本项目曾试过 decelerate 与对齐壁纸的长时长，都不对；真正的问题见下方 .modal-leave-to） */
+  transition: all 0.22s cubic-bezier(0.4, 0, 1, 1);
 }
 
-/* 弹窗只动 transform、不动 opacity：opacity<1 会形成 backdrop root，
-   内部 .glass 的 backdrop-filter 在动画期间失效，出现“透明间隙”、动画结束才复原 */
-.modal-enter-from,
-.modal-leave-to {
+/* 进场只动 transform、不动 opacity：opacity<1 会形成 backdrop root，
+   内部 .glass 的 backdrop-filter 在动画期间失效，出现“透明间隙”、动画结束才复原。
+   进场维持该策略 —— 当前观感已验证与壁纸缩放和谐。 */
+.modal-enter-from {
   transform: scale(0.95) translateY(10px);
+}
+/* 退场：**缩小与淡出必须同时进行**。
+   此前退场只做 scale（为规避上面那个 backdrop root 问题），于是少了「淡出」这条信息，
+   仅靠 5% 的缩放显得干瘪 —— 这才是「关闭看着不舒服」的真正原因，而非曲线或时长。
+   补上 opacity 后两条信息叠加，退场自然；0.22s 内 backdrop 的短暂失效被淡出本身掩盖。 */
+.modal-leave-to {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
 }
 
 /* 弹窗开启期间允许取色/文字色平滑过渡：取色完成后回写的 --txt-* 与 --c-* 在
@@ -610,8 +669,8 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
     -webkit-backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .modal-leave-active .glass {
-  transition: backdrop-filter 0.25s cubic-bezier(0.4, 0, 1, 1),
-    -webkit-backdrop-filter 0.25s cubic-bezier(0.4, 0, 1, 1);
+  transition: backdrop-filter 0.2s cubic-bezier(0, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.2s cubic-bezier(0, 0, 0.2, 1);
 }
 .modal-enter-from .glass,
 .modal-leave-to .glass {
@@ -625,7 +684,8 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 }
 
 .modal-overlay-leave-active {
-  transition: opacity 0.25s cubic-bezier(0.4, 0, 1, 1);
+  /* 比弹窗略慢一点点（0.24s vs 0.2s）：遮罩若先消失会露出「弹窗尚在、底已透」的中间态 */
+  transition: opacity 0.24s cubic-bezier(0, 0, 0.2, 1);
 }
 
 .modal-overlay-enter-from,
@@ -684,16 +744,22 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 
 /* 玻璃效果 */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
+  /* 背景 alpha 乘以 --glass-fade：切页过渡时由透明渐显（backdrop-filter 恒定不变） */
+  background: rgba(255, 255, 255, calc(0.7 * var(--glass-fade, 1)));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+
 /* ==================== 液态玻璃风格 ==================== */
 /* body[data-glass='liquid'] 时覆盖 .glass：更强折射感的高光边缘 + 饱和度提升 + 悬浮投影 */
 body[data-glass='liquid'] .glass {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.30));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, calc(0.62 * var(--glass-fade, 1))),
+    rgba(255, 255, 255, calc(0.3 * var(--glass-fade, 1)))
+  );
   backdrop-filter: blur(20px) saturate(1.65);
   -webkit-backdrop-filter: blur(20px) saturate(1.65);
   border: 1px solid rgba(255, 255, 255, 0.55);
@@ -704,7 +770,11 @@ body[data-glass='liquid'] .glass {
 }
 
 .dark body[data-glass='liquid'] .glass {
-  background: linear-gradient(135deg, rgba(30, 22, 58, 0.72), rgba(16, 12, 34, 0.55));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 22, 58, calc(0.72 * var(--glass-fade, 1))),
+    rgba(16, 12, 34, calc(0.55 * var(--glass-fade, 1)))
+  );
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.12),
