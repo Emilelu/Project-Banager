@@ -3,13 +3,16 @@
     <!-- 侧边栏 -->
     <aside class="w-60 flex flex-col shadow-xl relative overflow-hidden sidebar-bg">
       <!-- 装饰圆 -->
-      <div class="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-white/5 animate-pulse-soft"></div>
-      <div class="absolute bottom-20 -right-8 w-24 h-24 rounded-full bg-secondary/10 animate-float"></div>
+      <!-- ⚠️ 装饰元素勿加无限动画：它们位于 .sidebar-bg（backdrop-filter）子树内，
+           动画会使侧栏玻璃每帧重新捕获背景并模糊。实测动画值约 20pt GPU 占用。
+           详见 .workbuddy/memory/2026-09-13.md -->
+      <div class="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-white/5"></div>
+      <div class="absolute bottom-20 -right-8 w-24 h-24 rounded-full bg-secondary/10"></div>
 
       <!-- Logo区域 -->
       <div class="relative z-10 px-5 py-5 border-b border-white/10">
         <div class="flex items-center gap-3">
-          <img src="/logo.png" alt="Logo" class="w-8 h-8 animate-bounce-soft" />
+          <img src="/logo.png" alt="Logo" class="w-8 h-8" />
           <div>
             <h1 class="text-white text-base font-bold tracking-wide">追番管理</h1>
             <p class="text-white/50 text-xs">Project Bangumi Manager</p>
@@ -29,7 +32,7 @@
             item.icon }}</span>
           <span>{{ item.label }}</span>
           <span v-if="$route.path === item.path"
-            class="ml-auto w-2 h-2 rounded-full bg-sakura animate-pulse-soft"></span>
+            class="ml-auto w-2 h-2 rounded-full bg-sakura"></span>
         </router-link>
       </nav>
 
@@ -48,9 +51,9 @@
           💾 上次备份: {{ backupLabel }}
         </div>
         <div class="flex items-center justify-center gap-2 text-white/30 text-xs">
-          <span class="animate-sparkle">✦</span>
+          <span>✦</span>
           <span>Standalone</span>
-          <span class="animate-sparkle" style="animation-delay: 0.5s">✦</span>
+          <span>✦</span>
         </div>
       </div>
     </aside>

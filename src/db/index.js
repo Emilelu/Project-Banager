@@ -666,7 +666,9 @@ class BangumiDatabase {
       const normalizedDate = this._normalizeDate(watchDate)
       const row = this._get('SELECT name, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
       if (row) {
-        const addResult = this.addWatched({ name: row.name, watch_date: normalizedDate, url: row.url || '', url_params: row.url_params || '', notes: row.notes, sort_order: row.sort_order })
+        // 从追番移入已看时**清空链接**：追番页的链接是「追更地址」，已看的记录不再需要它，
+        // 留着反而是噪音（用户要求）。url_params 与 url 配套，一并清空。
+        const addResult = this.addWatched({ name: row.name, watch_date: normalizedDate, url: '', url_params: '', notes: row.notes, sort_order: row.sort_order })
         if (addResult.success) {
           this._ensureYearLabel(normalizedDate)
           this.deleteWatching(watchingId)

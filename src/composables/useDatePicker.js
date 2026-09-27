@@ -4,6 +4,17 @@
  * 支持多种输入格式的解析和校验
  */
 
+/**
+ * 今天的日期字符串，格式 YYYY/MM/DD（与本项目统一的日期格式一致，见文件头说明）。
+ * 供各「选日期」处的默认值使用 —— 务必用本地时间，不要用 toISOString()（那是 UTC，
+ * 在东八区会导致晚上 8 点后日期串到明天）。
+ */
+export function todayStr() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())}`
+}
+
 // 将 type="date" 的 YYYY-MM-DD 格式转为 YYYY/MM/DD
 export function normalizeDate(value) {
   if (!value) return ''

@@ -13,7 +13,7 @@
         </div>
         <button @click="startImport" :disabled="!selectedFile || importing"
           class="px-5 py-2.5 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all duration-300 btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">
-          <span v-if="importing" class="animate-pulse-soft">⏳ 导入中...</span>
+          <span v-if="importing">⏳ 导入中...</span>
           <span v-else>▶️ 开始导入</span>
         </button>
       </div>
@@ -65,7 +65,7 @@
       <div ref="logContainer"
         class="h-64 overflow-y-auto px-6 py-4 font-mono text-xs space-y-1 rounded-b-2xl"
         style="background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color: #a7f3d0;">
-        <div v-if="logs.length === 0" class="text-gray-500 animate-pulse-soft">✨ 等待导入...</div>
+        <div v-if="logs.length === 0" class="text-gray-500">✨ 等待导入...</div>
         <div v-for="(log, idx) in logs" :key="idx"
           class="transition-all duration-200 animate-slide-up"
           :class="log.type === 'error' ? 'text-red-400' : log.type === 'warning' ? 'text-yellow-400' : log.type === 'success' ? 'text-green-400' : 'text-gray-400'">

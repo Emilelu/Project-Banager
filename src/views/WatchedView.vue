@@ -46,11 +46,11 @@
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-danger animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
         已选择 <span class="font-bold">{{ checkedIds.length }}</span> 项
       </div>
       <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
         当前选中: <span class="font-bold gradient-text">{{ selected.name }}</span>
         <span class="text-gray-400">{{ selected.watch_date }}</span>
       </div>
@@ -81,7 +81,7 @@
         <tbody>
           <tr v-if="paginatedList.length===0">
             <td :colspan="batchMode?6:5" class="py-16 text-center text-gray-400">
-              <div class="text-4xl mb-3 animate-float">📭</div>
+              <div class="text-4xl mb-3">📭</div>
               <div>{{ searchQuery ? '没有找到匹配的记录' : (selectedYear === '__unclassified__' ? '暂无未分类记录' : selectedYear + ' 暂无已看记录') }}</div>
             </td>
           </tr>
@@ -359,7 +359,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
-import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey } from '../composables/useDatePicker'
+import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey, todayStr } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
 import { placeContextMenu } from '../composables/useContextMenu'
 
@@ -547,7 +547,8 @@ const editing = ref(null)
 const editValue = ref('')
 const dateManualInput = ref(false)
 
-const form = ref({ name:'', watch_date:'', url:'', url_params:'', notes:'' })
+// 新增时的默认观看日期 = 今天（编辑已有记录时仍沿用记录原值）
+const form = ref({ name:'', watch_date: todayStr(), url:'', url_params:'', notes:'' })
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -775,11 +776,19 @@ const dialogNameInput = ref(null)
 const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 // 仅当选中的是真实年份标签时才预填观看日期（排除「全部年份」「未分类」两个哨兵值）
+
+// 判断是否为「真实年份」（而非全部 / 未分类这类虚拟分组）
 const isRealYear = (y) => !!y && y !== '__all__' && y !== '__unclassified__'
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name:'', watch_date: isRealYear(selectedYear.value) ? selectedYear.value : '', url:'', url_params:'', notes:'' }
+  // 默认日期：在某个**真实年份**视图下添加时填该年份（保留原有的便利性）；
+  // 其余情况（全部 / 未分类）回落为今天。
+  form.value = {
+    name:'',
+    watch_date: isRealYear(selectedYear.value) ? selectedYear.value : todayStr(),
+    url:'', url_params:'', notes:''
+  }
   formTime.value = ''
   formDateValidationError.value = ''
   formShowTimePicker.value = false

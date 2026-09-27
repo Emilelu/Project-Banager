@@ -49,11 +49,11 @@
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-danger animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
         已选择 <span class="font-bold">{{ checkedIds.length }}</span> 项
       </div>
       <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-primary animate-pulse-soft"></span>
+        <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
         当前选中: <span class="font-bold gradient-text">{{ selected.name }}</span>
       </div>
     </div>
@@ -82,7 +82,7 @@
         <tbody>
           <tr v-if="paginatedList.length === 0">
             <td :colspan="batchMode ? 5 : 4" class="py-16 text-center text-gray-400">
-              <div class="text-4xl mb-3 animate-float">📭</div>
+              <div class="text-4xl mb-3">📭</div>
               <div>{{ searchQuery ? '没有找到匹配的记录' : '暂无等番记录' }}</div>
             </td>
           </tr>
@@ -370,7 +370,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { remainingApi, batchApi } from '../db/api'
-import { dateInputToFormat, formatToDateInput, compareDateKey } from '../composables/useDatePicker'
+import { dateInputToFormat, formatToDateInput, compareDateKey, todayStr } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
 import { placeContextMenu } from '../composables/useContextMenu'
 
@@ -587,7 +587,8 @@ const saveBatchAdd = async () => {
   await fetchData()
 }
 
-const form = ref({ name: '', expected_date: '', url: '', url_params: '', notes: '' })
+// 新增时的默认预计日期 = 今天（编辑已有记录时仍沿用记录原值）
+const form = ref({ name: '', expected_date: todayStr(), url: '', url_params: '', notes: '' })
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -691,7 +692,7 @@ const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name: '', expected_date: '', url: '', url_params: '', notes: '' }
+  form.value = { name: '', expected_date: todayStr(), url: '', url_params: '', notes: '' }
   showDialog.value = true
   focusNameInput()
 }
