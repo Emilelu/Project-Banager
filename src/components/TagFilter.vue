@@ -16,10 +16,16 @@
       <Teleport to="body">
         <div v-if="open" class="fixed inset-0 z-[100]" @click="open = false"></div>
         <transition name="pop">
-          <div v-if="open" ref="menuRef" role="menu"
+          <!-- a11y：
+               · role=menu 必须配 aria-label —— 否则读屏只念「菜单」，不知道是什么菜单
+               · 打开后焦点进入菜单（否则键盘用户按 Enter 打开后，焦点还在按钮上，
+                 再按 Tab 就跑到下一个工具栏按钮，菜单项永远摸不到）
+               · Esc 关闭后焦点回到触发按钮（由 onKeydown 处理） -->
+          <div v-if="open" ref="menuRef" role="menu" :aria-label="tt('tags.filterLabel')"
             class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[12rem] max-h-[60vh] overflow-y-auto"
             style="--pop-origin-y: top; --pop-from-y: -6px"
-            :style="menuStyle">
+            :style="menuStyle"
+            @keydown="onMenuKeydown">
             <!-- 清空筛选 -->
             <button v-if="selected.length" type="button" @click="clearAll"
               class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-500 hover:bg-primary/10 transition whitespace-nowrap">
@@ -34,7 +40,7 @@
               class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
               :class="selected.includes(tag.name) ? 'font-semibold text-gray-800' : 'text-gray-600'">
               <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: tag.color || 'rgb(var(--c-primary))' }"></span>
-              <span class="flex-1">{{ tag.name }}</span>
+              <span class="flex-1">{{ tagLabel(tag, tt) }}</span>
               <span :class="selected.includes(tag.name) ? 'text-primary' : 'text-gray-300'">
                 <AppIcon v-if="selected.includes(tag.name)" scale="xs" name="check" />
               </span>
@@ -48,9 +54,9 @@
     <div v-if="selected.length" class="flex items-center gap-1 flex-wrap">
       <button v-for="name in selected" :key="name" type="button"
         class="tag-filter-chip"
-        :aria-label="tt('tags.removeFilterLabel', { name })"
+        :aria-label="tt('tags.removeFilterLabel', { name: displayTagNames(name, allTags, tt)[0] })"
         @click="toggleTag(name)">
-        {{ name }}<AppIcon scale="xs" name="close" class="ml-0.5 opacity-70" />
+        {{ displayTagNames(name, allTags, tt)[0] }}<AppIcon scale="xs" name="close" class="ml-0.5 opacity-70" />
       </button>
     </div>
   </div>
@@ -70,6 +76,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { tagsApi } from '../db/api'
 import { useI18n } from '../composables/useI18n'
+import { useTagLabel } from '../composables/useTagLabel'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -77,6 +84,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const { tt } = useI18n()
+const { tagLabel, displayTagNames } = useTagLabel()
 
 const allTags = ref([])
 const open = ref(false)
@@ -108,11 +116,55 @@ const measureMenu = () => {
   menuPos.value = { left: Math.round(left), top: Math.round(top) }
 }
 
+/**
+ * 菜单内键盘导航（WAI-ARIA menu 模式的最小实现）：
+ *  - ↑/↓ 在菜单项之间移动焦点（两端循环），Home/End 跳到首/末项
+ *  - Esc 由文档级 onKeydown 关闭，并把焦点还给触发按钮
+ *  - Enter/Space 保持浏览器默认的「激活按钮」行为（button 自带）
+ * 不接管 Tab：menu 没有模态语义，Tab 离开是合规的。
+ *
+ * 用 DOM 查询而不是 Set<Element> 收集：菜单项会随筛选状态 / 标签列表变化而重建，
+ * Set 需要额外处理注册与注销，直接用当前 DOM 顺序最稳，也天然等于视觉顺序。
+ */
+const menuItemEls = () => {
+  const menu = menuRef.value
+  if (!menu) return []
+  return [...menu.querySelectorAll('[role^="menuitem"]')].filter((el) => el.getClientRects().length)
+}
+
+const focusMenuItem = (index) => {
+  const list = menuItemEls()
+  if (!list.length) return
+  const i = ((index % list.length) + list.length) % list.length
+  list[i].focus()
+}
+
+const onMenuKeydown = (e) => {
+  const list = menuItemEls()
+  if (!list.length) return
+  const idx = list.indexOf(document.activeElement)
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    focusMenuItem(idx < 0 ? 0 : idx + 1)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    focusMenuItem(idx < 0 ? list.length - 1 : idx - 1)
+  } else if (e.key === 'Home') {
+    e.preventDefault()
+    focusMenuItem(0)
+  } else if (e.key === 'End') {
+    e.preventDefault()
+    focusMenuItem(list.length - 1)
+  }
+}
+
 const toggle = async () => {
   open.value = !open.value
   if (open.value) {
     await nextTick()
     measureMenu()
+    // 打开后把焦点送进第一项：键盘用户按 Enter / Space 打开也能立刻在菜单里移动
+    focusMenuItem(0)
   }
 }
 
@@ -142,7 +194,11 @@ const onDocClick = (e) => {
   open.value = false
 }
 const onKeydown = (e) => {
-  if (e.key === 'Escape' && open.value) open.value = false
+  if (e.key === 'Escape' && open.value) {
+    open.value = false
+    // 关闭后焦点归还触发按钮：否则焦点此时落在已被移除的菜单项上，会退回 body
+    nextTick(() => triggerRef.value?.focus?.())
+  }
 }
 const onResize = () => { if (open.value) measureMenu() }
 
@@ -174,7 +230,7 @@ defineExpose({ loadTags })
 .tag-filter-trigger.tag-filter-active {
   border-color: rgb(var(--c-primary));
   color: rgb(var(--c-primary));
-  background: rgba(var(--c-primary), 0.1);
+  background: rgb(var(--c-primary) / 0.1);
 }
 .tag-filter-chip {
   display: inline-flex;
@@ -183,18 +239,18 @@ defineExpose({ loadTags })
   border-radius: 0.5rem;
   font-size: 0.6875rem;
   line-height: 1.25rem;
-  background: rgba(var(--c-primary), 0.12);
+  background: rgb(var(--c-primary) / 0.12);
   color: rgb(var(--c-primary-dark));
-  border: 1px solid rgba(var(--c-primary), 0.3);
+  border: 1px solid rgb(var(--c-primary) / 0.3);
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 .tag-filter-chip:hover {
-  background: rgba(var(--c-primary), 0.2);
+  background: rgb(var(--c-primary) / 0.2);
 }
 :global(.dark) .tag-filter-chip {
   color: rgb(var(--c-primary-light));
-  background: rgba(var(--c-primary-light), 0.16);
+  background: rgb(var(--c-primary-light) / 0.16);
 }
 </style>

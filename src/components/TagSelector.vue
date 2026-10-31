@@ -5,9 +5,9 @@
       <button v-for="tag in selected" :key="tag.name" type="button"
         class="tag-chip tag-chip-on"
         :style="{ '--tag-color': tag.color || 'rgb(var(--c-primary))' }"
-        :aria-label="tt('tags.removeLabel', { name: tag.name })"
+        :aria-label="tt('tags.removeLabel', { name: tagLabel(tag, tt) })"
         @click="removeTag(tag.name)">
-        {{ tag.name }}<AppIcon scale="xs" name="close" class="ml-0.5 opacity-70" />
+        {{ tagLabel(tag, tt) }}<AppIcon scale="xs" name="close" class="ml-0.5 opacity-70" />
       </button>
     </div>
 
@@ -17,12 +17,12 @@
         class="tag-chip tag-chip-off"
         :style="{ '--tag-color': tag.color || 'rgb(var(--c-primary))' }"
         @click="addTag(tag.name)">
-        {{ tag.name }}
+        {{ tagLabel(tag, tt) }}
       </button>
 
       <!-- 新建标签：内联输入，回车即建 -->
       <button v-if="!creating" type="button" @click="creating = true"
-        class="tag-chip tag-chip-add" :title="tt('tags.addNew')">
+        class="tag-chip tag-chip-add" v-tip="tt('tags.addNew')">
         <AppIcon scale="xs" name="plus" />{{ tt('tags.addShort') }}
       </button>
       <input v-else ref="newTagInput" v-model="newTagName" type="text"
@@ -53,6 +53,8 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { tagsApi } from '../db/api'
 import { useI18n } from '../composables/useI18n'
+import { useErrorText } from '../composables/useErrorText'
+import { useTagLabel } from '../composables/useTagLabel'
 import { showToast } from '../composables/useToast'
 
 const props = defineProps({
@@ -61,6 +63,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const { tt } = useI18n()
+const { errorText } = useErrorText()
+const { tagLabel } = useTagLabel()
 
 const allTags = ref([])       // 全部标签（含内置与自定义）
 const creating = ref(false)
@@ -132,7 +136,7 @@ const createTag = async () => {
       cancelCreate()
       hint.value = ''
     } else {
-      hint.value = res?.data?.error || tt('tags.createFailed')
+      hint.value = errorText(res?.data, tt, 'tags.createFailed')
     }
   } catch (e) {
     hint.value = e?.message || tt('tags.createFailed')
@@ -176,10 +180,17 @@ defineExpose({ loadTags, startCreate })
   filter: brightness(1.1);
 }
 
-/* 未选：淡色底 + 同色文字 */
+/* 未选：淡色底 + **同色但显著压暗**的文字。
+   为什么不直接 `color: var(--tag-color)`：标签色是 500 级高饱和色
+   （#EF4444 / #10B981 / #EC4899 / #8B5CF6…），压在「12% 同色淡底 + 白色玻璃」上
+   实测约 2.5:1，远低于正文 4.5:1。
+   与黑色的混合比例是**按最差色相反推**的：只混 72% 时紫/青/灰几档仍只有 3.3~4.1:1
+   （实测 日常 3.8 / 科幻 4.07 / 搞笑 3.35 / 治愈 3.74），压到 55% 后全部 ≥4.6:1。
+   代价是颜色更沉，但保留了色相区分度，且「已选/未选」仍靠底色的有无来区分。
+   深色模式在下方另有规则反转为亮阶。 */
 .tag-chip-off {
   background: color-mix(in srgb, var(--tag-color) 12%, transparent);
-  color: var(--tag-color);
+  color: color-mix(in srgb, var(--tag-color) 55%, black);
   border: 1px solid color-mix(in srgb, var(--tag-color) 30%, transparent);
 }
 .tag-chip-off:hover {
@@ -190,14 +201,16 @@ defineExpose({ loadTags, startCreate })
 .tag-chip-add {
   background: transparent;
   color: rgb(var(--c-primary));
-  border: 1px dashed rgba(var(--c-primary), 0.45);
+  border: 1px dashed rgb(var(--c-primary) / 0.45);
 }
 .tag-chip-add:hover {
-  background: rgba(var(--c-primary), 0.08);
+  background: rgb(var(--c-primary) / 0.08);
 }
 
-/* 深色模式下未选标签的淡底需要更亮，否则看不见 */
+/* 深色模式下未选标签：淡底提亮（否则看不见），文字同步反转为亮阶，
+   避免沿用浅色模式的深阶字压在深紫卡片上（深字压深底同样不可读）。 */
 :global(.dark) .tag-chip-off {
   background: color-mix(in srgb, var(--tag-color) 22%, transparent);
+  color: color-mix(in srgb, var(--tag-color) 55%, white);
 }
 </style>

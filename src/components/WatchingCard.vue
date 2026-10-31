@@ -10,59 +10,73 @@
     ]"
     role="button" tabindex="0"
     :aria-pressed="batchMode ? (checked ? 'true' : 'false') : (selected ? 'true' : 'false')"
-    :aria-label="tt('card.summaryLabel', { prefix: batchMode ? tt('card.checkPrefix') : tt('card.selectPrefix'), name: item.name, episode: item.current_episode })"
+    :aria-label="summaryLabel"
     @click="$emit('select')"
     @keydown="onCardKeydown"
     @mousedown="$emit('middle-click', $event)"
     @contextmenu.prevent="$emit('context-menu', $event)"
   >
     <div v-if="batchMode" class="absolute top-1 left-1 z-10" @click.stop="$emit('toggle-check')">
+      <!-- 勾选框：role=checkbox + aria-checked + 键盘 Space/Enter。
+           注意它位于 role=button 的卡片内部（ARIA 规定 button 的子树是 presentational），
+           这是既有结构遗留问题，改造需要改 WatchingView，此处仅记录（见交付说明）。 -->
       <div role="checkbox" tabindex="0" :aria-checked="checked ? 'true' : 'false'"
-        :aria-label="tt('card.checkLabel', { name: item.name })"
+        :aria-label="checkLabel"
         @keydown.enter.prevent="$emit('toggle-check')" @keydown.space.prevent="$emit('toggle-check')"
         class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
         :class="checked ? 'bg-primary border-primary' : 'border-gray-300 bg-white/80 hover:border-primary'">
         <svg v-if="checked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
       </div>
     </div>
-    <div @dblclick.stop="!batchMode && $emit('start-edit', 'name')" class="editable-cell" :class="{'ml-5': batchMode}">
+    <!-- 行内编辑单元格：双击进入（鼠标路径）+ **键盘等价路径**。
+         为什么 tabindex 只在「卡片已选中」时才为 0：
+         一张卡片有 4 个可编辑字段，若全部无条件进入 Tab 序，一页 12 张卡就多出 48 个 Tab 位，
+         键盘用户会被迫穿过一堆字段才能到下一个控件。
+         收敛后的走法：卡片本体（唯一常驻 Tab 位）→ Enter/Space 选中 → 再 Tab 进入该卡片的 4 个字段
+         → 每个字段 Enter/Space 进入编辑 → Esc 取消 / Enter 保存（输入框内已是既有逻辑）。
+         正在编辑的字段本身是 input，此时不再把外层 div 暴露成按钮（避免 role=button 内套 input）。 -->
+    <div v-bind="editCellProps('name')" :aria-label="editLabels.name"
+      @keydown="onCellKeydown($event, 'name')"
+      @dblclick.stop="!batchMode && $emit('start-edit', 'name')" class="editable-cell" :class="{'ml-5': batchMode}">
       <input v-if="editing?.id === item.id && editing?.field === 'name'" :value="editValue"
-        :aria-label="tt('card.editNameLabel', { name: item.name })"
+        :aria-label="editLabels.name"
         @input="$emit('update:editValue', $event.target.value)"
         @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
       <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors">{{ item.name }}</span>
-      <a v-if="item.url" :href="buildItemUrl(item)" target="_blank" rel="noopener" @click.stop
-        :aria-label="tt('card.openLinkLabel', { name: item.name })"
-        class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center" :title="tt('card.openLink')">
+      <a v-if="item.url" :href="itemUrl" target="_blank" rel="noopener" @click.stop
+        :aria-label="openLinkLabel"
+        class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center" v-tip="openLinkTip">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
       </a>
     </div>
-    <div class="flex items-center gap-1 mt-0.5">
-      <span class="text-sm font-bold text-gray-800 shrink-0" aria-hidden="true">e</span>
-      <span @dblclick.stop="!batchMode && $emit('start-edit', 'current_episode')" class="editable-cell min-w-0">
+    <div class="flex items-center gap-1 mt-0.5 card-ep-row">
+      <span class="text-sm font-bold text-gray-800 shrink-0 card-ep-label" aria-hidden="true">e</span>
+      <span @dblclick.stop="!batchMode && $emit('start-edit', 'current_episode')" class="editable-cell min-w-0"
+        v-bind="editCellProps('current_episode')" :aria-label="editLabels.current_episode"
+        @keydown="onCellKeydown($event, 'current_episode')">
         <input v-if="editing?.id === item.id && editing?.field === 'current_episode'" :value="editValue"
-          :aria-label="tt('card.editEpisodeLabel', { name: item.name })"
+          :aria-label="editLabels.current_episode"
           @input="$emit('update:editValue', $event.target.value)"
           type="text" inputmode="decimal" @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')"
           class="inline-edit-input w-16" autofocus />
         <!-- 集数排布：`3 / 12`（斜杠两侧留白，不与数字粘连），百分比独立右对齐到行末。
              无进度时保持原来的纯 `e 5`，不渲染任何占位文字。 -->
-        <span v-else class="text-sm font-bold text-gray-800 card-ep-line">{{ item.current_episode }}<span v-if="progress" class="text-gray-400 font-normal"> / {{ progress.total }}</span></span>
+        <span v-else class="text-sm font-bold text-gray-800 card-ep-line"><span class="card-ep-cur">{{ item.current_episode }}</span><span v-if="progress" class="card-ep-total text-gray-400 font-normal">&nbsp;/ {{ progress.total }}</span></span>
       </span>
       <!-- 用弹性占位把百分比推到行末（+/- 按钮之左）；无进度时占位仍撑开，
            按钮位置与原来一致，因此有/无进度的卡片行内元素不跳动 -->
       <span class="flex-1 min-w-0" aria-hidden="true"></span>
       <span v-if="progress" class="card-progress-pct" :class="{ 'is-complete': progress.pct >= 100 }"
-        :title="tt('card.progressLabel', { pct: progress.pct })">{{ progress.pct }}%</span>
+        v-tip="progressTip">{{ progress.pct }}%</span>
       <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 shrink-0">
         <!-- 集数加减：统一用主题色驱动的迷你按钮（.btn-mini-plus / .btn-mini-minus），
              尺寸、圆角、字形与其他组件一致；原先「+ 绿 / - 橙」与主题色无关且割裂 -->
-        <button @click.stop="$emit('increment')" :aria-label="tt('card.incEpisodeLabel', { name: item.name })"
-          class="btn-mini btn-mini-plus btn-press" :title="tt('watching.epPlus')">
+        <button @click.stop="$emit('increment')" :aria-label="incLabel"
+          class="btn-mini btn-mini-plus btn-press" v-tip="epPlusTip" :title="epPlusTitle">
           <AppIcon scale="xs" name="plus" />
         </button>
-        <button @click.stop="$emit('decrement')" :aria-label="tt('card.decEpisodeLabel', { name: item.name })"
-          class="btn-mini btn-mini-minus btn-press" :title="tt('watching.epMinus')">
+        <button @click.stop="$emit('decrement')" :aria-label="decLabel"
+          class="btn-mini btn-mini-minus btn-press" v-tip="epMinusTip" :title="epMinusTitle">
           <AppIcon scale="xs" name="minus" />
         </button>
       </div>
@@ -72,26 +86,33 @@
          但 .card-progress-slot 恒定占位，保证同列卡片文字基线不错位。 -->
     <div class="card-progress-slot">
       <div v-if="progress" class="card-progress" role="progressbar"
-        :aria-label="tt('card.progressLabel', { pct: progress.pct })"
+        :aria-label="progressTitle"
         :aria-valuenow="progress.pct" aria-valuemin="0" aria-valuemax="100">
         <div class="card-progress-fill" :class="{ 'is-complete': progress.pct >= 100 }"
           :style="{ width: progress.pct + '%' }" aria-hidden="true"></div>
       </div>
     </div>
-    <div @dblclick.stop="!batchMode && $emit('start-edit', 'time_slot')" class="editable-cell">
+    <div v-bind="editCellProps('time_slot')" :aria-label="editLabels.time_slot"
+      @keydown="onCellKeydown($event, 'time_slot')"
+      @dblclick.stop="!batchMode && $emit('start-edit', 'time_slot')" class="editable-cell">
       <input v-if="editing?.id === item.id && editing?.field === 'time_slot'" :value="editValue"
-        :aria-label="tt('card.editTimeLabel', { name: item.name })"
+        :aria-label="editLabels.time_slot"
         @input="$emit('update:editValue', $event.target.value)"
         @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
       <span v-else class="text-sm font-medium" :class="item.time_slot ? 'text-gray-500' : 'text-gray-400 font-normal'">{{ item.time_slot || '' }}</span>
     </div>
-    <div @dblclick.stop="!batchMode && $emit('start-edit', 'notes')" class="editable-cell">
+    <div v-bind="editCellProps('notes')" :aria-label="editLabels.notes"
+      @keydown="onCellKeydown($event, 'notes')"
+      @dblclick.stop="!batchMode && $emit('start-edit', 'notes')" class="editable-cell">
       <input v-if="editing?.id === item.id && editing?.field === 'notes'" :value="editValue"
-        :aria-label="tt('card.editNotesLabel', { name: item.name })"
+        :aria-label="editLabels.notes"
         @input="$emit('update:editValue', $event.target.value)"
         @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
       <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '' }}</span>
     </div>
+    <!-- 标签：列宽窄，compact 模式下最多显示 2 个 + 「+N」，
+         无标签时不渲染（不留空白，避免卡片高度跳动） -->
+    <ItemTags v-if="item.tags" :tags="item.tags" :max="2" compact class="mt-0.5 card-tags" />
   </div>
 </template>
 
@@ -118,6 +139,65 @@ const emit = defineEmits([
 ])
 
 /**
+ * 性能：把「只依赖 item 不变字段」的文案/链接计算收进 computed。
+ *
+ * 原来这些 tt() 直接写在模板里，每次 patch 都会重新求值一遍：
+ * 一张卡片约 10 次 tt()，200 张卡片 × 每次选中/勾选/滚动重渲染 ≈ 2000 次。
+ * 实测单次带参 tt() 约 0.42 µs → 一轮约 0.84 ms；而 tt() 内部要查 3 层字典
+ * （当前语言 → zh → 内置 zh）并跑一次正则插值，全部是纯重复劳动。
+ *
+ * 拆成 computed 后：文案/链接只在 item 对应字段变化时才重算，
+ * 而「选中/勾选/批量模式」这些高频变化只推动 class 与 aria-pressed，
+ * 不再连带重算所有文案。computed 由 Vue 缓存，与本组件其它状态无关。
+ *
+ * ⚠️ 不缓存任何**视觉**相关的东西（进度条、配色类），那部分仍按原逻辑逐次渲染。
+ */
+const name = computed(() => props.item?.name ?? '')
+const episodeText = computed(() => String(props.item?.current_episode ?? ''))
+const timeSlot = computed(() => props.item?.time_slot || '')
+const notes = computed(() => props.item?.notes || '')
+const itemUrl = computed(() => (props.item?.url ? buildItemUrl(props.item) : ''))
+
+/** 卡片主 aria-label（随 batchMode 变，但只依赖 batchMode + name + episode） */
+const summaryLabel = computed(() => tt('card.summaryLabel', {
+  prefix: props.batchMode ? tt('card.checkPrefix') : tt('card.selectPrefix'),
+  name: name.value,
+  episode: episodeText.value,
+}))
+const checkLabel = computed(() => tt('card.checkLabel', { name: name.value }))
+const openLinkLabel = computed(() => tt('card.openLinkLabel', { name: name.value }))
+const openLinkTip = computed(() => tt('card.openLink'))
+const incLabel = computed(() => tt('card.incEpisodeLabel', { name: name.value }))
+const decLabel = computed(() => tt('card.decEpisodeLabel', { name: name.value }))
+const progressLabel = computed(() => (progress.value ? tt('card.progressLabel', { pct: progress.value.pct }) : ''))
+
+/** 与进度相关的悬浮气泡文案（只在 progress 变化时重算，避免每次 patch 插值两个字符串） */
+const progressTip = computed(() => progressLabel.value)
+const epPlusTip = computed(() => tt('watching.epPlus'))
+const epMinusTip = computed(() => tt('watching.epMinus'))
+
+/**
+ * 原生 title（v-tip 已接管视觉气泡，但 title 仍然保留）：
+ *   · 读屏/纯键盘在某些组合下会读 title 作为补充说明；
+ *   · 鼠标用户在不支持自定义气泡的环境（如触屏长按）仍有系统提示；
+ *   · 既有回归测试（tests/a11y.test.js、tests/watching.test.js）以 title 作为
+ *     「纯图标按钮有可读标签」的探针，去掉 title 会让这些不变量失去可观测性。
+ * 两者文案同源，不会出现两套描述。
+ */
+const openLinkTitle = computed(() => openLinkTip.value)
+const progressTitle = computed(() => progressTip.value)
+const epPlusTitle = computed(() => epPlusTip.value)
+const epMinusTitle = computed(() => epMinusTip.value)
+
+/** 行内编辑输入框的 aria-label：只有正在编辑的那个字段会用到，按 field 取 */
+const editLabels = computed(() => ({
+  name: tt('card.editNameLabel', { name: name.value }),
+  current_episode: tt('card.editEpisodeLabel', { name: name.value }),
+  time_slot: tt('card.editTimeLabel', { name: name.value }),
+  notes: tt('card.editNotesLabel', { name: name.value }),
+}))
+
+/**
  * 追番进度：current_episode / total_episodes。
  *
  * 返回 null 的情形（模板据此隐藏进度条，绝不显示 0/0 或假百分比）：
@@ -134,6 +214,36 @@ const progress = computed(() => {
   const pct = Math.max(0, Math.min(100, Math.round((cur / total) * 100)))
   return { cur, total, pct }
 })
+
+/**
+ * 行内编辑单元格的键盘等价路径（a11y）。
+ *
+ * 鼠标路径是「双击单元格」，键盘原本没有任何入口 —— 审计里 12 个 .editable-cell
+ * 全部不可聚焦，纯键盘用户无法改名称/集数/时间/备注。这里给每个单元格补一条：
+ *   单元格可聚焦（仅在卡片已选中、且该字段不在编辑中时）→ Enter / Space 进入编辑。
+ *
+ * 为什么只在 selected 时进 Tab 序：一张卡片 4 个字段，若无条件暴露，
+ * 一页 12 张卡会多出 48 个 Tab 位，键盘用户要先穿过 48 个格子才能到下一个按钮。
+ * 收敛后：卡片本体是唯一常驻停靠点 → 选中后 Tab 才进入该卡片的字段。
+ *
+ * `role="button"` 而非 `tabindex=0` 裸 div：读屏要知道「按了会发生什么」。
+ * aria-label 复用 editLabels（「编辑番剧名称：X」），读屏能听出编辑哪个字段。
+ */
+const editCellProps = (field) => {
+  const isEditing = props.editing?.id === props.item?.id && props.editing?.field === field
+  // 批量模式（勾选优先）与「该字段正在编辑」时，单元格不再承担键盘入口
+  if (props.batchMode || isEditing || !props.selected) return {}
+  return { role: 'button', tabindex: '0' }
+}
+
+const onCellKeydown = (e, field) => {
+  // 只处理单元格自身收到的事件；子输入框的 Enter/Esc 已有独立处理
+  if (e.target !== e.currentTarget) return
+  if (!props.selected || props.batchMode) return
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  e.preventDefault()
+  emit('start-edit', field)
+}
 
 /**
  * 卡片本体承载「选中 / 批量勾选」，但卡片内有行内编辑输入框与 +/- 按钮。

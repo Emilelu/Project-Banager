@@ -41,6 +41,13 @@ const routes = [
     name: 'Appearance',
     component: () => import('../views/AppearanceView.vue'),
     meta: { title: '主题与背景', icon: 'palette' }
+  },
+  {
+    // 导入与导出合并到同一页面：导入走系统文件对话框自动识别格式，导出需显式选择格式
+    path: '/transfer',
+    name: 'Transfer',
+    component: () => import('../views/ImportExportView.vue'),
+    meta: { title: '导入 & 导出', icon: 'swap' }
   }
 ]
 

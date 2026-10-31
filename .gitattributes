@@ -1,0 +1,43 @@
+# ============================================================
+# 统一编码与换行，避免跨平台/跨编辑器破坏中文
+# ============================================================
+# 背景：本机 PowerShell 5.1 的 ACP 是 936(GBK)，曾多次把源文件里的
+# 中文注释写成乱码，并伴随 CRLF/LF 混用导致整个文件被 git 当作全量重写。
+#
+# 这里显式声明：
+#   · 源码一律 UTF-8、LF 换行（仓库内唯一真相）
+#   · 二进制文件不做任何转换
+#   · 校验时把文本文件当文本处理
+
+* text=auto eol=lf
+
+# —— 源码 ——
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.vue   text eol=lf
+*.css   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.html  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+
+# —— 二进制：绝不能做换行/编码转换 ——
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.gif   binary
+*.ico   binary
+*.xlsx  binary
+*.xls   binary
+*.db    binary
+*.sqlite binary
+*.wasm  binary
+*.woff  binary
+*.woff2 binary
+
+# —— 构建产物：保留为二进制，避免 git 尝试 diff 巨型单文件 HTML ——
+dist/index.html -text -diff

@@ -75,99 +75,42 @@
         </div>
       </nav>
 
-      <!-- 底部数据操作：收起时改为竖排图标按钮，与导航图标列对齐 -->
-      <div class="relative z-10 border-t border-white/10 space-y-2"
+      <!-- 底部：壁纸开关 + 深浅切换（原「导入/导出」按钮已迁到 /transfer 页面）。
+           这两个原本在顶栏右侧，按要求移到这里；「数据」分区标题也随之删除
+           （导入导出已不是底部按钮，而是「设置」分区下的一个导航项）。 -->
+      <div class="relative z-10 border-t border-white/10"
         :class="sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-3'">
-        <!-- 第三分区标题「数据」：导入 / 导出其实就在这个分区里，
-             但它们已经是底部常驻按钮，不再作为导航项重复出现在 navGroups
-             （旧「导入Excel」导航项已删除，Excel 导入改由这里的导入菜单触发）。
-             标题样式与上面 navGroups 的分区标题保持一致；收起时同样隐藏，
-             改由容器上的 border-t 作分隔。 -->
-        <div v-if="!sidebarCollapsed"
-          class="px-3 text-[0.6875rem] font-semibold uppercase tracking-wider text-white/40">
-          {{ tt('nav.groupData') }}
-        </div>
-        <!-- 导入 / 导出：两枚同级按钮，各自弹出菜单。
-             「能导出什么就能导入什么」—— 导出菜单有 5 种格式，导入菜单同样列 5 种。
-             原先「导出备份」与「导出数据」功能重复（.db 已在导出菜单里），已合并为一。
-             ⚠️ 两枚按钮的文案必须同长度（都只留两字 / 一个词）：
-             grid-cols-2 让两枚按钮天然等宽，文案长度不一就会把长的那枚截断成省略号。
-             测量脚本 tests/e2e/verify-sb-*.mjs 守住「等宽 + 不截断」这条不变量。 -->
         <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'grid grid-cols-2 gap-2'">
-          <!-- 导入 -->
-          <div class="relative">
-            <button ref="importTriggerRef" @click="toggleImportMenu"
-              class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-              :aria-label="tt('sidebar.import')"
-              :aria-expanded="showImportMenu" aria-haspopup="menu"
-              @mouseenter="sidebarCollapsed && showSidebarTip($event, tt('sidebar.import'))"
-              @mouseleave="hideSidebarTip"
-              @focus="sidebarCollapsed && showSidebarTip($event, tt('sidebar.import'))"
-              @blur="hideSidebarTip">
-              <AppIcon scale="sm" name="folderOpen" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.importShort') }}</span>
-              <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showImportMenu ? 'caretUp' : 'caretDown'" />
-            </button>
-            <Teleport to="body">
-              <div v-if="showImportMenu" class="fixed inset-0 z-[100]" @click="showImportMenu = false"></div>
-              <transition name="pop">
-                <div v-if="showImportMenu" ref="importMenuRef" role="menu"
-                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
-                  style="--pop-origin-y: top; --pop-from-y: -6px" :style="importMenuStyle">
-                  <button v-for="fmt in importFormats" :key="fmt.key" role="menuitem"
-                    @click="importData(fmt.key)"
-                    class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
-                    <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
-                    <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
-                  </button>
-                </div>
-              </transition>
-            </Teleport>
-          </div>
+          <!-- 壁纸背景开关。
+               需求三：气泡固定显示在按钮**正上方**，内容是**当前状态**（开启/关闭），
+               而不是「点击会发生什么」；所以这里传 bgStateLabel。 -->
+          <button @click="onToggleBg"
+            class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+            :class="{ 'opacity-50': !bgActive }"
+            :aria-pressed="appearance.state.bgEnabled ? 'true' : 'false'"
+            :aria-label="bgActive ? tt('topbar.bgOff') : tt('topbar.bgOn')"
+            @mouseenter="sidebarCollapsed && showSidebarTip($event, bgStateLabel, 'top')"
+            @mouseleave="hideSidebarTip"
+            @focus="sidebarCollapsed && showSidebarTip($event, bgStateLabel, 'top')"
+            @blur="hideSidebarTip">
+            <AppIcon scale="sm" :name="bgActive ? 'image' : 'imageOff'" />
+            <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.bgToggle') }}</span>
+          </button>
 
-          <!-- 导出 -->
-          <div class="relative">
-            <button ref="exportTriggerRef" @click="toggleExportMenu"
-              class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-              :aria-label="tt('sidebar.exportData')"
-              :aria-expanded="showExportMenu" aria-haspopup="menu"
-              @mouseenter="sidebarCollapsed && showSidebarTip($event, tt('sidebar.exportData'))"
-              @mouseleave="hideSidebarTip"
-              @focus="sidebarCollapsed && showSidebarTip($event, tt('sidebar.exportData'))"
-              @blur="hideSidebarTip">
-              <AppIcon scale="sm" name="log" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportDataShort') }}</span>
-              <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showExportMenu ? 'caretUp' : 'caretDown'" />
-            </button>
-            <Teleport to="body">
-              <div v-if="showExportMenu" class="fixed inset-0 z-[100]" @click="showExportMenu = false"></div>
-              <transition name="pop">
-                <div v-if="showExportMenu" ref="exportMenuRef" role="menu"
-                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
-                  :style="exportMenuStyle">
-                  <button v-for="fmt in exportFormats" :key="fmt.key" role="menuitem"
-                    @click="exportData(fmt.key)"
-                    class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
-                    <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
-                    <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
-                  </button>
-                </div>
-              </transition>
-            </Teleport>
-          </div>
+          <!-- 深浅模式切换（浅/深/自动 三态循环）。
+               需求三：气泡固定在按钮正上方，文案为 themeLabel（浅色 / 深色 / 跟随系统）。 -->
+          <button @click="toggleTheme"
+            class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+            :aria-label="themeLabel"
+            @mouseenter="sidebarCollapsed && showSidebarTip($event, themeLabel, 'top')"
+            @mouseleave="hideSidebarTip"
+            @focus="sidebarCollapsed && showSidebarTip($event, themeLabel, 'top')"
+            @blur="hideSidebarTip">
+            <AppIcon scale="sm" :name="themeIconName" />
+            <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.themeToggle') }}</span>
+          </button>
         </div>
-        <!-- 上次备份时间：收进导出按钮的悬浮气泡，不再单独占一行 -->
-        <Teleport to="body">
-          <div id="backup-tip" ref="backupTipRef" role="tooltip"
-            class="pointer-events-none fixed z-[120] px-3 py-2 rounded-xl app-menu-surface border border-white/40 text-xs transition-opacity duration-200 max-w-[min(22rem,calc(100vw-1rem))]"
-            :class="showBackupTip ? 'opacity-100' : 'opacity-0'"
-            :style="backupTipStyle">
-            <span :class="backupWarning ? 'text-amber-800 font-semibold' : 'text-gray-700 font-medium'">
-              {{ tt('sidebar.lastBackup') }}：{{ backupLabel }}
-            </span>
-            <span v-if="backupWarning" class="flex items-center gap-1 text-amber-800 font-semibold mt-0.5"><AppIcon scale="xs" name="warning" />{{ tt('sidebar.backupWarning') }}</span>
-          </div>
-        </Teleport>
-        <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak,.xlsx,.xls,.csv,.json,.md" class="hidden" @change="onBackupFileChosen" />
-        <div v-if="!sidebarCollapsed" class="flex items-center justify-center gap-2 text-white/30 text-xs">
+        <div v-if="!sidebarCollapsed" class="mt-2 flex items-center justify-center gap-2 text-white/30 text-xs">
           <AppIcon scale="xs" name="sparkle" />
           <span>{{ appVersion }}</span>
           <AppIcon scale="xs" name="sparkle" />
@@ -175,13 +118,19 @@
       </div>
     </aside>
 
-    <!-- sidebar tooltip: shown only when sidebar collapsed -->
+    <!-- sidebar tooltip: shown only when sidebar collapsed（侧栏收起态气泡）。
+         placement 决定垂直基准：right 模式用 translateY(-50%) 垂直居中，
+         top 模式不再居中（坐标已是气泡顶边，居中会让它整体上移压到按钮上）。 -->
     <Teleport to="body">
       <transition name="fade">
-        <div v-if="sidebarTip.show" role="tooltip"
+        <div v-if="sidebarTip.show" id="sidebar-tip" role="tooltip"
           class="pointer-events-none fixed z-[130] px-2.5 py-1.5 rounded-lg app-menu-surface border border-white/40
                  text-xs font-medium text-gray-700 whitespace-nowrap shadow-lg"
-          :style="{ left: sidebarTip.left + 'px', top: sidebarTip.top + 'px', transform: 'translateY(-50%)' }">
+          :style="{
+            left: sidebarTip.left + 'px',
+            top: sidebarTip.top + 'px',
+            transform: sidebarTip.placement === 'top' ? 'none' : 'translateY(-50%)',
+          }">
           {{ sidebarTip.text }}
         </div>
       </transition>
@@ -191,53 +140,54 @@
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- 顶部栏 -->
       <header class="h-14 flex items-center justify-between px-6 glass shadow-sm border-b border-white/20">
-        <h1 class="text-lg font-bold gradient-text flex items-center gap-2">
-          <AppIcon scale="md" :name="currentIcon" />
-          {{ currentTitle }}
-        </h1>
+        <!-- 页面标题：跟随路由做淡入淡出 + 轻微位移。
+             图标与文字**放在同一个过渡块里**，保证「同时淡出、同时淡入」，不会一个先一个后。
+             mode="out-in"：旧标题先退场，新标题再进场，杜绝两块标题重叠挤压布局。
+             不做读屏播报（页面内内容本身已变化），故不加 aria-live。 -->
+        <transition name="title-swap" mode="out-in">
+          <h1 :key="currentTitle" class="text-lg font-bold gradient-text flex items-center gap-2">
+            <AppIcon scale="md" :name="currentIcon" />
+            {{ currentTitle }}
+          </h1>
+        </transition>
         <div class="flex items-center gap-3">
-          <!-- 图标统一用内联 SVG（stroke=currentColor），与毛玻璃/极简风格一致；
-               emoji 在不同平台字重/基线不一致，会和界面其它元素违和 -->
-          <button @click="onToggleBg"
+          <!-- 壁纸开关与深浅切换已按要求移到侧边栏左下角（替代原「导入/导出」按钮位置），
+               顶栏不再保留这两个入口，避免同一功能两处重复。 -->
+          <!-- 标签管理与主题背景已改为侧边导航中的独立页面（/tags 与 /appearance），
+               顶栏不再保留入口，避免同一功能有两个入口造成困惑。 -->
+          <!-- ===== 需求一：语言按钮与 GitHub 按钮互换横向位置 =====
+               原顺序：语言(1209) → 帮助(1251) → GitHub(1293) → 时钟(1335)。
+               互换「彼此的位置」= 语言占 GitHub 的格子、GitHub 占语言的格子；
+               两块都是 36px 宽，所以右侧组总宽不变 → 帮助与时钟零位移。
+               用 flex order 显式插槽（默认 order=0）：1=GitHub(原语言位 1209) 2=帮助(原位 1251)
+               3=语言(原 GitHub 位 1293) 4=时钟(原位 1335)。
+               注：只把语言挪到 GitHub 右侧虽然也反了左右关系，却会把帮助挤左 42px，
+               那不叫"互换彼此位置"，故用 order 精确占位。 -->
+          <button @click="showHelp = true"
+            style="order: 2"
             class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
-            :class="{ 'opacity-45': !bgActive }"
-            :aria-label="bgActive ? tt('topbar.bgOn') : tt('topbar.bgOff')"
-            :aria-pressed="bgActive ? 'true' : 'false'"
-            :title="bgActive ? tt('topbar.bgOn') : tt('topbar.bgOff')">
+            :aria-label="tt('help.open')"
+            :title="tt('help.open')">
             <svg class="w-5 h-5 transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-              <!-- 关闭态：斜杠覆盖，一眼可辨 -->
-              <path v-if="!bgActive" d="M3 3l18 18" stroke-width="2.5" />
-            </svg>
-          </button>
-          <!-- 主题设置已改为侧边导航中的 /appearance 页面，顶栏不再保留入口。
-               （上一轮迁移时遗漏了这个按钮，导致同一功能在顶栏和侧栏各有一个入口。） -->
-
-          <button @click="toggleTheme"
-            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
-            :aria-label="themeLabel"
-            :title="themeLabel">
-            <!-- 三态：太阳 / 月亮 / 自动（半明半暗） -->
-            <svg v-if="theme === 'light'" class="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="4.5" />
-              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-            </svg>
-            <svg v-else-if="theme === 'dark'" class="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-            </svg>
-            <svg v-else class="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
-              <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" opacity="0.55" />
+              <path d="M9.1 9a3 3 0 1 1 4.2 3.2c-.9.5-1.3 1.1-1.3 2.1" />
+              <circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none" />
             </svg>
           </button>
-          <!-- 语言切换：图标按钮 + 下拉菜单（直接选目标语言，比轮换更直观） -->
-          <div class="relative">
+          <!-- GitHub 仓库链接：外链按钮，样式与其它顶栏图标一致。
+               需求一：order 1 —— 落到语言原来的槽位（右侧组最左，帮助左边）。 -->
+          <a :href="REPO_URL" target="_blank" rel="noopener noreferrer"
+            style="order: 1"
+            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
+            :aria-label="tt('topbar.github')"
+            :title="tt('topbar.github')">
+            <AppIcon scale="md" name="github" class="transition-transform duration-300 group-hover:scale-110" />
+          </a>
+          <!-- 语言切换：图标按钮 + 下拉菜单（直接选目标语言，比轮换更直观）。
+               需求一：order 2 —— 占用 GitHub 原来的槽位（帮助与时钟之间）。
+               互换后：GitHub 1251 → 语言 1293，帮助/时钟原地不动。 -->
+          <div class="relative" style="order: 2">
             <button ref="langBtnRef" @click="toggleLangMenu"
               class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
               :class="{ 'bg-primary/10': showLangMenu }"
@@ -283,31 +233,15 @@
               </transition>
             </Teleport>
           </div>
-          <!-- 标签管理与主题背景已改为侧边导航中的独立页面（/tags 与 /appearance），
-               顶栏不再保留入口，避免同一功能有两个入口造成困惑。 -->
-          <!-- 帮助：键盘快捷键 + 操作小贴士，统一收纳在弹窗里，不占页面空间 -->
-          <button @click="showHelp = true"
-            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
-            :aria-label="tt('help.open')"
-            :title="tt('help.open')">
-            <svg class="w-5 h-5 transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M9.1 9a3 3 0 1 1 4.2 3.2c-.9.5-1.3 1.1-1.3 2.1" />
-              <circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
-          <!-- GitHub 仓库链接：外链按钮，样式与其它顶栏图标一致 -->
-          <a :href="REPO_URL" target="_blank" rel="noopener noreferrer"
-            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
-            :aria-label="tt('topbar.github')"
-            :title="tt('topbar.github')">
-            <AppIcon scale="md" name="github" class="transition-transform duration-300 group-hover:scale-110" />
-          </a>
-          <!-- 时钟：常驻只显示日期；悬浮/聚焦时气泡显示时分秒 -->
-          <div class="relative" tabindex="0"
-            @mouseenter="openTimeTip" @mouseleave="showTimeTip = false"
-            @focus="openTimeTip" @blur="showTimeTip = false"
+          <!-- 时钟：常驻只显示日期；悬浮/聚焦时气泡显示时分秒。
+               需求二：气泡定位锚点从「时钟元素」改为「鼠标指针」——
+               指针进入时记录坐标，之后在时钟区域内的每次 mousemove 都刷新记录值，
+               气泡恒在指针正下方（水平以指针为中心），并做视口夹取 / 下边翻上。 -->
+          <div class="relative" tabindex="0" style="order: 4"
+            @mouseenter="onClockEnter"
+            @mousemove="onClockMove"
+            @mouseleave="showTimeTip = false"
+            @focus="onClockFocus" @blur="showTimeTip = false"
             @click="openTimeTip"
             role="group" :aria-label="dateDisplay"
             aria-describedby="clock-tip">
@@ -424,6 +358,9 @@ import {
   downloadBlob, exportTimestamp,
 } from './db/excelExporter'
 import { importStructured } from './db/structuredImporter'
+// xlsx 导入走既有 Excel 导入器：它自带分段识别、超链接、年份列与「名称 (2025/07)」解析，
+// 比结构化导入器完整得多，因此导入菜单里的 Excel 项必须接到这里。
+import { importExcel } from './db/excelImporter'
 import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
 import HelpDialog from './components/HelpDialog.vue'
@@ -445,18 +382,62 @@ const showTimeTip = ref(false)
 // 收起后导航只剩图标，必须靠气泡告知"这个图标是什么"。
 // 用 Teleport + fixed 定位：侧栏 overflow 隐藏且带 backdrop-filter，
 // 在其内部做绝对定位会被裁掉。
-const sidebarTip = ref({ show: false, text: '', left: 0, top: 0 })
+//
+// 方向（placement）：
+//   'right' — 默认，贴在按钮右侧并垂直居中（nav 项 / logo 用这个）
+//   'top'   — 贴在按钮正上方、水平居中（侧栏左下角的「壁纸」「主题」用这个，
+//             它们贴屏幕底部，气泡放右侧会挤在外面，且要"在上方显示当前状态"）
+// 纵向空间不足时（气泡顶边会超出视口）自动翻到按钮下方，保证任何尺寸下都不溢出。
+const sidebarTip = ref({ show: false, text: '', left: 0, top: 0, placement: 'right' })
+// 上方模式下气泡以「中心点」为 left、以「底边」为 top 的候选值；
+// 真正写入前要先拿到气泡实测宽高，故记下锚点按钮的矩形供 measureSidebarTipTop 使用。
+let sidebarTipAnchor = null
 
-const showSidebarTip = (e, text) => {
+/**
+ * 上方模式定位（需求三）：气泡水平居中于按钮、贴在按钮正上方。
+ * 纵向空间不够（气泡顶边会超出视口）时翻到按钮下方，保证不纵向溢出；
+ * 横向同样夹进视口 —— 收起态侧栏只有 64px，而「壁纸/主题」的气泡文案
+ * （尤其中日文的「壁纸背景已开启」）比按钮宽得多，纯居中必然会探出屏幕左边，
+ * 因此夹取后气泡会靠右停靠（此时右边缘仍在侧栏内，视觉上仍然"在按钮上方"）。
+ */
+const measureSidebarTipTop = () => {
+  const a = sidebarTipAnchor
+  const tip = document.getElementById('sidebar-tip')
+  if (!a) return
+  const w = Math.max(tip?.offsetWidth || 0, tip?.getBoundingClientRect().width || 0)
+  const h = Math.max(tip?.offsetHeight || 0, tip?.getBoundingClientRect().height || 0)
+  const gap = 8
+  let left = a.left + a.width / 2 - w / 2
+  let top = a.top - h - gap
+  if (top < 8) top = a.bottom + gap
+  const pos = clampToViewport(left, top, w, h, 8)
+  sidebarTip.value = { ...sidebarTip.value, left: Math.round(pos.left), top: Math.round(pos.top) }
+}
+
+const showSidebarTip = (e, text, placement = 'right') => {
   if (!text) return
   const el = e?.currentTarget || e?.target
   const r = el?.getBoundingClientRect()
   if (!r) return
-  sidebarTip.value = {
-    show: true,
-    text,
-    left: Math.round(r.right + 8),
-    top: Math.round(r.top + r.height / 2),
+  sidebarTipAnchor = { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }
+  if (placement === 'top') {
+    // 上方模式：先落一个占位坐标让气泡渲染出来，下一帧再按实测宽高精确对齐
+    sidebarTip.value = {
+      show: true,
+      text,
+      placement: 'top',
+      left: Math.round(r.left + r.width / 2),
+      top: Math.round(r.top),
+    }
+    nextTick(() => measureSidebarTipTop())
+  } else {
+    sidebarTip.value = {
+      show: true,
+      text,
+      placement: 'right',
+      left: Math.round(r.right + 8),
+      top: Math.round(r.top + r.height / 2),
+    }
   }
 }
 
@@ -669,6 +650,10 @@ const backupTipRef = ref(null)
 const clockTipRef = ref(null)
 const backupTipPos = ref({ left: 0, top: 0 })
 const clockTipPos = ref({ left: 0, top: 0 })
+// 时钟气泡的锚点：鼠标指针坐标（需求二）。
+// 与「跟随时钟元素」的区别：指针不一定在元素中心，靠右/靠下时按元素定位会跑偏到视口外。
+// 取值优先级 = 最近一次指针坐标（若有）→ 时钟元素中心（键盘 focus / 无指针事件时兜底）。
+const clockPointer = ref(null)
 
 const clampToViewport = (left, top, w, h, margin = 8) => {
   const maxLeft = Math.max(margin, window.innerWidth - w - margin)
@@ -693,20 +678,59 @@ const measureBackupTip = (anchorEl) => {
   backupTipPos.value = clampToViewport(left, top, t.width, t.height)
 }
 
+/**
+ * 时钟气泡定位（需求二）：出现在**鼠标指针正下方**。
+ *   · 水平：以指针 x 为中心居中；靠近左右边缘时夹进视口（不会溢出）。
+ *   · 垂直：指针 y + gap；指针靠近屏幕下边缘时自动翻到指针上方。
+ * 锚点用的是指针坐标（clockPointer），不是时钟元素位置 —— 后者在指针靠右/靠下时
+ * 会把气泡推到视口外。仅当没有指针信息（键盘 focus 等）时退回元素中心。
+ */
 const measureClockTip = (anchorEl) => {
-  if (!anchorEl) return
   const tip = clockTipRef.value
   if (!tip) return
-  const a = anchorEl.getBoundingClientRect()
   // 气泡此时可能还是 opacity-0，宽高未必可信；用实测值加下限兜底
-  const w = Math.max(tip.getBoundingClientRect().width, tip.offsetWidth, 60)
-  const h = Math.max(tip.getBoundingClientRect().height, tip.offsetHeight, 24)
-  const gap = 6
-  // 右对齐到触发元素右边，再整体夹进视口
-  const left = a.right - w
-  let top = a.bottom + gap
-  if (top + h > window.innerHeight - 8) top = a.top - h - gap
-  clockTipPos.value = clampToViewport(left, top, w, h)
+  const t = tip.getBoundingClientRect()
+  const w = Math.max(t.width, tip.offsetWidth, 60)
+  const h = Math.max(t.height, tip.offsetHeight, 24)
+  const gap = 8
+  const margin = 8
+  let px, py
+  if (clockPointer.value) {
+    px = clockPointer.value.x
+    py = clockPointer.value.y
+  } else if (anchorEl) {
+    const a = anchorEl.getBoundingClientRect()
+    px = a.left + a.width / 2
+    py = a.bottom
+  } else {
+    return
+  }
+  // 水平以指针为中心；空间不足时 clampToViewport 会把它夹回来（靠右时等价于左翻）
+  const left = px - w / 2
+  // 默认在指针下方；下方放不下（指针贴近屏幕下边缘）就翻到指针上方
+  let top = py + gap
+  if (top + h > window.innerHeight - margin) top = py - h - gap
+  clockTipPos.value = clampToViewport(left, top, w, h, margin)
+}
+
+// 指针进入时钟：先记下坐标并打开气泡，DOM 就绪后再定位（气泡本身 pointer-events-none，不会挡事件）
+const onClockEnter = async (e) => {
+  clockPointer.value = { x: e.clientX, y: e.clientY }
+  showTimeTip.value = true
+  await nextTick()
+  measureClockTip(e.currentTarget)
+}
+// 时钟区域内移动：刷新指针坐标并重新定位，让气泡始终贴在指针下方
+const onClockMove = (e) => {
+  clockPointer.value = { x: e.clientX, y: e.clientY }
+  if (showTimeTip.value) measureClockTip(e.currentTarget)
+}
+// 键盘 focus 没有指针坐标 → 清掉旧坐标，退回按时钟元素定位
+const onClockFocus = async (e) => {
+  clockPointer.value = null
+  showTimeTip.value = true
+  await nextTick()
+  measureClockTip(e.currentTarget)
 }
 
 const backupTipStyle = computed(() => ({
@@ -725,12 +749,13 @@ watch(showBackupTip, async (on) => {
   const btn = backupTipRef.value?.parentElement?.querySelector('button')
   measureBackupTip(btn)
 })
-// 时钟气泡：先显示（让 DOM 可测量），再同步定位，避免依赖 watch 时序
-const openTimeTip = async () => {
+// 时钟气泡：先显示（让 DOM 可测量），再同步定位，避免依赖 watch 时序。
+// 无指针信息（如被程序化调用）时按时钟元素兜底定位。
+const openTimeTip = async (e) => {
   showTimeTip.value = true
   await nextTick()
-  const box = clockTipRef.value?.parentElement
-  if (box) measureClockTip(box)
+  const el = (e && (e.currentTarget || e.target)) || clockTipRef.value?.parentElement
+  measureClockTip(el)
 }
 
 // 顶栏语言按钮显示「点击后会切换到的语言」简称（中 → EN → 日 轮换）
@@ -804,6 +829,16 @@ const showHelp = ref(false)
 
 const appearance = useAppearance()
 const bgActive = computed(() => appearance.state.bgEnabled && !!appearance.state.bgUrl && !appearance.state.bgFailed)
+/**
+ * 壁纸按钮气泡的文案：**当前状态**（已开启 / 已关闭），供需求三使用。
+ * 复用「设置页」已有的 toast 文案 key（appearance.bgEnabledToast / bgDisabledToast，
+ * 三语都已存在，语义正好是「壁纸背景已开启 / 已关闭」），因此无需新增 i18n key。
+ *
+ * 判定用 state.bgEnabled（用户的开关意图），而不是 bgActive：
+ * 后者还要求「已取到图且没加载失败」，网络抖动时会瞬间翻成「已关闭」，
+ * 与用户刚点下的开关自相矛盾。按钮的 aria-pressed 也会同步成同一个开关状态。
+ */
+const bgStateLabel = computed(() => (appearance.state.bgEnabled ? tt('appearance.bgEnabledToast') : tt('appearance.bgDisabledToast')))
 const onToggleBg = () => { appearance.toggleBackground() }
 const { theme, isDark, toggleTheme } = useTheme()
 
@@ -899,7 +934,24 @@ function cancelImport() {
  */
 async function handleStructuredImport(file, kind) {
   try {
-    const res = await importStructured(file, kind)
+    // xlsx 走既有 Excel 导入器（它自带完整的分段/超链接/年份列解析）。
+    // 之前这里一律调 importStructured，而后者只支持 json/csv/md，
+    // 导致「导入菜单选 Excel」必然返回「不支持的格式：xlsx」—— 已修正。
+    let res
+    if (kind === 'xlsx') {
+      const excelRes = await importExcel(file)
+      // 把 Excel 导入器的返回结构适配成与结构化导入一致的形状，
+      // 这样结果弹窗对两种来源都能正确展示。
+      const ok = excelRes?.success !== false
+      res = {
+        imported: Number(excelRes?.importedCount ?? excelRes?.imported ?? 0),
+        failed: Number(excelRes?.errorCount ?? excelRes?.failed ?? (ok ? 0 : 1)),
+        errors: Array.isArray(excelRes?.errors) ? excelRes.errors : (excelRes?.message ? [excelRes.message] : []),
+        byTable: excelRes?.byTable || { watching: 0, remaining: 0, watched: 0 },
+      }
+    } else {
+      res = await importStructured(file, kind)
+    }
     importResult.value = res
     showImportResult.value = true
   } catch (e) {
@@ -962,9 +1014,23 @@ const themeLabel = computed(() => {
 })
 
 /**
+ * 侧边栏底部深浅切换按钮的图标名（三态）：
+ *   浅色 → sun（点了会变深）／深色 → moon／自动 → auto（半日半月）
+ * 与顶栏原三态图标保持同一套语义，这样用户从顶栏迁移过来不会有认知落差。
+ */
+const themeIconName = computed(() => {
+  if (theme.value === 'dark') return 'moon'
+  if (theme.value === 'light') return 'sun'
+  return 'auto'
+})
+
+/**
  * 侧边导航分区（可滚动区只放「番单」与「设置」两组）：
  *   lists     — 正在追番 / 等待更新 / 已看历史（日常主流程，最高频）
- *   appearance— 主题与背景 / 标签管理（低频设置项）
+ *   appearance— 标签管理 / 导入&导出 / 主题与背景（低频设置项）
+ *
+ * 需求四：appearance 分组内「标签管理」与「主题与背景」互换位置 ——
+ * 标签管理提到最前，主题与背景落到最后；「导入&导出」保持原位（中间）。
  *
  * 第三组「数据」（导入 / 导出）**故意不在 navGroups 里**：
  * 那两个入口是固定在侧栏底部的常驻按钮（见模板底部数据区），
@@ -989,8 +1055,12 @@ const navGroups = [
     key: 'appearance',
     labelKey: 'nav.groupAppearance',
     items: [
-      { path: '/appearance', labelKey: 'nav.appearance', icon: 'palette' },
+      // 标签管理（原第三位，现提到最前）：与「主题与背景」交换横向位置
       { path: '/tags', labelKey: 'nav.tags', icon: 'bookmark' },
+      // 「导入&导出」合并成单页，归在「设置」分区下（原先它是底部独立按钮组）
+      { path: '/transfer', labelKey: 'nav.transfer', icon: 'swap' },
+      // 主题与背景（原第一位，现落到最后）
+      { path: '/appearance', labelKey: 'nav.appearance', icon: 'palette' },
     ],
   },
 ]

@@ -12,6 +12,22 @@ let errorCount = 0
 let errors = []
 let sortCounter = 0
 
+// 与 ImportView 的上限保持一致（20MB）。放在文件头而不是散落在函数里，
+// 避免「视图拦一次、导入器拦一次」两个数字以后各自漂移。
+const MAX_FILE_BYTES = 20 * 1024 * 1024
+
+/**
+ * 把任意异常转成可读消息。
+ * 上游（sql.js / SheetJS）可能抛裸字符串（没有 .message），
+ * 直接拼 err.message 会得到 "undefined"，日志里留下一行无法排查的废话。
+ */
+function safeErrorMessage(err) {
+  if (!err) return '未知错误'
+  if (typeof err === 'string') return err
+  if (typeof err.message === 'string' && err.message) return err.message
+  try { return String(err) } catch { return '未知错误' }
+}
+
 // 让出主线程：大文件解析与逐行写入会长时间占用 UI 线程，
 // 每个批次之间 await 一次，浏览器有机会处理输入与重绘，页面不会"假死"。
 const yieldToUI = () => new Promise((resolve) => {
@@ -227,12 +243,12 @@ function importWatching(db, workbook) {
           }
         } catch (err) {
           errorCount++
-          errors.push(`追番『${parsed.name}』导入失败: ${err.message}`)
+          errors.push(`追番『${parsed.name}』导入失败: ${safeErrorMessage(err)}`)
         }
       }
     }
   } catch (err) {
-    errors.push('导入追番失败: ' + err.message)
+    errors.push('导入追番失败: ' + safeErrorMessage(err))
   }
 }
 
@@ -285,11 +301,11 @@ function importRemaining(db, workbook) {
         }
       } catch (err) {
         errorCount++
-        errors.push(`等番『${name}』导入失败: ${err.message}`)
+        errors.push(`等番『${name}』导入失败: ${safeErrorMessage(err)}`)
       }
     }
   } catch (err) {
-    errors.push('导入等番失败: ' + err.message)
+    errors.push('导入等番失败: ' + safeErrorMessage(err))
   }
 }
 
@@ -397,13 +413,13 @@ async function importWatched(db, workbook) {
             }
           } catch (err) {
             errorCount++
-            errors.push(`已看『${parsed.name}』(${year}) 导入失败: ${err.message}`)
+            errors.push(`已看『${parsed.name}』(${year}) 导入失败: ${safeErrorMessage(err)}`)
           }
         }
       }
     }
   } catch (err) {
-    errors.push('导入已看数据失败: ' + err.message)
+    errors.push('导入已看数据失败: ' + safeErrorMessage(err))
   }
 }
 
@@ -415,6 +431,18 @@ export async function importExcel(file, { onProgress } = {}) {
   errorCount = 0
   errors = []
   progressHook = onProgress || null
+
+  // 防御：调用方可能传进来 undefined / 非 File（例如 FormData 里没有 file 字段）。
+  // 直接 file.arrayBuffer() 会抛 TypeError，且消息只有 "file.arrayBuffer is not a function"，
+  // 用户完全不知道发生了什么。
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    return {
+      success: false,
+      message: '无法打开 Excel 文件',
+      imported: 0,
+      errors: ['没有拿到文件内容，请重新选择文件'],
+    }
+  }
 
   const db = await getDb()
   sortCounter = 0
@@ -430,9 +458,23 @@ export async function importExcel(file, { onProgress } = {}) {
   // 读取文件
   let workbook
   try {
-    const arrayBuffer = await file.arrayBuffer()
-    if (arrayBuffer.byteLength > 20 * 1024 * 1024) {
+    // 先按 file.size 拦一次：arrayBuffer() 会把整个文件读进内存，
+    // 50MB 的坏文件在内存紧张的低配机器上足以把页面直接 OOM 掉（白屏）。
+    const declaredSize = Number(file.size)
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_FILE_BYTES) {
       return { success: false, message: '文件超过 20MB', imported: 0, errors: ['文件超过 20MB，请拆分后再导入'] }
+    }
+    const arrayBuffer = await file.arrayBuffer()
+    if (arrayBuffer.byteLength > MAX_FILE_BYTES) {
+      return { success: false, message: '文件超过 20MB', imported: 0, errors: ['文件超过 20MB，请拆分后再导入'] }
+    }
+    if (arrayBuffer.byteLength === 0) {
+      return {
+        success: false,
+        message: '无法打开 Excel 文件',
+        imported: 0,
+        errors: ['文件是空的（0 字节），请选择有效的 .xlsx / .xls 文件'],
+      }
     }
     workbook = XLSX.read(arrayBuffer, {
       type: 'array',
@@ -446,7 +488,7 @@ export async function importExcel(file, { onProgress } = {}) {
       success: false,
       message: '无法打开 Excel 文件',
       imported: 0,
-      errors: ['打开文件失败: ' + err.message]
+      errors: ['打开文件失败: ' + safeErrorMessage(err)]
     }
   }
 
@@ -457,19 +499,31 @@ export async function importExcel(file, { onProgress } = {}) {
     importRemaining(db, workbook)
     await importWatched(db, workbook)
   } catch (err) {
-    errors.push('导入过程异常: ' + err.message)
+    errors.push('导入过程异常: ' + safeErrorMessage(err))
   } finally {
     // 无论成功与否都把未落盘的改动刷一次；失败时批已被 rollbackBatch 处理
     try { await db.flush?.() } catch { /* ignore */ }
   }
 
   const recognized = workbook.SheetNames.some(name => /追番|Watching|等番|等待|Remaining|Waiting|已看|回忆|Watched|历史|完成/.test(name))
+
+  // 「失败」必须能说出原因：
+    //   · 有可识别的工作表但一条都没进来 → 表结构对不上（表头/列名不符合模板）
+    //   · 一张可识别的表都没有 → 文件根本不是本应用的模板
+  // 否则界面只会显示「导入失败：成功 0 条，失败 0 条」——用户看到「失败 0 条」
+  // 却被告知失败，完全无法自查。这类静默失败是本轮重点修掉的坑。
+  if (!recognized) {
+    errors.push('没有找到可识别的工作表（需包含「追番/等番/已看」或 Watching/Remaining/Watched 字样）')
+  } else if (importedCount === 0 && errorCount === 0 && errors.length === 0) {
+    errors.push('工作表已识别，但没有解析到任何数据行，请检查表头（星期列 / Name,Time / 年份列）是否符合模板')
+  }
+
   const success = recognized && (importedCount > 0 || (errorCount === 0 && errors.length === 0))
   return {
     success,
     message: success
       ? '导入完成！成功导入 ' + importedCount + ' 条数据，失败 ' + errorCount + ' 条'
-      : '导入失败：成功 ' + importedCount + ' 条，失败 ' + errorCount + ' 条',
+      : '导入失败：成功 ' + importedCount + ' 条，失败 ' + Math.max(errorCount, errors.length) + ' 条',
     imported: importedCount,
     errors: errors
   }

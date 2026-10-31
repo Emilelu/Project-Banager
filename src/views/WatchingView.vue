@@ -21,20 +21,23 @@
              全部元素共处一组后，任一元素出入场时其余元素都会平滑归位（.sel-anim-move）。 -->
         <!-- 注意：tag 容器不能是 display:contents —— 那样元素不参与布局，
              Vue 的 -move 位移计算失去参照，归位动画不会播放。用正常 flex 盒子。 -->
-        <transition-group name="sel-anim" tag="div" class="sel-anim-wrap flex items-center gap-2 flex-wrap">
+        <transition-group name="sel-anim" tag="div" ref="toolbarRef" class="sel-anim-wrap flex items-center gap-2 flex-wrap"
+          @before-leave="pinLeavingGroup" @leave-cancelled="unpinLeavingGroup">
         <button key="add" @click="openAddDialog" class="btn-base btn-primary">
           <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
         </button>
 
-        <!-- v-for 放 template、v-if 放 button：
-             v-if 与 v-for 同元素时 v-if 优先，会跳过整个循环，
-             transition-group 无法配对进出场 → 取消选中时按钮瞬间消失、其余按钮瞬间跳位。 -->
-        <template v-for="btn in selectedActions" :key="btn.key">
-          <button v-if="!!selected" @click="btn.onClick"
+        <!-- 「选中项专属操作」整体作为**一个** transition-group 子节点进出场。
+             为什么不把 6 个 button 各当一个子节点：它们会逐个离场，第一个
+             一旦脱离文档流、后面的兄弟立刻左移，于是第二个量到的已是挤压后
+             的坐标，根本钉不回原位（实测 6 个全堆到 355 附近）。
+             收成一个包装元素后，离场/入场只有一次测量，落点精确。 -->
+        <div v-if="!!selected" key="sel-actions" class="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
+          <button v-for="btn in selectedActions" :key="btn.key" @click="btn.onClick"
             class="btn-base" :class="btn.cls">
             <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
           </button>
-        </template>
+        </div>
 
         <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
         <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
@@ -51,7 +54,7 @@
           <AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}
         </button>
         <div key="sep-2" class="border-l border-white/30 h-6 mx-1"></div>
-        <button key="time-sort" @click="toggleTimeSort" class="btn-base btn-toned" :title="tt('watching.timeAsc')">
+        <button key="time-sort" @click="toggleTimeSort" class="btn-base btn-toned" v-tip="tt('watching.timeAsc')">
           <AppIcon scale="sm" name="timeSort" /> {{ timeSortAsc ? tt('watching.timeAsc') : tt('watching.timeDesc') }}
         </button>
         </transition-group>
@@ -435,7 +438,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUpdate, watch, nextTick } from 'vue'
 import { watchingApi, remainingApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput, todayStr } from '../composables/useDatePicker'
 import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl, defaultBgmUrl, openExternal } from '../composables/useEpisode'
@@ -443,9 +446,11 @@ import { showToast } from '../composables/useToast'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
+import { useErrorText } from '../composables/useErrorText'
 import WatchingCard from '../components/WatchingCard.vue'
 
 const { tt } = useI18n()
+const { errorText } = useErrorText()
 
 const weekDays = ['周一','周二','周三','周四','周五','周六','周日']
 // 星期表头装饰图标：统一走 AppIcon（与顶栏同一套线条规范）
@@ -762,27 +767,27 @@ const confirmActionFn = async () => {
     try {
       const res = await batchApi.batchDeleteWatching(checkedIds.value)
       if (res.data.success) { showToast(tt('toast.batchDeleted', { count: checkedIds.value.length })); checkedIds.value=[]; batchMode.value=false; await fetchData() }
-      else showToast(res.data.error||tt('toast.batchDeleteFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.batchDeleteFailed'),'error')
     } catch { showToast(tt('toast.batchDeleteFailed'),'error') }
   } else if (confirmAction.value === 'clear') {
     try {
       const res = await batchApi.clearWatching()
       if (res.data.success) { showToast(tt('toast.watchingCleared')); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
-      else showToast(res.data.error||tt('toast.clearFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.clearFailed'),'error')
     } catch { showToast(tt('toast.clearFailed'),'error') }
   } else if (confirmAction.value === 'delete') {
     if (!selected.value) return
     try {
       const res = await watchingApi.delete(selected.value.id)
       if (res.data.success) { showToast(tt('toast.watchingDeleted')); selected.value=null; await fetchData() }
-      else showToast(res.data.error||tt('toast.delFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.delFailed'),'error')
     } catch { showToast(tt('toast.delFailed'),'error') }
   } else if (confirmAction.value === 'moveToRemaining') {
     if (!selected.value) return
     try {
       const res = await watchingApi.moveToRemaining(selected.value.id)
       if (res.data.success) { showToast(tt('toast.movedToRemaining')); selected.value=null; await fetchData() }
-      else showToast(res.data.error||tt('toast.operationFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.operationFailed'),'error')
     } catch { showToast(tt('toast.operationFailed'),'error') }
   }
 }
@@ -874,7 +879,7 @@ const saveEdit = async () => {
     if (res.data.success) {
       if (item) item[field] = val
     } else {
-      showToast(res.data.error || tt('toast.updateFailed'),'error')
+      showToast(errorText(res.data, tt, 'toast.updateFailed'),'error')
     }
   } catch { showToast(tt('toast.updateFailed'),'error') }
   if (editing.value === token) editing.value = null
@@ -956,7 +961,7 @@ const saveForm = async () => {
           : watchingList.value.find(i => i.name === preSelected)
         if (created) selected.value = created
       }
-      else showToast(res.data.error || tt('toast.addFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.addFailed'),'error')
     } else {
       // 编辑态必须拿到被编辑项的 id。原先直接读 selected.value.id ——
       // 若编辑期间选中被清空（点页面空白 / 切换批量模式 / 快速填充后误触），
@@ -975,7 +980,7 @@ const saveForm = async () => {
         selected.value = null
         editingId.value = null
         await fetchData()
-      } else showToast(res.data.error || tt('toast.updateFailed'), 'error')
+      } else showToast(errorText(res.data, tt, 'toast.updateFailed'), 'error')
     }
   } catch (e) {
     // 不再静默吞异常：控制台留真实堆栈，提示里带上原因
@@ -1052,7 +1057,7 @@ const moveToWatched = async () => {
   try {
     const res = await watchingApi.moveToWatched(selected.value.id, finalDate)
     if (res.data.success) { showToast(tt('toast.movedToWatched', { date: finalDate })); showDateDialog.value=false; selected.value=null; await fetchData() }
-    else showToast(res.data.error||tt('toast.operationFailed'),'error')
+    else showToast(errorText(res.data, tt, 'toast.operationFailed'),'error')
   } catch { showToast(tt('toast.operationFailed'),'error') }
 }
 
@@ -1091,37 +1096,80 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })
+
+// ========== 工具栏离场元素「原地淡出」定位 ==========
+// .sel-anim-leave-active 让离场元素脱离文档流（这是让 -move 归位动画能触发的前提），
+// 但它随即会回落到工具栏的静态位置（最左侧），半透明地压住「添加番剧」。
+// 这里在 before-leave 里把它钉在它自己的原始坐标上，于是视觉上是「原地淡出」，
+// 而其余按钮由 transition-group 的 -move 类平滑滑到新位置。
+//
+// 因为「选中项专属操作」已收成单个包装元素，离场只有一次测量，
+// 此时 before-leave 里量到的就是真实原位（不再需要提前快照）。
+
+const toolbarRef = ref(null)
+
+const pinLeavingGroup = (el) => {
+  const wrap = toolbarRef.value?.$el
+  if (!el || !wrap) return
+  const rect = el.getBoundingClientRect()
+  const box = wrap.getBoundingClientRect()
+  el.style.position = 'absolute'
+  el.style.left = `${rect.left - box.left - wrap.clientLeft}px`
+  el.style.top = `${rect.top - box.top - wrap.clientTop}px`
+  el.style.width = `${rect.width}px`
+  // 清掉 leave-from/leave-to 覆盖的 max-height/margin/padding，免得被压扁
+  el.style.maxHeight = 'none'
+  el.style.margin = '0'
+}
+
+const unpinLeavingGroup = (el) => {
+  if (!el) return
+  el.style.position = ''
+  el.style.left = ''
+  el.style.top = ''
+  el.style.width = ''
+  el.style.maxHeight = ''
+  el.style.margin = ''
+}
 </script>
 
 <style scoped>
-/* 工具栏 transition-group 的「归位」动画（FLIP）能否播放，取决于两件事：
-   1. 离场元素必须立刻脱离文档流（position: absolute）；
-   2. 其余元素的位置变化必须发生在 ·-move· 类生效的那一帧。
+/* ── 工具栏归位动画（FLIP）为什么原来不播放 ─────────────────────────────
+   Vue 的 <transition-group> 在 patch 后的 onUpdated 里做 FLIP：
+     1. 记录每个「上次渲染过」的子元素的新位置；
+     2. 用「旧位置 − 新位置」给它们写一段临时 translate；
+     3. 加上 `sel-anim-move` 类，让 transform 过渡回 0（0.22s）。
+   这就是其余按钮「平滑归位」的唯一来源。
 
-   只做 1 的解释：Vue 的 TransitionGroup 在 patch 结束后的 onUpdated 里，
-   先记录每个现存子元素的新位置，再用「旧位置 - 新位置」给它们打上临时
-   translate，最后加 sel-anim-move 类让 transform 过渡回 0（含 0.22s）。
-   但 .sel-anim-leave-active 只过渡 opacity/transform/max-height/margin/padding，
-   并没有让离场按钮退出布局：6 个专属按钮在离场期间仍各自占据 74~98px 宽的位置，
-   于是「批量选择」等按钮的旧位置与新位置完全相同 → Vue 判定 dx=0，
-   不加 -move 类、也不写 translate → 视觉上就是瞬间跳位。
+   原来的 `.sel-anim-leave-active` 只过渡 opacity/transform/max-height/
+   margin/padding，**离场按钮并没有退出布局**：6 个专属按钮在整个 0.22s
+   离场期间仍各占 74~98px 宽的位置，于是「批量选择」等按钮的旧位置与新位置
+   完全相同 → Vue 判定 dx = 0 → 不加 -move 类、也不写 translate →
+   视觉上就是瞬间跳位。
+   这正好解释了实测到的两个现象：过渡中 `getComputedStyle(btn).transform`
+   始终是 `none`，且页面上完全找不到任何 `sel-anim-*` 类。
 
-   这里给离场元素 position: absolute 让它脱离文档流（配合下面的
-   sel-anim-wrap 作为定位参照，宽度不变就不会跳到别的行），
-   其余按钮才能真正产生位移并被 -move 平滑带动。 */
-.sel-anim-leave-active {
+   修法两步：
+   A. 离场元素立刻脱离文档流 → 后面的按钮才会真的产生位移；
+   B. 给离场元素写 transition，让 Vue 走「过渡队列」判定它仍在离场中，
+      而不是立刻从 DOM 移除（否则它连淡出都没有）。
+   ─────────────────────────────────────────────────────────────────── */
+
+/* A + B：只管工具栏的直接子元素（不能写成裸的 `.sel-anim-leave-active`，
+   因为同一组件里「当前选中」信息行也用 `name="sel-anim"` 的 <transition>，
+   被绝对定位会把它从文档流里拔出来、位置乱跳）。
+   脱离文档流后，由 <transition-group :before-leave> 算好的原始坐标钉住自己。 */
+.sel-anim-wrap > .sel-anim-leave-active {
   position: absolute;
   pointer-events: none;
-  /* 离场按钮已脱离文档流，但 Vue 的 FLIP 会把「上一次渲染过的子元素」
-     一并打上 translate —— 包括正在离场的这几个。若不锁住 transform，
-     它们会跟着其余按钮一起向左滑走，半透明地压在新位置的按钮上。
-     锁成 none 后它们原地淡出，视觉上是「原地消失 + 其余按钮滑入。 */
-  transform: none !important;
+  /* 必须显式写 transform 过渡：否则 Vue 只为「有过渡属性」的元素排队等过渡结束，
+     没匹配到过渡会立刻把节点删掉 —— 那样连淡出都没有，-leave-to 也永远不生效。 */
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
-/* 离场元素 absolute 后的定位参照：固定宽度、不参与换行计算。
-   注意不要写成 display: contents —— 那样子元素不参与布局，
-   Vue 的 -move 位移测量会失去参照，归位动画同样不会播放。 */
+/* 定位参照：必须是参与布局的正常盒子。
+   不能改成 display: contents —— 那样子元素不参与布局，
+   Vue 的 -move 位移测量失去参照，归位动画同样不会播放。 */
 .sel-anim-wrap {
   position: relative;
 }

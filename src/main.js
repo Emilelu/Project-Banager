@@ -4,12 +4,14 @@ import AppIcon from './components/AppIcon.vue'
 import TagSelector from './components/TagSelector.vue'
 import TagFilter from './components/TagFilter.vue'
 import ColorPicker from './components/ColorPicker.vue'
+import ItemTags from './components/ItemTags.vue'
 import router from './router'
 import './style.css'
 import { initAppearance } from './composables/useAppearance'
 import { initTheme } from './composables/useTheme'
 import { initLocale } from './composables/useI18n'
 import { registerAllMessages } from './locales'
+import { vTip } from './composables/useHoverTip'
 
 // 动态 Dark Reader 锁（兜底）：index.html 已有静态 <meta name="darkreader-lock">，
 // 但 DR 的 content script 在 document_start 注入，可能早于静态 meta 解析。
@@ -61,6 +63,9 @@ async function boot() {
   app.component('TagSelector', TagSelector)
   app.component('TagFilter', TagFilter)
   app.component('ColorPicker', ColorPicker)
+  app.component('ItemTags', ItemTags)
+  // 全站悬浮气泡指令：替代原生 title（样式与侧边栏气泡一致，见 useHoverTip.js）
+  app.directive('tip', vTip)
   app.use(router)
   app.mount('#app')
   console.log('[boot] mounted')

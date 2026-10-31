@@ -92,6 +92,8 @@ vi.mock('../src/composables/useTheme', async () => {
 const WatchedView = (await import('../src/views/WatchedView.vue')).default
 const ImportView = (await import('../src/views/ImportView.vue')).default
 const App = (await import('../src/App.vue')).default
+// 导入/导出已合并为独立页面（/transfer），相关测试改为直接挂载该页面
+const ImportExportView = (await import('../src/views/ImportExportView.vue')).default
 const ToastHost = (await import('../src/components/ToastHost.vue')).default
 const { importExcel } = await import('../src/db/excelImporter')
 const { toasts, showToast } = await import('../src/composables/useToast')
@@ -132,18 +134,23 @@ const buttonByContains = buttonByText
  * 不能再直接找「导出备份」按钮 —— 需要先开菜单、再点「数据库备份 (.db)」项。
  * 菜单 Teleport 到 body，因此从 document 里找而不是 wrapper。
  */
-const triggerExportDbViaMenu = async (wrapperRef) => {
-  // 用 includes 而非严格相等：导出按钮除文案外还带一个 caret 图标，
-  // 且文案会随 i18n 调整（曾从「导出数据」缩为「导出」），严格相等太脆。
-  const exportBtn = wrapperRef.findAll('button').find(b => /导出/.test(b.text()))
-  if (!exportBtn) throw new Error('找不到「导出」按钮')
-  await exportBtn.trigger('click')
+/**
+ * 通过 ImportExportView 页面触发 .db 导出。
+ * 侧边栏的导入/导出按钮已合并为独立页面（/transfer），页面里的导出是**平铺按钮**，
+ * 不再有下拉菜单，所以直接找按钮点击即可。
+ */
+const mountTransfer = async () => {
+  wrapper = mount(ImportExportView, { attachTo: document.body })
   await flushPromises()
-  // 菜单项在 body 上
-  const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
-    .find(el => el.textContent.includes('.db'))
-  if (!item) throw new Error('找不到「数据库备份 (.db)」菜单项')
-  item.click()
+  return wrapper
+}
+
+/** 点导出区里指定格式的按钮（按文案里的后缀匹配，不依赖按钮顺序） */
+const clickExport = async (wrapperRef, suffix) => {
+  const btns = wrapperRef.findAll('button')
+  const target = btns.find(b => b.text().includes(suffix))
+  if (!target) throw new Error('找不到导出按钮: ' + suffix)
+  await target.trigger('click')
   await flushPromises()
 }
 
@@ -946,9 +953,37 @@ describe('App · 备份导出与恢复', () => {
     consoleError.mockRestore()
   })
 
+
+  it('__DEBUG__ 打印 ImportExportView 按钮文本', async () => {
+    await mountTransfer()
+    const btns = wrapper.findAll('button').map(b => b.text())
+    console.log('BTN_TEXTS:', JSON.stringify(btns))
+    const fileInputs = wrapper.findAll('input[type="file"]')
+    console.log('FILE_INPUTS:', fileInputs.length)
+    console.log('BODY_HAS_BACKUP:', document.body.textContent.includes('backup.db'))
+  })
+
+  it('__DEBUG__ 打印 ImportExportView 按钮文本', async () => {
+    await mountTransfer()
+    const btns = wrapper.findAll('button').map(b => b.text())
+    console.log('BTN_TEXTS:', JSON.stringify(btns))
+    const fileInputs = wrapper.findAll('input[type="file"]')
+    console.log('FILE_INPUTS:', fileInputs.length)
+    console.log('BODY_HAS_BACKUP:', document.body.textContent.includes('backup.db'))
+  })
+
+  it('__DEBUG__ 打印 ImportExportView 按钮文本', async () => {
+    await mountTransfer()
+    const btns = wrapper.findAll('button').map(b => b.text())
+    console.log('BTN_TEXTS:', JSON.stringify(btns))
+    const fileInputs = wrapper.findAll('input[type="file"]')
+    console.log('FILE_INPUTS:', fileInputs.length)
+    console.log('BODY_HAS_BACKUP:', document.body.textContent.includes('backup.db'))
+  })
   it('导出备份：生成 Blob、按时间戳命名并记录上次备份时间', async () => {
     await mountApp()
-    await triggerExportDbViaMenu(wrapper)
+    await mountTransfer()
+    await clickExport(wrapper, '.db')
     await flushPromises()
 
     expect(dbMock.export).toHaveBeenCalled()
@@ -956,17 +991,16 @@ describe('App · 备份导出与恢复', () => {
     expect(downloadName).toMatch(/^bangumi_backup_\d{8}_\d{4}\.db$/)
     expect(revokeObjectURL).not.toHaveBeenCalledWith('blob:mock')
     expect(localStorage.getItem('banager_last_backup')).toBeTruthy()
-    // 上次备份时间已从常驻行改为悬浮气泡（且 Teleport 到 body），故查 DOM 而非 wrapper.text()
-    const tip = document.querySelector('#backup-tip')
-    expect(tip).toBeTruthy()
-    expect(tip.textContent).toContain('今天')
+    // 「上次备份时间」的气泡原本挂在侧边栏导出按钮上，按钮已迁到 /transfer 页面，
+    // 该气泡随之移除；这里只断言核心行为：时间戳已持久化。
     expect(toasts.some((t) => t.message === '备份已导出')).toBe(true)
   })
 
   it('导出备份后延迟释放 blob URL，避免下载被中断', async () => {
     vi.useFakeTimers()
     await mountApp()
-    await triggerExportDbViaMenu(wrapper)
+    await mountTransfer()
+    await clickExport(wrapper, '.db')
     vi.advanceTimersByTime(1600)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
     vi.useRealTimers()
@@ -977,7 +1011,8 @@ describe('App · 备份导出与恢复', () => {
       throw new Error('disk full')
     })
     await mountApp()
-    await triggerExportDbViaMenu(wrapper)
+    await mountTransfer()
+    await clickExport(wrapper, '.db')
 
     expect(toasts.some((t) => t.type === 'error' && /导出失败/.test(t.message))).toBe(true)
     expect(localStorage.getItem('banager_last_backup')).toBeNull()
@@ -985,7 +1020,7 @@ describe('App · 备份导出与恢复', () => {
   })
 
   it('选择备份文件后先弹确认框，取消则不触库', async () => {
-    await mountApp()
+    await mountTransfer()
     await setFileInput(wrapper.find('input[type="file"]'), new File(['x'], 'backup.db'))
     await flushPromises()
     expect(document.body.textContent).toContain('backup.db')
@@ -1000,7 +1035,7 @@ describe('App · 备份导出与恢复', () => {
   it('确认后把文件字节交给 importDb 并持久化', async () => {
     const sqliteHeader = new TextEncoder().encode('SQLite format 3\u0000')
     const file = new File([sqliteHeader], 'backup.db')
-    await mountApp()
+    await mountTransfer()
     await setFileInput(wrapper.find('input[type="file"]'), file)
     await flushPromises()
     bodyButton('确认导入').click()
@@ -1014,7 +1049,7 @@ describe('App · 备份导出与恢复', () => {
   })
 
   it('非 SQLite 文件在触库前即被拒绝', async () => {
-    await mountApp()
+    await mountTransfer()
     await setFileInput(wrapper.find('input[type="file"]'), new File(['not a db'], 'broken.db'))
     await flushPromises()
     bodyButton('确认导入').click()
@@ -1031,7 +1066,7 @@ describe('App · 备份导出与恢复', () => {
     dbMock.importDb.mockImplementation(() => {
       throw new Error('file is not a database')
     })
-    await mountApp()
+    await mountTransfer()
 
     await setFileInput(wrapper.find('input[type="file"]'), new File([sqliteHeader], 'broken.db'))
     await flushPromises()
@@ -1045,7 +1080,7 @@ describe('App · 备份导出与恢复', () => {
 
   it('[缺陷#01] 恢复前应先导出一份当前库做快照', async () => {
     const sqliteHeader = new TextEncoder().encode('SQLite format 3\u0000')
-    await mountApp()
+    await mountTransfer()
     await setFileInput(wrapper.find('input[type="file"]'), new File([sqliteHeader], 'backup.db'))
     await flushPromises()
     bodyButton('确认导入').click()
@@ -1055,7 +1090,7 @@ describe('App · 备份导出与恢复', () => {
   })
 
   it('[缺陷#01] 非 SQLite 文件应在触库前被拒绝（magic header 校验）', async () => {
-    await mountApp()
+    await mountTransfer()
     await setFileInput(
       wrapper.find('input[type="file"]'),
       new File(['SQLite format 3'.slice(1)], 'not-really.db'),

@@ -60,6 +60,19 @@
   --txt-card-500: 55 65 81;
   /* 更深的正文色档：用于压在浅色玻璃上的次级文字，保证 4.5:1 以上 */
   --txt-card-700: 55 48 70;
+
+  /* ==================== 全站统一动效曲线（非线性缓动） ==================== */
+  /* 基准 = 背景壁纸的过渡（见 body.with-bg::before，**不要改它**）：
+     壁纸用的就是 cubic-bezier(0.4, 0, 0.2, 1)（Material 标准缓动），观感已被认定为"完美"，
+     于是把全站界面过渡统一向它对齐，替换掉原先散落的 ease / linear / ease-in 的机械感。
+     三条都是三次贝塞尔：起步与收尾都有加速度变化，全程没有匀速段。
+       --ease-smooth   : 标准缓动。属性过渡（颜色/描边/阴影/宽度/模糊）的默认曲线，与壁纸同族
+       --ease-out-soft : 出场曲线（起步快、收尾极慢）。用于面板/菜单/按钮「出现、放大」等进入类动画
+       --ease-in-soft  : 离场曲线（起步慢、收尾快）。与出场成对，用于关闭/消失类动画
+     例外（故意不用本套变量）：壁纸过渡、进度条填充、滑块、@media (prefers-reduced-motion) 的 none。 */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-soft: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
@@ -158,7 +171,8 @@ body {
     sans-serif;
   background: linear-gradient(135deg, #f5f3ff 0%, #fce7f3 50%, #ecfeff 100%);
   min-height: 100vh;
-  transition: background 0.3s ease, color 0.3s ease;
+  /* 明暗/配色切换时整页底色与文字色过渡：走全站标准曲线（与壁纸同族），不再是机械的 ease */
+  transition: background 0.3s var(--ease-smooth), color 0.3s var(--ease-smooth);
 }
 
 /* ==================== 焦点环（去掉浏览器默认白/黑圈） ==================== */
@@ -257,7 +271,17 @@ tr[draggable='true'] {
    原先选中态是「同色系淡底 + 同色系深字」（bg-primary/10 + text-primary-dark），
    当主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。
    改为：选中 = 白底 + 主题色描边 + 深色文字；未选中 = 灰底 + 灰字。
-   形状、字号、内边距由使用处传入，这里只管配色。 */
+   形状、字号、内边距由使用处传入，这里只管配色。
+   与 .btn-base 同理：这些分段按钮在主题页上也会被 hover 放大（模板里带 btn-press），
+   半透明白底会让放大区透出底下的其他控件，因此底色统一改成不透明合成。 */
+.seg-btn {
+  /* 缩放曲线与幅度对齐全站按钮体系（0.24s / --ease-out-soft / 1.025） */
+  transition: transform 0.24s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
+    border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth),
+    box-shadow 0.2s var(--ease-smooth);
+  isolation: isolate;
+  position: relative;
+}
 .seg-btn.seg-active {
   background: #fff;
   border-color: rgb(var(--c-primary));
@@ -266,7 +290,8 @@ tr[draggable='true'] {
   font-weight: 600;
 }
 .seg-btn.seg-idle {
-  background: rgba(255, 255, 255, 0.5);
+  /* 原 rgba(255,255,255,0.5) → 0.94：半透明底在放大/悬停时会透出卡片与相邻控件 */
+  background: rgba(255, 255, 255, 0.94);
   /* 注意：不能用 rgba(var(--c-primary), 0.18) —— --c-primary 是「R G B」三元组，
      套进 rgba() 会拼成 rgba(197 152 89, 0.18)，是**非法语法**，
      整条声明被浏览器丢弃，边框色于是回退到 Tailwind preflight 的 currentColor，
@@ -277,21 +302,36 @@ tr[draggable='true'] {
 }
 .seg-btn.seg-idle:hover {
   border-color: rgb(var(--c-primary) / 0.4);
-  background: rgba(255, 255, 255, 0.75);
+  background: linear-gradient(rgb(var(--c-primary) / 0.08), rgb(var(--c-primary) / 0.08)),
+    rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgb(var(--c-primary) / 0.12);
 }
-/* 深色模式反转：选中用半透明白底 + 亮色描边 */
+/* 深色模式反转：选中用半透明白底 + 主题色系描边 */
 .dark .seg-btn.seg-active {
   background: rgba(255, 255, 255, 0.16);
-  border-color: rgb(var(--c-primary-light));
+  /* 原先直接用 rgb(var(--c-primary-light)) 实色描边：该变体在深色模式下是
+     rgb(211 222 238) —— 几乎等于纯白，压在深紫底上就是一圈刺眼的亮白边，
+     且与同一区块内的其它控件（seg-idle / btn-neutral / btn-step 都是
+     rgba(255,255,255,0.14~0.16) 的极淡描边）完全不同档，是典型的
+     「深底上突然变亮边」。
+     改成「主题色 55% + 亮变体 45%」的中间色：仍比未选中明显更亮（保住选中层级），
+     但带主题色、不再刺眼。不支持 color-mix 的浏览器退化为半透明亮变体（亮度也低于纯白）。 */
+  border-color: rgb(var(--c-primary-light) / 0.55);
+  border-color: color-mix(in srgb, rgb(var(--c-primary)) 55%, rgb(var(--c-primary-light)));
   color: #fff;
 }
 .dark .seg-btn.seg-idle {
-  background: rgba(255, 255, 255, 0.06);
+  /* 深色下同样不透底：用深紫实体底，而非 0.06 的白 */
+  background: rgba(30, 22, 58, 0.92);
   border-color: rgba(255, 255, 255, 0.16);
   color: #cbd5e1;
 }
 .dark .seg-btn.seg-idle:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+      rgb(var(--c-primary-light) / 0.18),
+      rgb(var(--c-primary-light) / 0.18)
+    ),
+    rgba(30, 22, 58, 0.92);
 }
 
 /* ==================== 键盘按键标签（kbd） ==================== */
@@ -318,8 +358,10 @@ tr[draggable='true'] {
    原先只有内部图标会缩放，整条导航项不动，与顶栏按钮手感不一致。
    间距：py-3 → py-3.5，让相邻导航项的呼吸感更接近顶栏图标按钮的密度。 */
 .nav-item {
-  transition: transform 0.18s ease, background-color 0.2s ease, box-shadow 0.2s ease,
-    color 0.2s ease;
+  /* 缩放走出场曲线（起步快、收尾慢，放大的"手感"更丝滑），颜色类属性走标准曲线；
+     时长 0.18s → 0.22s：0.18s 的 ease 在小尺寸导航条上仍偏"跳"，加长后才像被"带过去" */
+  transition: transform 0.22s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
+    box-shadow 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
   will-change: transform;
   /* 行高提高一档：py-4 + min-height，让菜单项更有呼吸感（原先 42px 偏紧） */
   min-height: 3rem;
@@ -507,15 +549,32 @@ html:not(.dark) body.adaptive .app-btn-ghost {
      正解就是让 origin 与 clip 对齐到同一个盒子：渐变从边框外缘连续铺到另一侧外缘，
      边框保持透明（只占位，不参与绘制），按钮几何尺寸完全不变。 */
   background-origin: border-box;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease,
-    background-image 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  /* ===== 悬浮放大：按用户反馈重新标定 =====
+     ① 幅度 1.045 → 1.025：1.045 落在主题页那种 23~30px 高的小按钮上就是「跳一下」。
+        1.025 按宽度折算每边只多 1.25%（100px 宽按钮每边 1.25px），保留「被指到」的呼吸感，
+        又不至于把按钮撑进相邻元素的格子 —— 主题页最宽按钮 563px 放大后每边只多 7px，
+        仍小于栅格 10.5px 的间距；追番/等番/已看页工具栏按钮是同一套几何，手感保持一致。
+     ② 时长 0.15s → 0.24s，曲线换 --ease-out-soft（起步快、收尾极慢）：0.15s 的 ease 是
+        「啪」地一步到位，加长并走软出场曲线后，加速—减速可被肉眼感知，才是丝滑而非闪一下。
+     ③ 层叠：isolation 建层叠上下文 + hover/active 抬到 z-index:1，确保放大后的按钮
+        画在相邻兄弟**之上**，不会被文档顺序在后的兄弟切掉半边。
+        注意这条只解决「被别的元素画在上面」；「透过按钮看到后面的元素」是**半透明底色**
+        导致的，逐类在 .btn-neutral / .btn-step / .seg-btn 等处改成不透明合成。 */
+  isolation: isolate;
+  position: relative;
+  transition: transform 0.24s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
+    background-color 0.2s var(--ease-smooth), background-image 0.2s var(--ease-smooth),
+    opacity 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
+    color 0.2s var(--ease-smooth);
   will-change: transform;
 }
 .btn-base:hover {
-  transform: scale(1.045);
+  transform: scale(1.025);
+  z-index: 1;
 }
 .btn-base:active {
-  transform: scale(0.96);
+  transform: scale(0.975);
+  z-index: 1;
 }
 .btn-base:disabled {
   opacity: 0.4;
@@ -563,24 +622,40 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 }
 
 /* 中性操作：玻璃灰底 + 主色描边，不抢主操作视觉 */
+/* ===== 「放大后透过按钮看到后面元素」的根因与修法（本按钮族 = 重灾区） =====
+   成因：底色是 rgba(255,255,255,0.55) 半透明白 + hover 又换成 rgb(--c-primary / 0.12)
+   ——两层都是半透明。按钮放大时覆盖面积变大，**透过自身底色就能看到背后的表格行、
+   相邻按钮、卡片边框**；实测把相邻兄弟涂成纯红后，hover 放大区内部像素直接是
+   rgb(213,24,26)（红底合成结果），肉眼就是「放大后按钮里透出别的元素」。
+   修法：不靠调 alpha，而是把底色做成**不透明合成**——
+     .btn-neutral 用「白瓷实体底（0.94）+ 极轻主题色染色」保证任何背景下不透明；
+     hover 态改成同样不透明的主题色淡染，绝不回退到半透明。
+   同时保留 backdrop-filter（它作用于按钮背后的区域，与不透明底不冲突），
+   玻璃观感不丢。 */
 .btn-neutral {
-  background: rgba(255, 255, 255, 0.55);
+  background: linear-gradient(rgb(var(--c-primary) / 0.10), rgb(var(--c-primary) / 0.10)),
+    rgba(255, 255, 255, 0.94);
   color: rgb(var(--txt-card-700, 55 48 70));
   border: 1px solid rgb(var(--c-primary) / 0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 .btn-neutral:hover {
-  background: rgb(var(--c-primary) / 0.12);
+  background: linear-gradient(rgb(var(--c-primary) / 0.20), rgb(var(--c-primary) / 0.20)),
+    rgba(255, 255, 255, 0.94);
   border-color: rgb(var(--c-primary) / 0.3);
 }
 .dark .btn-neutral {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 22, 58, 0.92);
   color: #d9d4e7;
   border-color: rgba(255, 255, 255, 0.14);
 }
 .dark .btn-neutral:hover {
-  background: rgb(var(--c-primary-light) / 0.16);
+  background: linear-gradient(
+      rgb(var(--c-primary-light) / 0.22),
+      rgb(var(--c-primary-light) / 0.22)
+    ),
+    rgba(30, 22, 58, 0.92);
 }
 
 /* 破坏性操作：危险色 */
@@ -602,7 +677,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all 0.2s var(--ease-smooth);
   color: #fff;
 }
 /* 集数加减迷你按钮：白字必须压在**饱和实色**上才够对比度。
@@ -633,22 +708,28 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(var(--c-primary) / 0.28);
-  background: rgba(255, 255, 255, 0.85);
+  /* 原 rgba(255,255,255,0.85) 同样半透，放大/悬停时透出弹窗内容；改不透明瓷白 */
+  background: rgba(255, 255, 255, 0.96);
   color: rgb(var(--c-primary));
   font-weight: 700;
-  transition: all 0.15s ease;
+  transition: all 0.2s var(--ease-smooth);
 }
 .btn-step:hover {
-  background: rgb(var(--c-primary) / 0.12);
+  background: linear-gradient(rgb(var(--c-primary) / 0.14), rgb(var(--c-primary) / 0.14)),
+    rgba(255, 255, 255, 0.96);
   border-color: rgb(var(--c-primary) / 0.45);
 }
 .dark .btn-step {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 22, 58, 0.92);
   border-color: rgba(255, 255, 255, 0.16);
   color: rgb(var(--c-primary-light));
 }
 .dark .btn-step:hover {
-  background: rgb(var(--c-primary-light) / 0.18);
+  background: linear-gradient(
+      rgb(var(--c-primary-light) / 0.2),
+      rgb(var(--c-primary-light) / 0.2)
+    ),
+    rgba(30, 22, 58, 0.92);
 }
 
 /* ==================== 选中态过渡（工具栏按钮 / 选中提示） ==================== */
@@ -658,8 +739,10 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    - 离开时反向淡出（不占位，故用 max-height 收拢，避免工具栏高度跳变） */
 .sel-anim-enter-active,
 .sel-anim-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.22s ease,
-    margin 0.22s ease, padding 0.22s ease;
+  /* 进入 = 软出场（快起慢收），离开 = 软离场（慢起快收）：两段方向相反的缓动，收放成对 */
+  transition: opacity 0.22s var(--ease-out-soft), transform 0.22s var(--ease-out-soft),
+    max-height 0.22s var(--ease-smooth), margin 0.22s var(--ease-smooth),
+    padding 0.22s var(--ease-smooth);
   overflow: hidden;
 }
 .sel-anim-enter-from,
@@ -683,7 +766,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    —— 这正是「取消选中一项时，部分按钮隐藏后其他按钮归位没有过渡」的原因。
    加上这一条，剩余按钮会平滑滑动到新位置。 */
 .sel-anim-move {
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.22s var(--ease-smooth);
 }
 
 /* ==================== 折叠/展开统一过渡 ==================== */
@@ -702,8 +785,9 @@ html:not(.dark) body.adaptive .app-btn-ghost {
  */
 .collapse-enter-active,
 .collapse-leave-active {
-  transition: opacity 0.25s ease, grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-    margin 0.25s ease;
+  /* 高度/边距走标准缓动，透明度走软出场；grid-template-rows 是唯一有「收拢」语义的属性 */
+  transition: opacity 0.25s var(--ease-out-soft),
+    grid-template-rows 0.28s var(--ease-smooth), margin 0.25s var(--ease-smooth);
   display: grid;
   grid-template-rows: 1fr;
 }
@@ -971,6 +1055,20 @@ html[lang='zh-CN'] .font-mono {
   border-color: rgba(255, 255, 255, 0.06) !important;
 }
 
+/* 注：border-white/40 常被用在弹窗 / 下拉菜单（.app-menu-surface / .glass 外壳）上，
+   深色下若也压到 0.06 会与 .dark .app-menu-surface 自己的 0.12 打架；这里只补 0.10，
+   让浮层描边比卡片略亮一档，既不像浅色那样刺眼，也不至于糊在深底里。 */
+.dark .border-white\/40 {
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* 配色预设选中环：模板写死 border-gray-700（#374151），这个色在浅底上清晰，
+   但在深色底（#1a1030 附近）几乎与背景同亮度，选中项完全看不出被选中。
+   深色下改为 --c-primary-light 的淡描边（保留「比未选中更亮」的层级，又不刺眼）。 */
+.dark .border-gray-700 {
+  border-color: rgb(var(--c-primary-light) / 0.75) !important;
+}
+
 /* 灰色背景按钮/标签 */
 .dark .bg-gray-100 {
   background: #2d3344 !important;
@@ -989,6 +1087,27 @@ html[lang='zh-CN'] .font-mono {
   color: #e2e8f0 !important;
   border-color: rgb(var(--c-primary)/0.3) !important;
 }
+
+/* ==================== 深色模式下的「硬写浅色边框」兜底 ==================== */
+/*
+ * 问题：三个页面（追番卡片 / 等番 / 已看）的表格复选框是**模板自绘**的
+ * `<div class="w-4 h-4 rounded border-2 ...">`，未选中态写死 `border-gray-300`
+ * （#D1D5DB）＋ `bg-white/80`。浅色模式下这是标准的灰描边白底，没问题；
+ * 一旦切到深色模式，`.dark .bg-white\/80` 会把底色压成半透明深紫，
+ * 而边框色 #D1D5DB 没有任何 .dark 覆盖 → **深底上一圈刺眼的白边**（实测
+ * border 仍为 rgb(209,213,219)，与周围 rgb(46,40,66) 反差极大），
+ * 就是用户说的「深色模式下突然变亮边」。
+ *
+ * 处理：在深色模式下把这类「未选中的自绘复选框」的边框换成与其它深色控件
+ * 同档的半透明白描边（rgba(255,255,255,0.16) 与 .btn-neutral/.btn-step/.seg-idle 一致），
+ * 视觉上从「白框」降为「淡框」，选中态（border-primary）不受影响。
+ * 注意限定 border-gray-300，避免误伤模板里其它灰色描边。
+ */
+.dark .border-gray-300 {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* 已选中的自绘复选框：border-primary 落在深底上是饱和主题色，够醒目，保持不变 */
 
 .dark input::placeholder,
 .dark textarea::placeholder {
@@ -1148,8 +1267,8 @@ body.palette-animating,
 body.palette-animating *,
 body.palette-animating *::before,
 body.palette-animating *::after {
-  transition: background-color 0.18s ease, color 0.18s ease,
-    border-color 0.18s ease !important;
+  transition: background-color 0.18s var(--ease-smooth), color 0.18s var(--ease-smooth),
+    border-color 0.18s var(--ease-smooth) !important;
 }
 
 /* ==================== 自适应文字取色 ==================== */
@@ -1239,10 +1358,11 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 .fade-leave-active {
   /* opacity 先跑完（0.15s），transform 继续到 0.3s。
      opacity 必须**先行结束**：只要它 < 1，后代的 backdrop-filter 就整体失效，
-     模糊便无从「淡入」。让它尽早归位，模糊才有表演的窗口（见下方延迟过渡）。 */
+     模糊便无从「淡入」。让它尽早归位，模糊才有表演的窗口（见下方延迟过渡）。
+     曲线：opacity 用软出场（淡出到 0 的最后一段更"轻"），位移用骨灰级标准缓动。 */
   transition:
-    opacity 0.15s ease-out,
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.15s var(--ease-out-soft),
+    transform 0.3s var(--ease-smooth);
 }
 
 .fade-enter-from {
@@ -1270,8 +1390,8 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 .fade-enter-active .glass,
 .fade-leave-active .glass {
   transition:
-    backdrop-filter 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
-    -webkit-backdrop-filter 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.15s;
+    backdrop-filter 0.2s var(--ease-smooth) 0.15s,
+    -webkit-backdrop-filter 0.2s var(--ease-smooth) 0.15s;
   will-change: backdrop-filter;
 }
 /* 起始模糊为 0。用 blur(0px) 而非 none：保持该元素始终是 backdrop 参与方，
@@ -1285,7 +1405,7 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 /* 滑入动画 */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s var(--ease-smooth);
 }
 
 .slide-enter-from {
@@ -1298,17 +1418,55 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   opacity: 0;
 }
 
+/* ==================== 顶栏页面标题切换 ==================== */
+/* 切路由时顶栏标题（图标 + 文字同在一个过渡块）做「淡出 → 淡入」。
+   时长**非对称**：退场 0.12s（旧标题尽快让位）+ 进场 0.18s（新标题有可读的浮现时间）。
+   `mode="out-in"` 下两段串行，整体换字 ≈ 0.3s，落在「0.2s 左右、不拖沓」的量级。
+   位移各 4px（退场向上、进场自下），小于标题半行高，不会出现大幅跳动。
+   曲线一律用 --ease-smooth：进场若用 --ease-out-soft（cubic-bezier(0.16,1,0.3,1)），
+   实测 60ms 时 opacity 已到 0.903 —— 起步过快，淡入几乎看不出来，等于「啪」地出现。 */
+.title-swap-leave-active {
+  transition:
+    opacity 0.12s var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform 0.12s var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.title-swap-enter-active {
+  transition:
+    opacity 0.18s var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform 0.18s var(--ease-smooth, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.title-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.title-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* 尊重「减少动态效果」：直接切标题，不做淡入淡出，避免个别用户观感不适 */
+@media (prefers-reduced-motion: reduce) {
+  .title-swap-enter-active,
+  .title-swap-leave-active {
+    transition: none;
+  }
+}
+
+
 /* 模态框动画 - 内容窗口 */
 .modal-enter-active {
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.35s var(--ease-out-soft);
 }
 
 .modal-leave-active {
   /* 业界通行做法（Material 3 / Radix / shadcn 的 Dialog）：**退场用 accelerate（ease-in）
      + 150~250ms 短时长**，与「进场用 decelerate」成对 —— 这是有规范依据的标准姿势，
-     故回到 cubic-bezier(0.4, 0, 1, 1) 配 0.22s。
+     故退场依然走"加速"侧，只是换成统一体系里的 --ease-in-soft 0.22s。
      （本项目曾试过 decelerate 与对齐壁纸的长时长，都不对；真正的问题见下方 .modal-leave-to） */
-  transition: all 0.22s cubic-bezier(0.4, 0, 1, 1);
+  transition: all 0.22s var(--ease-in-soft);
 }
 
 /* 进场只动 transform、不动 opacity：opacity<1 会形成 backdrop root，
@@ -1332,8 +1490,8 @@ body.modal-active .palette-animating,
 body.modal-active .palette-animating *,
 body.modal-active .palette-animating *::before,
 body.modal-active .palette-animating *::after {
-  transition: background-color 0.18s ease, color 0.18s ease,
-    border-color 0.18s ease !important;
+  transition: background-color 0.18s var(--ease-smooth), color 0.18s var(--ease-smooth),
+    border-color 0.18s var(--ease-smooth) !important;
 }
 
 /* 自适应文字元素（--txt-* 驱动的灰阶与侧栏白字）在取色变色时直接跳变，不参与全树
@@ -1359,12 +1517,12 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
    随外层 transform 进度从 0 渐显到目标值，消除“动画播完才突然叠加模糊”的突兀感。
    时长/曲线与弹窗开合严格一致（开 0.35s / 关 0.25s），不动画曲线本身。 */
 .modal-enter-active .glass {
-  transition: backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-    -webkit-backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: backdrop-filter 0.35s var(--ease-out-soft),
+    -webkit-backdrop-filter 0.35s var(--ease-out-soft);
 }
 .modal-leave-active .glass {
-  transition: backdrop-filter 0.2s cubic-bezier(0, 0, 0.2, 1),
-    -webkit-backdrop-filter 0.2s cubic-bezier(0, 0, 0.2, 1);
+  transition: backdrop-filter 0.2s var(--ease-in-soft),
+    -webkit-backdrop-filter 0.2s var(--ease-in-soft);
 }
 .modal-enter-from .glass,
 .modal-leave-to .glass {
@@ -1374,12 +1532,12 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 
 /* 模态框动画 - 背景遮罩（模糊渐变） */
 .modal-overlay-enter-active {
-  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.35s var(--ease-out-soft);
 }
 
 .modal-overlay-leave-active {
   /* 比弹窗略慢一点点（0.24s vs 0.2s）：遮罩若先消失会露出「弹窗尚在、底已透」的中间态 */
-  transition: opacity 0.24s cubic-bezier(0, 0, 0.2, 1);
+  transition: opacity 0.24s var(--ease-in-soft);
 }
 
 .modal-overlay-enter-from,
@@ -1406,14 +1564,17 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
  * 动画本身只读变量，因此无论菜单出现在哪个方向，都从锚点一侧"长出来"。
  */
 .pop-enter-active {
-  transition: opacity 0.22s ease,
-    transform 0.26s cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* 菜单出现：transform 走软出场（快起慢收，"从锚点长出来"的手感更顺），
+     opacity 稍短先行到位，避免菜单在位移期间一直半透明 */
+  transition: opacity 0.2s var(--ease-out-soft),
+    transform 0.26s var(--ease-out-soft);
   transform-origin: center var(--pop-origin-y, top);
   will-change: transform, opacity;
 }
 
 .pop-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease-in;
+  /* 菜单消失：成对使用软离场（慢起快收），收得干脆 */
+  transition: opacity 0.16s var(--ease-in-soft), transform 0.16s var(--ease-in-soft);
   transform-origin: center var(--pop-origin-y, top);
 }
 
@@ -1438,6 +1599,7 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 /* 卡片悬浮效果 */
 .card-hover {
   @apply transition-all duration-300;
+  transition-timing-function: var(--ease-out-soft);
 }
 
 .card-hover:hover {
@@ -1448,22 +1610,27 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 /* ==================== 按钮统一动效（悬浮放大 / 按下回弹） ==================== */
 /* 全项目所有可点元素（.btn-press）共享同一套微动效，避免「有些按钮悬浮会放大、
    有些纹丝不动」的不一致感（顶栏语言按钮曾因此被单独遗漏）。
-   - 悬浮：轻微放大 + 轻微上浮，暗示可点击
+   - 悬浮：轻微放大，暗示可点击
    - 按下：缩小，给出触感反馈
-   - 过渡统一 150ms，快而不过冲
+   - 放大/缩小时长与曲线与 .btn-base 完全对齐（0.24s / --ease-out-soft）：
+     主题页里「随机配色」这类按钮同时带 .btn-base 与 .btn-press，两者若写不同参数，
+     实际生效的是后声明者 —— 统一后无论谁赢结果都一样，不会再出现"有的按钮跳得快、
+     有的慢"的漂移感
+   - 幅度同样收到 1.025：主题页那些 23~30px 的小按钮用 1.045 会明显"跳"一下
    - 用 transform 而非改宽高，不触发重排 */
 .btn-press {
-  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease,
-    opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: transform 0.24s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
+    background-color 0.2s var(--ease-smooth), opacity 0.2s var(--ease-smooth),
+    border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
   will-change: transform;
 }
 
 .btn-press:hover {
-  transform: scale(1.045);
+  transform: scale(1.025);
 }
 
 .btn-press:active {
-  transform: scale(0.96);
+  transform: scale(0.975);
   /* 按下时不要再叠加悬浮的位移，保持干脆 */
 }
 
@@ -1726,6 +1893,7 @@ body[data-glass='liquid'] .sidebar-bg {
 /* 双击编辑提示 */
 .editable-cell {
   @apply cursor-pointer transition-all duration-200 rounded px-1 -mx-1;
+  transition-timing-function: var(--ease-smooth);
 }
 
 .editable-cell:hover {
@@ -1734,15 +1902,17 @@ body[data-glass='liquid'] .sidebar-bg {
 
 /* Toast 动画 */
 .toast-enter-active {
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 弹入：软出场曲线 + 0.4s，保留了"冒出来再稳稳落定"的松紧变化；
+     原先的 cubic-bezier(0.34, 1.56, 0.64, 1) 带过冲回弹，与全站其余曲线不是一个手感 */
+  transition: all 0.4s var(--ease-out-soft);
 }
 
 .toast-leave-active {
-  transition: all 0.2s ease-in;
+  transition: all 0.2s var(--ease-in-soft);
 }
 
 .toast-move {
-  transition: transform 0.2s ease;
+  transition: transform 0.2s var(--ease-smooth);
 }
 
 .toast-enter-from {
@@ -1758,6 +1928,7 @@ body[data-glass='liquid'] .sidebar-bg {
 /* 列表项动画 */
 .list-item {
   @apply transition-all duration-200;
+  transition-timing-function: var(--ease-smooth);
 }
 
 .list-item:hover {
@@ -1833,13 +2004,16 @@ td .truncate {
   line-height: 0;
 }
 
-/* 轨道：主题色 16% 淡底 + 1px 同色内描边，浅色玻璃上也分得清轨道与卡片底 */
+/* 轨道：主题色 20% 淡底 + 1px 同色内描边。
+   实测：只用 16% 无描边时，轨道与卡片底对比度只有 1.17:1（浅色）/1.35:1（深色），
+   几乎看不出"这里有一条轨道"，进度条就只剩半截填充漂在空中。
+   描边给轨道一条确定的边，20% 淡底让它与卡片底区分开。 */
 .card-progress {
   height: 100%;
   border-radius: 999px;
   overflow: hidden;
-  background-color: rgb(var(--c-primary) / 0.16);
-  box-shadow: inset 0 0 0 1px rgb(var(--c-primary) / 0.1);
+  background-color: rgb(var(--c-primary) / 0.2);
+  box-shadow: inset 0 0 0 1px rgb(var(--c-primary) / 0.18);
 }
 
 /* 填充：主色 → 主色深阶的横向渐变，与全站渐变按钮同一套色阶取向 */
@@ -1872,19 +2046,83 @@ td .truncate {
   color: rgb(var(--c-success-dark));
 }
 
-/* 集数行：`3 / 12` 永不折行，卡片在窄列里也不会把斜杠拆到下一行 */
+/* 集数行：`3 / 12` 不折行，当前集数永远完整可见 */
 .card-ep-line {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
 }
 
-/* ---- 深色模式：深紫卡片底上，轨道用半透明白提亮，填充改用 light 变体保证亮度 ---- */
-.dark .card-progress {
-  background-color: rgb(255 255 255 / 0.12);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+.card-ep-cur {
+  flex: 0 0 auto;
 }
 
+.card-ep-total {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 集数行的元素间距收到 2px（模板里是 gap-1=4px）：
+   「e + 3 / 12 + 100% + 两个 24px 按钮」在 146px 的列里原本差 2~3px 就挤爆，
+   收紧后 1280 及以上能完整显示总集数，只有更窄才需要降级。
+   但「e」与集数之间必须保住 4px 的呼吸（2px 会读成「e3」，与全站排印不一致），
+   故单独给标签补 2px 外边距，只压缩后段之间那几处间隔。 */
+.card-ep-row {
+  column-gap: 0.125rem;
+}
+
+.card-ep-label {
+  margin-right: 0.125rem;
+}
+
+/* 窄列降级阶梯：周历列宽 = 视口 1/7。实测整套元素至少需要 ≈115px 内容宽，
+   而 1152 屏的列内容宽只有 ≈103px —— 硬挤会把当前集数压成 2px 一条，比直接不显示更糟。
+   用容器查询按卡片「内容盒」宽度分级，先让最次要的信息退场：
+     1. 内容宽 ≤ 118px（卡片 ≈142px 以下）：隐藏「/ 总集数」。
+        当前集数、百分比、进度条全部保留；总集数仍在进度条的 aria 里，信息不丢。
+     2. 内容宽 ≤ 92px（卡片 ≈116px 以下）：再把「e」标签收掉，只留纯数字
+        （与「无总集数」时的原有观感一致）。
+   百分比与 +/- 按钮始终完整显示：进度条与百分比是这轮改版的主角，不能先退。 */
+.watching-card {
+  container-type: inline-size;
+}
+
+@container (max-width: 118px) {
+  .card-ep-total {
+    display: none;
+  }
+}
+
+@container (max-width: 92px) {
+  .card-ep-label {
+    display: none;
+  }
+}
+
+/* ---- 深色模式：深紫卡片底上，轨道用半透明白提亮，填充改用 light 变体保证亮度 ---- */
+/* 深色下 12% 白实测只有 1.35:1，轨道几乎消失；提到 22% + 1px 描边后能稳定看出轨道（2.02:1），
+   同时不会亮过填充条，填充仍是画面里最亮的那一段。 */
+.dark .card-progress {
+  background-color: rgb(255 255 255 / 0.22);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+
+/* 深色填充的渐变取向要与浅色相反：从主色（右）走向 light（左）。
+   浅色是从 primary → primary-dark，即"右端更深"；深色沿用同一方向就变成
+   "左端最亮" —— 25% 这类小进度只露出一小段，看上去是一坨近白的粉，看不出是主题色。
+   另外给 light 变体只留最后 28%，避免整段被提亮成"白条"：
+   起笔是饱满的主题色，接近完成时才逐渐发亮，兼顾"认得出主色"与"越满越亮"。 */
 .dark .card-progress-fill {
-  background-image: linear-gradient(to right, rgb(var(--c-primary-light)), rgb(var(--c-primary)));
+  background-image: linear-gradient(
+    to right,
+    rgb(var(--c-primary)) 0%,
+    rgb(var(--c-primary)) 72%,
+    rgb(var(--c-primary-light)) 100%
+  );
 }
 
 /* 绿在深底上取原色即可（--c-success 本身足够亮），不用 dark 变体 */

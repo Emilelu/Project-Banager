@@ -1,6 +1,6 @@
 {
   "name": "bangumi-manager-standalone",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "size:dist": "node scripts/analyze-dist.mjs",
+    "size:deps": "node scripts/analyze-bundle.mjs",
+    "verify:dist": "node scripts/verify-build.mjs",
+    "verify:wasm": "node scripts/test-wasm-inline.mjs"
   },
   "dependencies": {
     "sql.js": "^1.11.0",

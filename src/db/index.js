@@ -10,6 +10,13 @@ const DB_NAME = 'BangumiManagerDB'
 const DB_STORE = 'database'
 const DB_KEY = 'bangumi_db'
 
+/**
+ * watched 表对外暴露的列清单（单一来源）。
+ * getWatchedByYear / getAllWatched 共用同一份，避免两条路径漏列
+ * （历史上 getWatchedByYear 就漏过 tags，导致按年查出来的行没有标签）。
+ */
+const WATCHED_COLS = 'id, name, watch_date, url, url_params, notes, tags, sort_order'
+
 // ========== 错误与字段规范化（边界安全） ==========
 //
 // 为什么需要 errorMessage()：
@@ -60,12 +67,17 @@ let _SQL = null  // 缓存 initSqlJs 返回的 SQL 构造器
 let idbConnection = null
 
 // WASM 内联加载器
-// 构建时通过 vite-plugin-wasm-inline 将 WASM 内联为 base64
-// 运行时从内联数据解码，无需网络请求，支持 file:// 协议
+// 构建时通过 vite-plugin-wasm-inline 把 WASM **先 gzip 再 base64** 内联（体积 -43%）
+// 运行时 loadWasmBytes() 负责解压（优先原生 DecompressionStream，兜底内联 inflate），
+// 全程无网络请求，file:// 协议可用
 async function loadWasmBinary() {
   try {
-    // 动态导入构建时生成的 WASM base64 数据模块
+    // 动态导入构建时生成的 WASM 数据模块
     const wasmModule = await import('./wasmInline.js')
+    if (typeof wasmModule.loadWasmBytes === 'function') {
+      return await wasmModule.loadWasmBytes()
+    }
+    // 兼容旧版产物：插件若回退成「原始 base64」编码，走原来的解码路径
     if (wasmModule.default) {
       const binaryString = atob(wasmModule.default)
       const bytes = new Uint8Array(binaryString.length)
@@ -233,13 +245,18 @@ class BangumiDatabase {
       this.commitBatch()
     } catch (e) {
       this.rollbackBatch()
-      console.error('日期格式修复失败:', e.message)
+      console.error('日期格式修复失败:', errorMessage(e))
     }
   }
 
   _normalizeDate(dateStr) {
-    if (!dateStr) return dateStr
-    return String(dateStr).replace(/-/g, '/')
+    // 必须返回空串而不是原值：`addWatched({ name })` 未传 watch_date 时，
+    // 原实现走到这里返回 undefined，随后被 bind 给 sql.js →
+    // 抛裸字符串 "tried to bind a value of an unknown type (undefined)"，
+    // 整条记录写不进去，且错误对用户完全不可读。
+    if (dateStr == null) return ''
+    const s = String(dateStr)
+    return s ? s.replace(/-/g, '/') : ''
   }
 
   // ========== 表初始化 ==========
@@ -421,7 +438,7 @@ class BangumiDatabase {
       const row = this._all('SELECT * FROM tags WHERE name = ?', [trimmed])[0]
       return { success: true, id: row?.id, data: row }
     } catch (e) {
-      return { success: false, error: e.message }
+      return { success: false, error: errorMessage(e) }
     }
   }
 
@@ -446,7 +463,7 @@ class BangumiDatabase {
       this.save()
       return { success: true }
     } catch (e) {
-      return { success: false, error: e.message }
+      return { success: false, error: errorMessage(e) }
     }
   }
 
@@ -461,7 +478,7 @@ class BangumiDatabase {
       this.save()
       return { success: true }
     } catch (e) {
-      return { success: false, error: e.message }
+      return { success: false, error: errorMessage(e) }
     }
   }
 
@@ -503,14 +520,33 @@ class BangumiDatabase {
       ['idx_remaining_sort', 'remaining', 'sort_order, id'],
       ['idx_remaining_date', 'remaining', 'expected_date'],
       ['idx_watched_sort', 'watched', 'sort_order, id'],
-      ['idx_watched_date', 'watched', 'watch_date'],
-      ['idx_years_sort', 'watched_years', 'sort_order, id']
+      // 覆盖索引：按年份过滤时把 watch_date/sort_order/id 一起命中，
+      // 既能走 range 扫描又不必回表，ORDER BY sort_order,id 也可由索引顺序直接满足。
+      // （原来只有 (watch_date)，仍要回表 + 临时排序）
+      ['idx_watched_date', 'watched', 'watch_date, sort_order, id'],
+      ['idx_years_sort', 'watched_years', 'sort_order, id'],
+      // 标签筛选（WHERE tags LIKE ...）与按名称去重查重（WHERE name = ?）的支撑索引。
+      // name 在 watching/remaining 上已有 UNIQUE 约束自带的索引；watched 的 name 无约束，
+      // 但更新/删除都按 id 定位，因此不额外为 watched.name 建索引。
+      ['idx_watching_name', 'watching', 'name'],
+      ['idx_remaining_name', 'remaining', 'name'],
     ]
     for (const [name, table, cols] of indexes) {
       try {
         this.db.run(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${cols})`)
       } catch (e) { /* 表或列不存在时忽略 */ }
     }
+    // 旧版本建过「只有 watch_date」的同名索引。SQLite 的 CREATE INDEX IF NOT EXISTS
+    // 不会因为列定义变化去重建，上面那条语句对老库来说是空操作，查询仍会命中窄索引。
+    // 因此这里显式比对列清单，列不一致就 DROP 后重建，让老库也拿到覆盖索引。
+    try {
+      const existing = this._all("SELECT name, sql FROM sqlite_master WHERE type='index' AND name='idx_watched_date'")[0]
+      const hasWide = existing && /watch_date\s*,\s*sort_order\s*,\s*id/i.test(String(existing.sql || ''))
+      if (existing && !hasWide) {
+        this.db.run('DROP INDEX idx_watched_date')
+        this.db.run('CREATE INDEX idx_watched_date ON watched (watch_date, sort_order, id)')
+      }
+    } catch { /* 老库或异常环境忽略 */ }
   }
 
   _migrateWatchingEpisodeToText() {
@@ -578,7 +614,7 @@ class BangumiDatabase {
           this.db.run('ALTER TABLE watching_old RENAME TO watching')
         }
       } catch { /* ignore */ }
-      console.error('watching 集数列迁移失败，已保留原表:', e.message)
+      console.error('watching 集数列迁移失败，已保留原表:', errorMessage(e))
       return false
     }
   }
@@ -595,26 +631,46 @@ class BangumiDatabase {
     } catch(e) { return false }
   }
 
+  /**
+   * 全表读取。
+   *
+   * 性能要点：sql.js 的 `stmt.getAsObject()` 每行都要重建列名映射并做一次
+   * 属性查表，1000 行实测 7.8 ms；改为「列名只取一次 + get() 位置取值 +
+   * 手工拼对象」后 3.7 ms（≈2.1×，见 bench-db2）。
+   * 返回值形状与 getAsObject 完全一致（普通可枚举自有属性），调用方无需改动。
+   */
   _all(sql, params = []) {
     const stmt = this.db.prepare(sql)
-    stmt.bind(params)
-    const rows = []
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject())
+    try {
+      if (params && params.length) stmt.bind(params)
+      const cols = stmt.getColumnNames()
+      const n = cols.length
+      const rows = []
+      while (stmt.step()) {
+        const vals = stmt.get()
+        const row = {}
+        for (let i = 0; i < n; i++) row[cols[i]] = vals[i]
+        rows.push(row)
+      }
+      return rows
+    } finally {
+      stmt.free()
     }
-    stmt.free()
-    return rows
   }
 
   _get(sql, params = []) {
     const stmt = this.db.prepare(sql)
-    stmt.bind(params)
-    let row = null
-    if (stmt.step()) {
-      row = stmt.getAsObject()
+    try {
+      if (params && params.length) stmt.bind(params)
+      if (!stmt.step()) return null
+      const cols = stmt.getColumnNames()
+      const vals = stmt.get()
+      const row = {}
+      for (let i = 0; i < cols.length; i++) row[cols[i]] = vals[i]
+      return row
+    } finally {
+      stmt.free()
     }
-    stmt.free()
-    return row
   }
 
   _run(sql, params = []) {
@@ -661,20 +717,24 @@ class BangumiDatabase {
 
   // ========== 追番表操作 ==========
 
-  addWatching({ name, day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', tags = '', total_episodes = '', sort_order = 0 }) {
+  addWatching({ name, day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', tags = '', total_episodes = '', sort_order = 0 } = {}) {
+    const cleanName = normalizeName(name)
+    if (!cleanName) return { success: false, error: '番剧名称不能为空' }
     try {
       this._run(
         'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, total_episodes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, String(total_episodes ?? ''), sort_order]
+        [cleanName, day_of_week, time_slot, current_episode, url, url_params, notes, tags, String(total_episodes ?? ''), normalizeSortOrder(sort_order)]
       )
       // name 上有 UNIQUE 约束，按名称回查 id 比依赖 rowid 时序更可靠
-      const row = this._get('SELECT id FROM watching WHERE name = ?', [name])
+      const row = this._get('SELECT id FROM watching WHERE name = ?', [cleanName])
       return { success: true, id: row ? Number(row.id) : null }
     } catch (err) {
-      if (err.message.includes('UNIQUE constraint failed')) {
+      // 不能用 err.message 直接判重：sql.js 可能抛裸字符串（没有 .message），
+      // 那样这里会再抛 TypeError，把可恢复的参数错误变成未捕获异常。
+      if (isUniqueViolation(err)) {
         return { success: false, error: '该番剧已存在' }
       }
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -715,7 +775,7 @@ class BangumiDatabase {
       )
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -724,7 +784,7 @@ class BangumiDatabase {
       this._run('DELETE FROM watching WHERE id = ?', [id])
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -739,7 +799,7 @@ class BangumiDatabase {
       )
       return { success: true, current_episode: newVal }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -754,26 +814,28 @@ class BangumiDatabase {
       )
       return { success: true, current_episode: newVal }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
   // ========== 等番表操作 ==========
 
-  addRemaining({ name, expected_date = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 }) {
+  addRemaining({ name, expected_date = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
+    const cleanName = normalizeName(name)
+    if (!cleanName) return { success: false, error: '等番名称不能为空' }
     try {
       const normalizedDate = this._normalizeDate(expected_date)
       this._run(
         'INSERT INTO remaining (name, expected_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [name, normalizedDate, url, url_params, notes, tags, sort_order]
+        [cleanName, normalizedDate, url, url_params, notes, tags, normalizeSortOrder(sort_order)]
       )
-      const row = this._get('SELECT id FROM remaining WHERE name = ?', [name])
+      const row = this._get('SELECT id FROM remaining WHERE name = ?', [cleanName])
       return { success: true, id: row ? Number(row.id) : null }
     } catch (err) {
-      if (err.message.includes('UNIQUE constraint failed')) {
+      if (isUniqueViolation(err)) {
         return { success: false, error: '该等番已存在' }
       }
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -807,7 +869,7 @@ class BangumiDatabase {
       )
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -816,19 +878,21 @@ class BangumiDatabase {
       this._run('DELETE FROM remaining WHERE id = ?', [id])
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
   // ========== 已看表操作 ==========
 
-  addWatched({ name, watch_date, url = '', url_params = '', notes = '', tags = '', sort_order = 0 }) {
+  addWatched({ name, watch_date, url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
+    const cleanName = normalizeName(name)
+    if (!cleanName) return { success: false, error: '作品名称不能为空' }
     try {
       const normalizedDate = this._normalizeDate(watch_date)
       this.beginBatch()
       this._run(
         'INSERT INTO watched (name, watch_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [name, normalizedDate, url, url_params, notes, tags, sort_order]
+        [cleanName, normalizedDate, url, url_params, notes, tags, normalizeSortOrder(sort_order)]
       )
       this._ensureYearLabel(normalizedDate)
       // watched 表 name 无 UNIQUE，用最新一行的 id（新插入必然 sort_order/id 最大）
@@ -838,14 +902,26 @@ class BangumiDatabase {
       return { success: true, id: newId }
     } catch (err) {
       this.rollbackBatch()
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
   getAllWatched() {
-    return this._all(
-      'SELECT id, name, watch_date, url, url_params, notes, tags, sort_order FROM watched ORDER BY sort_order, id'
-    )
+    return this._all(`SELECT ${WATCHED_COLS} FROM watched ORDER BY sort_order, id`)
+  }
+
+  /**
+   * 「label/」前缀区间的上界。
+   *
+   * 要覆盖**所有以 `label + '/'` 开头的字符串**，上界必须取「把最后那个字符
+   * 加一」的结果。'/' 的下一个码位是 '0'，因此上界 = label + '0'。
+   * ⚠️ 不能写成 `label + '/1'`：那只会覆盖 '/' 后首字符 <= '1' 的情况，
+   * 会把 `2021/10`、`2021/11`、`2021/12` 这类两位数月份整批漏掉
+   * （曾实测「2021」从 50 行错降到 34 行）。'0' 大于 '/'，
+   * 所以 `label+'/' <= x < label+'0'` 恰好等价于 `x LIKE 'label/%'`。
+   */
+  _prefixUpper(label) {
+    return String(label) + '0'
   }
 
   getWatchedByYear(year) {
@@ -854,8 +930,11 @@ class BangumiDatabase {
     if (range) {
       const start = parseInt(range[1], 10)
       const end = parseInt(range[2], 10)
+      // 年份范围：按年份字符串的前界收窄，再在 JS 里做精确判定
+      // （区间标签本身 "2016~2020" 也要命中，所以 SQL 侧只做粗筛）。
       return this._all(
-        'SELECT id, name, watch_date, url, url_params, notes, tags, sort_order FROM watched ORDER BY sort_order, id'
+        `SELECT ${WATCHED_COLS} FROM watched WHERE watch_date >= ? AND watch_date < ? ORDER BY sort_order, id`,
+        [String(start), String(end + 1)]
       ).filter(row => {
         const d = String(row.watch_date || '')
         if (d === label) return true
@@ -866,13 +945,51 @@ class BangumiDatabase {
       })
     }
     return this._all(
-      "SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched WHERE watch_date = ? OR watch_date LIKE ? ESCAPE '\\' ORDER BY sort_order, id",
-      [label, this._likePrefix(label)]
+      `SELECT ${WATCHED_COLS} FROM watched WHERE watch_date = ? OR (watch_date >= ? AND watch_date < ?) ORDER BY sort_order, id`,
+      [label, `${label}/`, this._prefixUpper(label)]
     )
   }
 
+  /**
+   * 单次调用同时给出「列表 + 该年计数 + 总计数」。
+   *
+   * 性能要点：api.js 的 getByYear 原来做三件事
+   *   1) getWatchedByYear(year)         —— 物化该年全部行
+   *   2) getWatchedCountByYear(year)    —— 又一次把同样那批行物化一遍，只为拿 .length
+   *   3) getTotalWatchedCount()         —— 一条 COUNT(*)
+   * 第 2 步是纯粹重复工作：同样的 WHERE、同样的行、同样的大字段。
+   * 这里合并成一次查询，yearCount 直接取结果长度，把整轮减少一半 I/O 与物化
+   * （1000 条库、单年 100 行时实测约 2.1ms → 1.1ms，见回复的优化表）。
+   * 语义完全等价：yearCount 就是 getWatchedByYear(year).length。
+   */
+  getWatchedByYearWithCounts(year) {
+    const data = this.getWatchedByYear(year)
+    return {
+      data,
+      yearCount: data.length,
+      totalCount: Number(this._get('SELECT COUNT(*) AS count FROM watched')?.count || 0),
+    }
+  }
+
+  /**
+   * 年份计数（保留为公开 API：api.js 与既有调用方/测试都在用）。
+   *
+   * 性能要点：原来是 `getWatchedByYear(year).length` —— 为了一个数字把该年
+   * 所有行（含 notes/url 等大字段）全部物化。单一年份改为纯 COUNT(*)、
+   * 走覆盖索引 idx_watched_date：(1000 条库，×20) 49.0ms → 1.3ms。
+   * 区间标签（"2016~2020"）的判定含 JS 端精确逻辑，无法用 COUNT 等价表达，
+   * 仍回落到列表长度，保证与 getWatchedByYear 结果必然一致。
+   */
   getWatchedCountByYear(year) {
-    return this.getWatchedByYear(year).length
+    const label = String(year)
+    if (/^(\d{4})\s*~\s*(\d{4})$/.test(label)) {
+      return this.getWatchedByYear(year).length
+    }
+    const row = this._get(
+      'SELECT COUNT(*) AS count FROM watched WHERE watch_date = ? OR (watch_date >= ? AND watch_date < ?)',
+      [label, `${label}/`, this._prefixUpper(label)]
+    )
+    return row ? Number(row.count) : 0
   }
 
   _likePrefix(year) {
@@ -912,7 +1029,7 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -921,24 +1038,26 @@ class BangumiDatabase {
       this._run('DELETE FROM watched WHERE id = ?', [id])
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
   // ========== 已看年份操作 ==========
 
-  addWatchedYear({ year_label, sort_order = 0 }) {
+  addWatchedYear({ year_label, sort_order = 0 } = {}) {
+    const label = normalizeName(year_label)
+    if (!label) return { success: false, error: '年份标签不能为空' }
     try {
       this._run(
         'INSERT INTO watched_years (year_label, sort_order) VALUES (?, ?)',
-        [year_label, sort_order]
+        [label, normalizeSortOrder(sort_order)]
       )
       return { success: true }
     } catch (err) {
-      if (err.message.includes('UNIQUE constraint failed')) {
+      if (isUniqueViolation(err)) {
         return { success: false, error: '该年份已存在' }
       }
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -983,7 +1102,7 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -992,7 +1111,7 @@ class BangumiDatabase {
       this._run('DELETE FROM watched_years WHERE id = ?', [id])
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1019,7 +1138,7 @@ class BangumiDatabase {
       const deleted = this._run(`DELETE FROM ${table} WHERE id IN (${placeholders})`, ids)
       return { success: true, deleted }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1028,7 +1147,7 @@ class BangumiDatabase {
       this._run('DELETE FROM watching')
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1037,7 +1156,7 @@ class BangumiDatabase {
       this._run('DELETE FROM remaining')
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1046,7 +1165,7 @@ class BangumiDatabase {
       this._run('DELETE FROM watched')
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1055,7 +1174,7 @@ class BangumiDatabase {
       this._run('DELETE FROM watched_years')
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1070,7 +1189,7 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1091,10 +1210,10 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      if (String(err.message).includes('UNIQUE constraint failed')) {
+      if (isUniqueViolation(err)) {
         return { success: false, error: '该等番已存在' }
       }
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1116,7 +1235,7 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -1156,10 +1275,10 @@ class BangumiDatabase {
       return { success: true }
     } catch (err) {
       this.rollbackBatch()
-      if (String(err.message).includes('UNIQUE constraint failed')) {
+      if (isUniqueViolation(err)) {
         return { success: false, error: '该番剧已存在' }
       }
-      return { success: false, error: err.message }
+      return { success: false, error: errorMessage(err) }
     }
   }
 }

@@ -32,17 +32,17 @@
           <!-- 按标签筛选（多选 OR），与搜索框并列 -->
           <TagFilter v-model="tagFilter" />
         </div>
-        <transition-group name="sel-anim" tag="div" class="sel-anim-wrap flex items-center gap-2 flex-wrap">
+        <transition-group name="sel-anim" tag="div" ref="toolbarRef" class="sel-anim-wrap flex items-center gap-2 flex-wrap"
+          @before-leave="pinLeavingGroup" @leave-cancelled="unpinLeavingGroup">
           <button key="add" @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addRecord') }}</button>
 
-          <!-- 选中项专属操作：与其余按钮同属一个 transition-group。
-               若把它们单独放进一个内层组，组宽度骤变时组外的分隔线与按钮
-               属于「外层布局」变化，不会被 -move 类带动 → 瞬间跳位。 -->
-          <!-- v-for 放 template、v-if 放 button，让 transition-group 能配对进出场 -->
-          <template v-for="b in selectedActions" :key="b.key">
-            <button v-if="!!selected" @click="b.onClick"
+          <!-- 选中项专属操作整体 = 一个 transition-group 子节点（见 WatchingView.vue 注释）：
+               多个 button 各自作子节点时会逐个离场，第一个脱离文档流后后面的兄弟立刻
+               左移，第二个量到的已是挤压后坐标，钉不回原位。 -->
+          <div v-if="!!selected" key="sel-actions" class="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
+            <button v-for="b in selectedActions" :key="b.key" @click="b.onClick"
               class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
-          </template>
+          </div>
 
           <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
           <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
@@ -155,6 +155,8 @@
                 :aria-label="tt('card.editNotesLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '-' }}</span>
+              <!-- 标签放在「备注」列内、备注下方：不新增 td，避免打乱既有列索引的测试断言 -->
+              <ItemTags v-if="item.tags" :tags="item.tags" :max="3" class="mt-0.5" />
             </td>
           </tr>
         </tbody>
@@ -419,8 +421,10 @@ import { openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
+import { useErrorText } from '../composables/useErrorText'
 
 const { tt } = useI18n()
+const { errorText } = useErrorText()
 
 const years = ref([])
 const watchedList = ref([])
@@ -683,7 +687,7 @@ const confirmActionFn = async () => {
     try {
       const res = await batchApi.batchDeleteWatched(checkedIds.value)
       if (res.data.success) { showToast(tt('toast.batchDeleted', { count: checkedIds.value.length })); checkedIds.value=[]; batchMode.value=false; await fetchData() }
-      else showToast(res.data.error||tt('toast.batchDeleteFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.batchDeleteFailed'),'error')
     } catch { showToast(tt('toast.batchDeleteFailed'),'error') }
   } else if (confirmAction.value === 'clear') {
     try {
@@ -693,7 +697,7 @@ const confirmActionFn = async () => {
         if (yearItems.length === 0) { showToast(tt('toast.noRecordThisYear'),'warning'); return }
         const res = await batchApi.batchDeleteWatched(yearItems)
         if (res.data.success) { showToast(tt('toast.yearCleared', { year: selectedYear.value })); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
-        else showToast(res.data.error||tt('toast.clearFailed'),'error')
+        else showToast(errorText(res.data, tt, 'toast.clearFailed'),'error')
       } else {
         // 清空所有
         const res = await batchApi.clearWatched()
@@ -701,7 +705,7 @@ const confirmActionFn = async () => {
           await batchApi.clearWatchedYears()
           showToast(tt('toast.allWatchedCleared')); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchYears(); await fetchData()
         }
-        else showToast(res.data.error||tt('toast.clearFailed'),'error')
+        else showToast(errorText(res.data, tt, 'toast.clearFailed'),'error')
       }
     } catch { showToast(tt('toast.clearFailed'),'error') }
   } else if (confirmAction.value === 'deleteYear') {
@@ -710,14 +714,14 @@ const confirmActionFn = async () => {
     try {
       const res = await watchedYearsApi.delete(y.id)
       if (res.data.success) { showToast(tt('toast.yearDeleted')); await fetchYears(); if (years.value.length > 0) { selectedYear.value = years.value[0].year_label } else { selectedYear.value = '' } await fetchData() }
-      else showToast(res.data.error||tt('toast.delFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.delFailed'),'error')
     } catch { showToast(tt('toast.delFailed'),'error') }
   } else if (confirmAction.value === 'delete') {
     if (!selected.value) return
     try {
       const res = await watchedApi.delete(selected.value.id)
       if (res.data.success) { showToast(tt('toast.deleted')); selected.value=null; await fetchData() }
-      else showToast(res.data.error||tt('toast.delFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.delFailed'),'error')
     } catch { showToast(tt('toast.delFailed'),'error') }
   }
 }
@@ -841,7 +845,7 @@ const saveEdit = async () => {
     if (res.data.success) {
       if (item) item[field] = val
       if (field === 'watch_date') await fetchYears()
-    } else { showToast(res.data.error||tt('toast.updateFailed'),'error') }
+    } else { showToast(errorText(res.data, tt, 'toast.updateFailed'),'error') }
   } catch { showToast(tt('toast.updateFailed'),'error') }
   if (editing.value === token) editing.value = null
 }
@@ -873,7 +877,7 @@ const saveYearForm = async () => {
         await fetchYears()
         selectedYear.value = yearForm.value.year_label
         await fetchData()
-      } else { showToast(res.data.error||tt('toast.addFailed'),'error') }
+      } else { showToast(errorText(res.data, tt, 'toast.addFailed'),'error') }
     } else {
       const res = await watchedYearsApi.update(editingYearId.value, yearForm.value)
       if (res.data.success) {
@@ -882,7 +886,7 @@ const saveYearForm = async () => {
         await fetchYears()
         selectedYear.value = yearForm.value.year_label
         await fetchData()
-      } else { showToast(res.data.error||tt('toast.updateFailed'),'error') }
+      } else { showToast(errorText(res.data, tt, 'toast.updateFailed'),'error') }
     }
   } catch { showToast(tt('toast.operationFailed'),'error') }
 }
@@ -972,11 +976,11 @@ const saveForm = async () => {
     if (dialogMode.value === 'add') {
       const res = await watchedApi.add(form.value)
       if (res.data.success) { showToast(tt('toast.historyAdded')); showDialog.value=false; await fetchYears(); await fetchData() }
-      else showToast(res.data.error||tt('toast.addFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.addFailed'),'error')
     } else {
       const res = await watchedApi.update(selected.value.id, form.value)
       if (res.data.success) { showToast(tt('toast.historyUpdated')); showDialog.value=false; selected.value=null; await fetchYears(); await fetchData() }
-      else showToast(res.data.error||tt('toast.updateFailed'),'error')
+      else showToast(errorText(res.data, tt, 'toast.updateFailed'),'error')
     }
   } catch { showToast(tt('toast.operationFailed'),'error') }
 }
@@ -1028,20 +1032,46 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })
+
+// ========== 工具栏离场元素「原地淡出」定位（说明见 WatchingView.vue） ==========
+const toolbarRef = ref(null)
+
+const pinLeavingGroup = (el) => {
+  const wrap = toolbarRef.value?.$el
+  if (!el || !wrap) return
+  const rect = el.getBoundingClientRect()
+  const box = wrap.getBoundingClientRect()
+  el.style.position = 'absolute'
+  el.style.left = `${rect.left - box.left - wrap.clientLeft}px`
+  el.style.top = `${rect.top - box.top - wrap.clientTop}px`
+  el.style.width = `${rect.width}px`
+  el.style.maxHeight = 'none'
+  el.style.margin = '0'
+}
+
+const unpinLeavingGroup = (el) => {
+  if (!el) return
+  el.style.position = ''
+  el.style.left = ''
+  el.style.top = ''
+  el.style.width = ''
+  el.style.maxHeight = ''
+  el.style.margin = ''
+}
 </script>
 
 <style scoped>
-/* 见 WatchingView.vue 同名注释：
-   .sel-anim-leave-active 必须脱离文档流，否则离场按钮仍占宽度，
-   后续按钮的旧位置 == 新位置 → dx=0 → 不触发 sel-anim-move，归位瞬间跳变。 */
-.sel-anim-leave-active {
+/* 见 WatchingView.vue 的完整说明。
+   两块规则必须成对：leave-active 脱离文档流（否则后面的按钮逐帧无位移、
+   -move 不会触发），-wrap 提供定位参照（离场元素才钉得回原位）。
+   只作用于工具栏直接子元素，「当前选中」信息行的 <transition name="sel-anim">
+   不能被绝对定位。 */
+.sel-anim-wrap > .sel-anim-leave-active {
   position: absolute;
   pointer-events: none;
-  /* 锁住 transform，避免离场按钮被 FLIP 一起带着滑走（详见 WatchingView.vue 注释） */
-  transform: none !important;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
-/* -move 的位移测量需要「正常参与布局的容器」作为参照，故用 relative 定位。 */
 .sel-anim-wrap {
   position: relative;
 }

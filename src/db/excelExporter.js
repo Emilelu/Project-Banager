@@ -206,6 +206,11 @@ function csvCell(v) {
  * 生成 CSV（三张表分别成段，用空行 + 表名分隔）。
  * 不拆成三个文件，是因为浏览器一次点击只能下载一个文件；
  * 单文件 CSV 也能被 Excel / Numbers / Google Sheets 直接打开。
+ *
+ * ⚠ 已知的结构性损失（与 xlsx 模板一致，不是缺陷）：
+ * 追番表是「时间 × 星期」的周历，没有 time_slot 或 day_of_week 不在周一到周日的条目
+ * 没有格子可放，因此**不会出现在 CSV 里**。为它们新加段落会改变文件格式，
+ * 所以这里保持与模板一致；这类条目走 JSON 导出才能完整往返。
  */
 export function buildExportCsv(data) {
   const lines = []

@@ -2,11 +2,11 @@
   <div class="space-y-5">
     <!-- 请注意：本页面由弹窗改造而来，三大区块的交互逻辑与弹窗版完全一致，
          仅外壳从 fixed 遮罩换成普通页面流。 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-5 space-y-6">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-7 py-6 space-y-8">
       <!-- 玻璃风格 -->
             <section>
-              <h4 class="text-sm font-bold text-gray-700 mb-2">{{ tt('theme.glassStyle') }}</h4>
-              <div class="grid grid-cols-2 gap-3">
+              <h4 class="text-sm font-bold text-gray-700 mb-3">{{ tt('theme.glassStyle') }}</h4>
+              <div class="grid grid-cols-2 gap-4">
                 <button @click="setGlass('frost')"
                   class="p-3 rounded-xl border-2 text-left transition-all btn-press"
                   :class="state.glass === 'frost' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
@@ -27,13 +27,13 @@
             <!-- 配色：按「选什么颜色 → 颜色从哪来」的决策顺序分层，
                  自定义取色收进折叠，避免一排颜色选择器把主流程冲散。 -->
             <section>
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.palette') }}</h4>
                 <div class="flex items-center gap-1.5">
                   <button @click="onRandom" class="btn-base btn-primary !px-3 !py-1 !text-xs">
                     <AppIcon scale="xs" name="sparkle" />{{ tt('theme.randomPalette') }}
                   </button>
-                  <button @click="onReset" :title="tt('theme.resetPalette')"
+                  <button @click="onReset" v-tip="tt('theme.resetPalette')"
                     class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 transition btn-press">
                     <AppIcon scale="xs" name="undo" />
                   </button>
@@ -41,21 +41,21 @@
               </div>
 
               <!-- ① 预设配色（最常用，一眼可选） -->
-              <div class="flex gap-2.5 flex-wrap">
+              <div class="flex gap-3 flex-wrap">
                 <button v-for="preset in presets" :key="preset.key" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
                   class="w-10 h-10 rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden relative"
                   :class="isActivePreset(preset) ? 'border-gray-700 scale-110' : 'border-transparent hover:scale-105'"
-                  :aria-label="tt(preset.key)" :title="tt(preset.key)">
+                  :aria-label="tt(preset.key)" v-tip="tt(preset.key)">
                   <span class="w-full h-full" :style="{ background: `linear-gradient(135deg, ${hslCss(preset.p)}, ${hslCss(preset.s)})` }"></span>
                 </button>
               </div>
 
               <!-- ② 配色来源：跟随壁纸 / 每次随机（互斥二选一，做成清晰的三段式） -->
-              <div class="mt-3">
-                <div class="text-xs text-gray-500 mb-1.5">{{ tt('theme.paletteSource') }}</div>
-                <div class="grid grid-cols-2 gap-2">
+              <div class="mt-5">
+                <div class="text-xs text-gray-500 mb-2">{{ tt('theme.paletteSource') }}</div>
+                <div class="grid grid-cols-2 gap-3">
                   <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
-                    :title="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
+                    v-tip="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
                     class="seg-btn flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition btn-press border disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="isPaletteAuto ? 'seg-active' : 'seg-idle'">
                     <AppIcon scale="xs" name="palette" />{{ tt('theme.pickFromWallpaper') }}
@@ -74,7 +74,7 @@
 
               <!-- ③ 自定义取色：低频高级项，默认折叠 -->
               <button @click="showCustomColor = !showCustomColor"
-                class="mt-3 flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press">
+                class="mt-5 flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press">
                 <AppIcon scale="xs" :name="showCustomColor ? 'caretUp' : 'caretDown'" />
                 {{ tt('theme.customColor') }}
               </button>
@@ -89,7 +89,7 @@
               <transition name="collapse">
                 <div v-if="showCustomColor">
                   <div class="collapse-shell">
-                    <div class="tone-panel mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 flex items-center gap-2 flex-wrap">
+                    <div class="tone-panel mt-3 p-3 rounded-xl bg-white/50 border border-primary/15 flex items-center gap-2 flex-wrap">
                       <label class="flex items-center gap-1.5 text-xs text-gray-600">
                         {{ tt('theme.primary') }}
                         <ColorPicker :value="customP" size="2rem" :aria-label="tt('theme.customPrimary')" @input="customP = $event" />
@@ -107,7 +107,7 @@
 
             <!-- 背景图 -->
             <section>
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.wallpaper') }}</h4>
                 <button @click="toggleBg" role="switch" :aria-checked="state.bgEnabled ? 'true' : 'false'"
                   :aria-label="state.bgEnabled ? tt('theme.bgOff') : tt('theme.bgOn')"
@@ -135,13 +135,13 @@
                   </button>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
-                  class="tone-input w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
-                  <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">{{ tt('theme.customUrlHint') }}</p>
+                  class="tone-input w-full mt-3 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
+                  <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-2">{{ tt('theme.customUrlHint') }}</p>
                   <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
                   <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
                        点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
                        不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
-                  <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
+                  <div v-if="state.bgProvider !== 'custom'" class="mt-3 flex items-center gap-2.5 flex-wrap">
                     <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
                          后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。深色模式由
                          style.css 的 .dark .seg-btn.* 规则反转（半透明白底 + 亮色描边 + 白字）。 -->
@@ -151,13 +151,13 @@
                       <AppIcon scale="xs" name="refresh" class="inline-block" /> {{ tt('theme.autoChange') }}
                     </button>
                     <button @click="setAutoSwitch(false)"
-                      :title="tt('theme.autoSwitchHint')"
+                      v-tip="tt('theme.autoSwitchHint')"
                       class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
                       :class="!state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
                       <AppIcon scale="xs" name="bookmark" class="inline-block" /> {{ tt('theme.fixCurrent') }}
                     </button>
                   </div>
-                <div v-if="state.bgUrl" class="mt-3">
+                <div v-if="state.bgUrl" class="mt-4">
                   <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
                        这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
                        生成中显示骨架，降级失败才回退原图直出 -->
@@ -168,14 +168,14 @@
                       loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
-                  <div class="flex items-center gap-2 mt-1.5">
+                  <div class="flex items-center gap-2.5 mt-2">
                     <p v-if="bgFailed" class="tone-danger text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
                     <button @click="openOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      :title="tt('theme.openOriginalHint')"><AppIcon scale="xs" name="link" />{{ tt('theme.openOriginal') }}</button>
+                      v-tip="tt('theme.openOriginalHint')"><AppIcon scale="xs" name="link" />{{ tt('theme.openOriginal') }}</button>
                     <button @click="downloadOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      :title="tt('theme.downloadOriginalHint')"><AppIcon scale="xs" name="download" />{{ tt('theme.downloadOriginal') }}</button>
+                      v-tip="tt('theme.downloadOriginalHint')"><AppIcon scale="xs" name="download" />{{ tt('theme.downloadOriginal') }}</button>
                   </div>
                   <p v-if="noCorsSource" class="tone-warning text-xs text-warning-dark/90 mt-1 leading-relaxed">
                     ⓘ {{ tt('theme.noCorsDetail') }}
@@ -183,7 +183,7 @@
                 </div>
                 <!-- 遮罩/模糊属于低频微调：默认折叠，避免弹窗被撑到必须滚动，
                      导致底部控件被裁（原先「遮罩浓度」滑块就被切掉一半）。 -->
-                <div class="mt-3 flex items-center justify-between">
+                <div class="mt-4 flex items-center justify-between">
                   <button @click="showTuning = !showTuning"
                     class="tone-fold flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press"
                     :aria-expanded="showTuning">
@@ -192,7 +192,7 @@
                   </button>
                   <!-- 「恢复默认」是展开后才出现的附属动作：单独淡入，不和折叠主体抢动画 -->
                   <transition name="fade">
-                    <button v-if="showTuning" @click="resetBgTuning" :title="tt('theme.resetMaskBlurHint')"
+                    <button v-if="showTuning" @click="resetBgTuning" v-tip="tt('theme.resetMaskBlurHint')"
                       class="tone-fold px-2 py-1 rounded-lg text-[0.6875rem] text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
                   </transition>
                 </div>
@@ -204,7 +204,7 @@
                 <transition name="collapse">
                   <div v-if="showTuning">
                     <div class="collapse-shell">
-                      <div class="tone-tuning mt-2 p-3 rounded-xl bg-white/70 border border-primary/15 space-y-2.5">
+                      <div class="tone-tuning mt-3 p-3.5 rounded-xl bg-white/70 border border-primary/15 space-y-3.5">
                         <label class="tone-label flex items-center gap-3 text-xs font-medium" style="color: rgb(var(--txt-card-700, 55 48 70))">
                           <span class="w-14 shrink-0">{{ tt('theme.maskOpacity') }}</span>
                           <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"

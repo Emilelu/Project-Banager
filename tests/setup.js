@@ -21,7 +21,14 @@ import AppIcon from '../src/components/AppIcon.vue'
 import TagSelector from '../src/components/TagSelector.vue'
 import TagFilter from '../src/components/TagFilter.vue'
 import ColorPicker from '../src/components/ColorPicker.vue'
-config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter, ColorPicker }
+import ItemTags from '../src/components/ItemTags.vue'
+config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter, ColorPicker, ItemTags }
+
+// 同理注册全局悬浮气泡指令 v-tip：
+// 视图模板里已把原生 title 换成 v-tip，测试不注册会刷屏
+// "Failed to resolve directive: tip"，并按 DOM 结构差异导致部分断言失败。
+import { vTip } from '../src/composables/useHoverTip'
+config.global.directives = { ...(config.global.directives || {}), tip: vTip }
 
 // jsdom 缺失的浏览器 API 兜底
 if (typeof window !== 'undefined') {

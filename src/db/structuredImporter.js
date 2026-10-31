@@ -44,9 +44,55 @@ const WEEKDAY_ALIASES = [
   ['周日', ['周日', '星期日', 'Sunday', 'Sun']],
 ]
 
+/**
+ * 从 JSON 记录里取出可用名称。
+ *
+ * 为什么不能直接 String(row.name)：
+ *   JSON 是用户可手改的，name 完全可能是对象/数组/纯空白。
+ *   String({a:1}) → "[object Object]"、['x'] → "x"、'   ' → 一堆空格，
+ *   这些都会被当成合法名称写进库，界面上出现一堆无法辨认的条目，
+ *   用户既不知道从哪来的、也删不干净。这里统一判定为「无效名称」并计入失败。
+ */
+function usableName(raw) {
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    return s ? s : ''
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+  return ''
+}
+
 /** 统一的导入结果结构 */
 function emptyResult() {
   return { imported: 0, failed: 0, errors: [], byTable: { watching: 0, remaining: 0, watched: 0 } }
+}
+
+/**
+ * 让出主线程：大文件逐条写库会长时间占用 UI 线程，期间点击/重绘全部排队，
+ * 用户看到的是「页面假死」。每 YIELD_EVERY 条 await 一次，浏览器有机会喘口气。
+ * 与 excelImporter 的 yieldToUI 同义，只是这里没有进度回调（结构化导入是同步汇总）。
+ */
+const YIELD_EVERY = 200
+const yieldToUI = () => new Promise((resolve) => {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve())
+  else setTimeout(resolve, 0)
+})
+
+/**
+ * 结构化导入的体积上限。
+ * 与 xlsx 的 20MB 一致：file.text() 是**全量读入内存**再 JSON.parse，
+ * 50MB 的 JSON 在低配机器上会直接把页面 OOM 掉（白屏，且用户不知道发生了什么）。
+ * 在解析之前就拒绝，比解析到一半崩掉更可控。
+ */
+const MAX_STRUCTURED_BYTES = 20 * 1024 * 1024
+
+/** 体积预检：只拦「超过上限」，空文件交给各解析器给出各自的既有提示 */
+function checkFileSize(file) {
+  const size = Number(file?.size)
+  if (Number.isFinite(size) && size > MAX_STRUCTURED_BYTES) {
+    return `文件超过 20MB（当前 ${(size / 1024 / 1024).toFixed(1)}MB），请拆分后再导入`
+  }
+  return null
 }
 
 /** 去掉 BOM 并统一换行 */
@@ -98,6 +144,8 @@ function looksLikeDate(v) {
  */
 export async function importJson(file) {
   const result = emptyResult()
+  const sizeIssue = checkFileSize(file)
+  if (sizeIssue) { result.failed = 1; result.errors.push(sizeIssue); return result }
   const raw = normalizeText(await file.text())
 
   let parsed
@@ -132,10 +180,20 @@ export async function importJson(file) {
 
   const db = await getDb()
 
+  // 逐条写库并定期让出主线程：20 万条 JSON 原先会一条龙同步跑完，
+  // 期间页面完全无响应（实测浏览器里跑了 40 秒以上，用户只能强杀标签页）。
+  let processed = 0
+  const tick = async () => {
+    processed++
+    if (processed % YIELD_EVERY === 0) await yieldToUI()
+  }
+
   for (const row of groups.watching) {
-    if (!row?.name) { result.failed++; result.errors.push('追番记录缺少 name，已跳过'); continue }
+    await tick()
+    const name = usableName(row?.name)
+    if (!name) { result.failed++; result.errors.push('追番记录缺少 name（需要非空名称字符串），已跳过'); continue }
     const res = db.addWatching({
-      name: String(row.name),
+      name,
       day_of_week: String(row.day_of_week ?? ''),
       time_slot: String(row.time_slot ?? ''),
       current_episode: String(row.current_episode ?? '0'),
@@ -151,9 +209,11 @@ export async function importJson(file) {
   }
 
   for (const row of groups.remaining) {
-    if (!row?.name) { result.failed++; result.errors.push('等番记录缺少 name，已跳过'); continue }
+    await tick()
+    const name = usableName(row?.name)
+    if (!name) { result.failed++; result.errors.push('等番记录缺少 name（需要非空名称字符串），已跳过'); continue }
     const res = db.addRemaining({
-      name: String(row.name),
+      name,
       expected_date: String(row.expected_date ?? ''),
       url: String(row.url ?? ''),
       url_params: String(row.url_params ?? ''),
@@ -166,9 +226,11 @@ export async function importJson(file) {
   }
 
   for (const row of groups.watched) {
-    if (!row?.name) { result.failed++; result.errors.push('已看记录缺少 name，已跳过'); continue }
+    await tick()
+    const name = usableName(row?.name)
+    if (!name) { result.failed++; result.errors.push('已看记录缺少 name（需要非空名称字符串），已跳过'); continue }
     const res = db.addWatched({
-      name: String(row.name),
+      name,
       watch_date: String(row.watch_date ?? ''),
       url: String(row.url ?? ''),
       url_params: String(row.url_params ?? ''),
@@ -178,6 +240,13 @@ export async function importJson(file) {
     })
     if (res.success) { result.imported++; result.byTable.watched++ }
     else { result.failed++; result.errors.push(`已看「${row.name}」：${res.error}`) }
+  }
+
+  // 三张表都是空的：明确告诉用户「文件里没有数据」，而不是给出一次成功的空导入。
+  // 空 JSON 对象 `{}` 是最常见的「选错文件」形态。
+  if (result.imported === 0 && result.failed === 0 && result.errors.length === 0) {
+    result.failed = 1
+    result.errors.push('JSON 里没有任何可导入的记录（watching / remaining / watched 均为空）')
   }
 
   return result
@@ -235,14 +304,28 @@ function isBlankRecord(cells) {
   return cells.every((c) => !String(c ?? '').trim())
 }
 
-/** 识别分段标题记录：「# Watching | 追番」 */
-function isSectionRecord(cells) {
+/**
+ * 识别分段标题记录：「# Watching | 追番」。
+ *
+ * ⚠ 不能只看「以 # 开头」：已看表的年份列是**第一列**，所以一部叫
+ *   「# 标题作品」的番剧在 CSV 里就是一条 `# 标题作品 (2025/07)` 的单单元格记录。
+ *   若一律当成分段标题，整段已看会被吞掉（实测 imported=0）。
+ * 因此判定要求「像表名」：
+ *   · 命中已知表名 / 含 `|`（导出格式固定是「# Watching | 追番」）；或
+ *   · 结构上处在分段边界（文件开头或紧跟空行）—— 导出时分段标题前必有空行。
+ */
+function isSectionRecord(cells, { atBoundary }) {
   const first = String(cells[0] ?? '').trim()
   if (!/^#\s/.test(first)) return false
-  // 导出时标题是单独的单元格；若被逗号拆开，则要求出现已知表名，
-  // 以免把「以 # 开头的番名」当成新分段
-  if (cells.length === 1) return true
-  return /追番|Watching|等番|Remaining|已看|Watched|回忆|历史|等待/i.test(first)
+  // 导出时标题是单独的单元格；若被逗号拆开，则要求出现已知表名
+  if (cells.length > 1) {
+    return /追番|Watching|等番|Remaining|已看|Watched|回忆|历史|等待/i.test(first)
+  }
+  if (/追番|Watching|等番|Remaining|已看|Watched|回忆|历史|等待/i.test(first)) return true
+  if (first.includes('|')) return true
+  // 其余形如 "# 其他表" 的未知分段：只在分段边界处认作标题（随后被忽略），
+  // 夹在数据行中间的则按数据解析。
+  return atBoundary
 }
 
 /**
@@ -255,18 +338,23 @@ function isSectionRecord(cells) {
  */
 export async function importCsv(file) {
   const result = emptyResult()
+  const sizeIssue = checkFileSize(file)
+  if (sizeIssue) { result.failed = 1; result.errors.push(sizeIssue); return result }
   const text = normalizeText(await file.text())
   const records = parseCsvRecords(text)
 
   const sections = []
   let current = null
+  let prevBlank = true // 文件开头也算分段边界
   for (const cells of records) {
-    if (isSectionRecord(cells)) {
+    if (isSectionRecord(cells, { atBoundary: prevBlank })) {
       if (current) sections.push(current)
       current = { title: String(cells[0]).replace(/^#\s*/, '').trim(), rows: [] }
+      prevBlank = false
       continue
     }
     if (current) current.rows.push(cells)
+    prevBlank = isBlankRecord(cells)
   }
   if (current) sections.push(current)
 
@@ -283,6 +371,18 @@ export async function importCsv(file) {
     if (/追番|Watching/i.test(title)) await importCsvWatching(db, sec.rows, result)
     else if (/等番|Remaining/i.test(title)) await importCsvRemaining(db, sec.rows, result)
     else if (/已看|Watched|回忆|历史/i.test(title)) await importCsvWatched(db, sec.rows, result)
+  }
+
+  // 有分段但一条都没解析出来：必须报失败。
+  // 典型场景是用户手改过文件、把表头行删了或换了列名，此时各解析器都静默 return，
+  // 汇总出来是「成功导入 0 条、失败 0 条」——界面会显示为一次成功的空导入，
+  // 用户以为数据进来了，其实什么都没发生（最难排查的一类静默失败）。
+  if (result.imported === 0 && result.failed === 0 && result.errors.length === 0) {
+    const knownTable = sections.some((sec) => /追番|Watching|等番|Remaining|已看|Watched/i.test(sec.title))
+    if (knownTable) {
+      result.failed = 1
+      result.errors.push('找到了工作表分段，但没有解析到任何数据行：请检查表头（星期列 / Name,Time / 年份列）是否符合导出模板')
+    }
   }
 
   return result
@@ -476,6 +576,8 @@ function stripMdTags(body) {
  */
 export async function importMd(file) {
   const result = emptyResult()
+  const sizeIssue = checkFileSize(file)
+  if (sizeIssue) { result.failed = 1; result.errors.push(sizeIssue); return result }
   const text = normalizeText(await file.text())
   const db = await getDb()
 
@@ -574,6 +676,13 @@ export async function importMd(file) {
       if (res.success) { result.imported++; result.byTable.watched++ }
       else { result.failed++; result.errors.push(`已看「${name}」：${res.error}`) }
     }
+  }
+
+  // 有章节但没有可识别的列表项：同样不能报「成功的空导入」。
+  // 例：章节标题被翻译/改写成了导出器不认的写法，此时 section 为空，整段被跳过。
+  if (result.imported === 0 && result.failed === 0 && result.errors.length === 0) {
+    result.failed = 1
+    result.errors.push('找到了章节标记，但没有解析到任何列表项：请确认内容按导出的「- 条目」格式书写')
   }
 
   return result
