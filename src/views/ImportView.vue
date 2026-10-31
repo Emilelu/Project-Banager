@@ -1,34 +1,35 @@
 <template>
   <div class="space-y-5">
-    <!-- 文件选择区域 -->
-    <div class="glass rounded-2xl shadow-lg border-2 border-primary/20 px-6 py-5 shine-border">
-      <div class="flex items-center gap-4 flex-wrap relative z-10">
+    <!-- 文件选择区域：卡片标题行 + 正文（与「导入 & 导出」页的导入卡片刻度一致） -->
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
+      <div class="card-head mb-1">
+        <AppIcon scale="md" name="upload" class="text-primary" />
+        <!-- 「只支持 .xlsx / .xls 文件」是**选择文件按钮**的格式限制说明 → 按钮气泡（见下） -->
+        <h3 class="card-head-title gradient-text">{{ tt('import.instructions') }}</h3>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap relative z-10">
         <!-- a11y：原实现是一个包着 `class="hidden"` 文件框的 <label>。
              label 本身不可聚焦、内部 input 又是 display:none，结果**键盘用户完全无法选择文件**
              （实测本页原本只有「开始导入 / 清空日志」两个 Tab 位）。这里补 role=button + tabindex
              + Enter/Space 触发，同时保留同一个 input[type=file]（导入流程与测试都依赖它）。
-             配色走 .btn-pick-file：直接用 `from-primary to-primary-dark` 时，
-             壁纸自适应会把 --c-primary 调到偏亮，白字实测只有 2.97:1；
-             与 success 按钮同一套「主题色 + 混黑」写法后达标。 -->
+             外观统一走 .btn-base + .btn-toned（主题色驱动），不再自写渐变。 -->
         <label role="button" tabindex="0"
-          class="btn-pick-file px-5 py-2.5 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 btn-press cursor-pointer"
+          class="btn-base btn-toned cursor-pointer"
+          v-tip="tt('toast.onlyExcel')" :aria-label="tt('import.browse')"
           @keydown.enter.prevent="openFileDialog"
           @keydown.space.prevent="openFileDialog">
-          <AppIcon scale="sm" name="search" /> {{ tt('import.browse') }}
+          <AppIcon scale="sm" name="search" />{{ tt('import.browse') }}
           <input ref="fileInputRef" type="file" accept=".xlsx,.xls" @change="onFileChange" class="hidden" />
         </label>
-        <div class="flex-1 text-sm text-gray-600">
-          <!-- 文件名用 text-success-dark：text-success（#10B981）压在白玻璃上只有 2.54:1 -->
-          <span v-if="selectedFile" class="text-success-dark font-medium animate-scale-in inline-block"><AppIcon scale="sm" name="check" /> {{ selectedFile.name }}</span>
-          <span v-else class="text-gray-400">{{ tt('import.noFile') }}</span>
+        <div class="flex-1 text-sm min-w-0">
+          <span v-if="selectedFile" class="inline-flex items-center gap-1.5 text-sm font-medium text-success-dark animate-scale-in">
+            <AppIcon scale="sm" name="check" />{{ selectedFile.name }}
+          </span>
+          <span v-else class="card-sub">{{ tt('import.noFile') }}</span>
         </div>
-        <!-- 「开始导入」原用 success→emerald-400 渐变 + 白字，实测最差只有 1.92:1
-             （emerald-400 太亮）。改成 --c-success-dark 与黑色混色的深阶渐变，
-             最差 ≈4.7:1（仍是同一套绿色语义，且随主题配色联动）。 -->
         <button @click="startImport" :disabled="!selectedFile || importing"
-          class="btn-import-now px-5 py-2.5 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all duration-300 btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">
-          <span v-if="importing" class="inline-flex items-center gap-1.5"><AppIcon scale="sm" name="clock" />{{ tt('import.importingButton') }}</span>
-          <span v-else class="inline-flex items-center gap-1.5"><AppIcon scale="sm" name="video" />{{ tt('import.start') }}</span>
+          class="btn-base btn-primary shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
+          <AppIcon scale="sm" :name="importing ? 'clock' : 'video'" />{{ importing ? tt('import.importingButton') : tt('import.start') }}
         </button>
       </div>
       <!-- 导入进度：日志里的「已处理 x/y 行」是文字流，读屏只能听到一串数字。
@@ -44,9 +45,12 @@
       </div>
     </div>
 
-    <!-- 导入说明 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-5">
-      <h3 class="text-sm font-bold gradient-text mb-3"><AppIcon scale="lg" name="log" /> {{ tt('import.instructions') }}</h3>
+    <!-- 导入说明（第一部分） -->
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
+      <div class="card-head mb-3">
+        <AppIcon scale="md" name="log" class="text-primary" />
+        <h3 class="card-head-title gradient-text">{{ tt('import.instructions') }}</h3>
+      </div>
       <div class="text-sm text-gray-600 space-y-2 leading-relaxed">
         <p>{{ tt('import.step1') }}</p>
         <ul class="ml-6 list-disc space-y-1">
@@ -70,9 +74,12 @@
     </div>
 
     <!-- 导入说明（其余段落） -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-5">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
+      <div class="card-head mb-3">
+        <AppIcon scale="md" name="note" class="text-primary" />
+        <h3 class="card-head-title gradient-text">{{ tt('import.step4') }}</h3>
+      </div>
       <div class="text-sm text-gray-600 space-y-2 leading-relaxed">
-        <p>{{ tt('import.step4') }}</p>
         <ul class="ml-6 list-disc space-y-1">
           <li>{{ tt('import.step4L1') }}</li>
           <li>{{ tt('import.step4L2') }}</li>
@@ -89,14 +96,17 @@
 
     <!-- 日志区域 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
-      <div class="px-6 py-3 border-b border-white/20 flex items-center justify-between">
-        <h3 class="text-sm font-bold gradient-text"><AppIcon scale="lg" name="log" /> {{ tt('import.log') }}</h3>
-        <button @click="clearLog" class="text-xs text-gray-400 hover:text-primary transition btn-press"><AppIcon scale="lg" name="trash" /> {{ tt('import.clearLog') }}</button>
+      <div class="card-head px-6 pt-4 pb-3 border-b border-white/20">
+        <AppIcon scale="md" name="log" class="text-primary" />
+        <h3 class="card-head-title gradient-text">{{ tt('import.log') }}</h3>
+        <button @click="clearLog" class="btn-base btn-neutral log-clear ml-auto">
+          <AppIcon scale="sm" name="trash" />{{ tt('import.clearLog') }}
+        </button>
       </div>
       <div ref="logContainer"
         class="h-64 overflow-y-auto px-6 py-4 font-mono text-xs space-y-1 rounded-b-2xl"
         style="background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color: #a7f3d0;">
-        <div v-if="logs.length === 0" class="empty-hint"><AppIcon scale="sm" name="sparkle" /> {{ tt('import.waiting') }}</div>
+        <div v-if="logs.length === 0" class="log-empty inline-flex items-center gap-1.5"><AppIcon scale="sm" name="sparkle" />{{ tt('import.waiting') }}</div>
         <!-- 日志等级色：底是固定的深蓝渐变（#1a1a2e→#16213e），实测各等级对比度
              error #F87171 6.17 / warning #FBBF24 10.22 / success #4ADE80 9.79 / 普通 #9CA3AF 6.72，
              都 ≥4.5。原先 empty 态用 text-gray-500（#6B7280）只有 3.53:1，已改为 gray-400。 -->
@@ -258,31 +268,27 @@ const clearLog = () => {
 }
 </script>
 <style scoped>
-/* 日志区底是固定深蓝渐变（#1a1a2e→#16213e）。
-   空态原先用 text-gray-500（#6B7280），实测只有 2.48:1；换成 gray-300 后 ≈11:1。
-   注意不能复用 .text-gray-400：深色模式全局规则会把它压暗。 */
-.empty-hint {
-  color: #D1D5DB;
+/*
+ * 日志区专用：底是固定深蓝渐变（#1a1a2e → #16213e），与卡片玻璃底完全不同，
+ * 因此空态文字不能用 .empty-inline 的浅色灰（那是给玻璃底算的），
+ * 这里单独给一档更亮的灰（gray-300 ≈ 11:1）。
+ * 注意：不能复用 .text-gray-400 —— 深色模式的全局 `.dark .text-gray-400`
+ * 会把它压到 #7c8ba5，压在这块深蓝上就偏暗了。
+ */
+.log-empty {
+  color: #d1d5db;
 }
 
-/* 「浏览文件」label：主题色深阶混色渐变，白字最差 ≈5.7:1。
-   直接用 from-primary to-primary-dark 时，壁纸自适应会把 --c-primary 调亮到
-   白底 2.97:1；混黑后再算，即便自适应继续提亮也仍在 4.8:1 以上。 */
-.btn-pick-file {
-  background-image: linear-gradient(
-    to right,
-    color-mix(in srgb, rgb(var(--c-primary)) 78%, black),
-    color-mix(in srgb, rgb(var(--c-primary-dark)) 88%, black)
-  );
+/* 日志区右上角的「清空日志」：深蓝底上要浅色描边 + 浅色字，
+   而 .btn-neutral 是按玻璃底算的深色字，直接放上来会糊住。 */
+.log-clear {
+  color: #cbd5e1 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* 「开始导入」按钮：success 深阶混色渐变，白字最差 ≈4.7:1（原 emerald-400 端点只有 1.92:1）。
-   与 Toast / 进度条同一套「语义色 + 混黑」的做法，主题换色时自动跟随。 */
-.btn-import-now {
-  background-image: linear-gradient(
-    to right,
-    color-mix(in srgb, rgb(var(--c-success-dark)) 78%, black),
-    color-mix(in srgb, rgb(var(--c-success-dark)) 88%, black)
-  );
+.log-clear:hover {
+  color: #f1f5f9 !important;
+  background: rgba(255, 255, 255, 0.16) !important;
 }
 </style>

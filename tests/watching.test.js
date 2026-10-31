@@ -122,6 +122,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+
+const topbarText = () => Array.from(document.querySelectorAll('.topbar-stat')).map(s => s.textContent).join('|')
+
 describe('WatchingView 周历 / 集数 / 增删改', () => {
   it('按星期渲染卡片，未排期记录进入未排期区', async () => {
     const wrapper = await mountWatching([
@@ -151,13 +154,13 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
     const wrapper = mount(WatchingView, mountOptions)
     await flushPromises()
     const card = cardByName(wrapper, '番剧A')
-    await card.find('button[title="+1集"]').trigger('click')
+    await card.find('button.btn-mini-plus').trigger('click')
     await flushPromises()
     expect(watchingApi.increment).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toMatch(/当前选中:[\s\S]*e2/)
     expect(card.text()).toContain('2')
 
-    await card.find('button[title="-1集"]').trigger('click')
+    await card.find('button.btn-mini-minus').trigger('click')
     await flushPromises()
     expect(watchingApi.decrement).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toMatch(/当前选中:[\s\S]*e1/)
@@ -213,8 +216,10 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
     await cardByName(wrapper, '番剧A').trigger('click')
     await buttonByText(wrapper, '移至已看').trigger('click')
     const dialog = wrapper.find('.app-dialog')
-    const dateInput = dialog.find('input[type="date"]')
-    expect(dateInput.element.value).toBe(todayStr().replace(/\//g, '-'))
+    // 原生 input[type=date] 已换成自研 DatePicker：触发器是 button，值以文本呈现
+    const trigger = dialog.find('[data-datepicker-trigger]')
+    expect(trigger.exists(), 'DatePicker 触发器应存在').toBe(true)
+    expect(trigger.text()).toContain(todayStr())
 
     await buttonByExactText(dialog, '确定').trigger('click')
     await flushPromises()
@@ -382,7 +387,7 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
       rows = rows.filter((row) => row.id !== id)
       return actionOk()
     })
-    const wrapper = mount(RemainingView, mountOptions)
+    const wrapper = mount(RemainingView, { ...mountOptions, attachTo: document.body })
     await flushPromises()
     expect(tableRows(wrapper)).toHaveLength(20)
 
@@ -396,7 +401,7 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
 
     expect(remainingApi.delete).toHaveBeenCalledWith(21)
     expect(tableRows(wrapper)).toHaveLength(20)
-    expect(wrapper.text()).toContain('共 20 条')
+    expect(Array.from(document.querySelectorAll('.topbar-stat')).map(s => s.textContent).join('|')).toContain('共 20 条')
     expect(buttonByExactText(wrapper, '上一页').attributes('disabled')).toBeDefined()
   })
 
@@ -417,18 +422,21 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
     })
   })
 
-  it('新增等番默认预计日期为今天', async () => {
+  // 用户要求：「所有日期输入框 除了移动到已看的弹窗 其他的都不要默认填充日期」
+  it('新增等番不预填预计日期', async () => {
     remainingApi.add.mockResolvedValue(actionOk())
     const wrapper = await mountRemaining([])
     await buttonByText(wrapper, '添加等番').trigger('click')
     const dialog = wrapper.find('.app-dialog')
-    expect(dialog.find('input[type="date"]').element.value).toBe(todayStr().replace(/\//g, '-'))
+    // 日期为空（不预填今天）：自研 DatePicker 的触发器此时是「空态」，只显示占位文案
+    const trigger = dialog.find('[data-datepicker-trigger]')
+    expect(trigger.exists()).toBe(true)
+    expect(trigger.classes()).toContain('is-empty')
     await dialog.find('input[placeholder="请输入番剧名称"]').setValue('新等番')
     await buttonByExactText(dialog, '保存').trigger('click')
     await flushPromises()
     expect(remainingApi.add).toHaveBeenCalledWith(expect.objectContaining({
       name: '新等番',
-      expected_date: todayStr(),
     }))
   })
 })

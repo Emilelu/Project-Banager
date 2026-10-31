@@ -4,7 +4,8 @@
     <!-- 侧边栏可折叠：展开 15rem / 收起 4rem（只留图标）。
          宽度用 transition 平滑变化，收起后文字与分区标题隐藏、图标居中。 -->
     <aside class="flex flex-col shadow-xl relative overflow-hidden sidebar-bg transition-[width] duration-300 ease-out"
-      :class="sidebarCollapsed ? 'w-16' : 'w-60'">
+      :class="sidebarCollapsed ? 'w-16' : 'w-60'"
+      :style="{ '--sb-w': sidebarCollapsed ? '4rem' : '15rem' }">
       <!-- 装饰圆 -->
       <!-- ⚠️ 装饰元素勿加无限动画：它们位于 .sidebar-bg（backdrop-filter）子树内，
            动画会使侧栏玻璃每帧重新捕获背景并模糊。实测动画值约 20pt GPU 占用。
@@ -65,8 +66,12 @@
                踩坑：早先给图标单独加 group-hover:scale-110，文字只跟 1.02 的整体缩放，
                两者倍率不同 → 悬浮时「图标放大了、文字没跟上」，看起来没一起动。
                现在去掉图标的独立 scale，统一由 .nav-item 整体 transform 驱动。 -->
-            <AppIcon scale="md" :class="sidebarCollapsed ? '' : 'mr-3'" :name="item.icon" />
-            <span v-if="!sidebarCollapsed" class="truncate">{{ tt(item.labelKey) }}</span>
+            <AppIcon scale="md" :class="sidebarCollapsed ? 'shrink-0' : 'mr-3 shrink-0'" :name="item.icon" />
+            <!-- 导航文案**不截断**：日语/德语的导航名明显更长（「インポート & エクスポート」
+                 远比「导入 & 导出」宽），用 truncate 会被截成「インポート & エクス…」。
+                 这里改成「按可用宽度弹性缩放字号」——文字永远完整显示，
+                 只在必要时把字号从 0.875rem 平滑缩到 0.75rem。见 .nav-label。 -->
+            <span v-if="!sidebarCollapsed" class="nav-label">{{ tt(item.labelKey) }}</span>
             <!-- 收起时用一个小红点表示当前页，替代原来的文字+圆点 -->
             <span v-if="$route.path === item.path"
               class="w-2 h-2 rounded-full bg-sakura"
@@ -80,15 +85,20 @@
            （导入导出已不是底部按钮，而是「设置」分区下的一个导航项）。 -->
       <div class="relative z-10 border-t border-white/10"
         :class="sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-3'">
-        <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'grid grid-cols-2 gap-2'">
+        <div :class="sidebarCollapsed ? 'flex flex-col gap-1' : 'grid grid-cols-2 gap-2'">
           <!-- 壁纸背景开关。
-               气泡方向按侧栏状态区分（与其它导航项一致）：
-                 · 收起态（只剩图标）→ 右侧气泡，与其他导航图标行为统一；
-                 · 展开态（按钮已有文字）→ 正上方气泡，内容是**当前状态**（开启/关闭）。
-               之所以展开态也要气泡：按钮文字只写「壁纸」，不说明当前是开还是关。 -->
+               样式与上方导航项（.nav-item）保持一致：
+                 · 收起态：justify-center px-2 py-3.5，配色 text-white/60 hover:bg-white/10 hover:text-white
+                 · 展开态：铺满 px-2 py-2 的胶囊按钮
+               气泡方向同样按侧栏状态区分（收起→右侧，展开→正上方显示当前状态）。 -->
           <button @click="onToggleBg"
-            class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-            :class="{ 'opacity-50': !bgActive }"
+            class="flex items-center rounded-xl font-medium transition-all duration-150 whitespace-nowrap"
+            :class="[
+              sidebarCollapsed
+                ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
+                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs btn-press',
+              { 'opacity-50': !bgActive }
+            ]"
             :aria-pressed="appearance.state.bgEnabled ? 'true' : 'false'"
             :aria-label="bgActive ? tt('topbar.bgOff') : tt('topbar.bgOn')"
             @mouseenter="showBottomBtnTip($event, tt('sidebar.bgToggle'), bgStateLabel)"
@@ -99,10 +109,15 @@
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.bgToggle') }}</span>
           </button>
 
-          <!-- 深浅模式切换（浅/深/自动 三态循环）。
-               气泡方向同上：收起态走右侧，展开态在正上方显示 themeLabel（浅色 / 深色 / 跟随系统）。 -->
+          <!-- 深浅模式切换（浅/深/自动 三态循环）。样式与上方导航项一致，见壁纸按钮的说明。
+               气泡方向同上：收起态走右侧，展开态在正上方显示当前主题状态。 -->
           <button @click="toggleTheme"
-            class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+            class="flex items-center rounded-xl font-medium transition-all duration-150 whitespace-nowrap"
+            :class="[
+              sidebarCollapsed
+                ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
+                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs btn-press'
+            ]"
             :aria-label="themeLabel"
             @mouseenter="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"
             @mouseleave="hideSidebarTip"
@@ -141,16 +156,26 @@
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- 顶部栏 -->
-      <header class="h-14 flex items-center justify-between px-6 glass shadow-sm border-b border-white/20">
-        <!-- 页面标题：跟随路由做淡入淡出 + 轻微位移。
-             图标与文字**放在同一个过渡块里**，保证「同时淡出、同时淡入」，不会一个先一个后。
+      <header class="app-header h-14 flex items-center justify-between px-6 glass shadow-sm relative">
+        <!-- 页面标题 + 番单计数：跟随路由做淡入淡出 + 轻微位移。
+             图标与文字**放在同一个过渡块里**，保证「同时淡出、同时淡入」。
+             计数徽章（本年 N 部 / 总计 N 部 / 共 N 条）也放在这里，
+             让用户一眼看到当前页的规模，而不用在卡片内部再占一行（用户要求）。
              mode="out-in"：旧标题先退场，新标题再进场，杜绝两块标题重叠挤压布局。
              不做读屏播报（页面内内容本身已变化），故不加 aria-live。 -->
         <transition name="title-swap" mode="out-in">
-          <h1 :key="currentTitle" class="text-lg font-bold gradient-text flex items-center gap-2">
-            <AppIcon scale="md" :name="currentIcon" />
-            {{ currentTitle }}
-          </h1>
+          <div :key="currentTitle" class="flex items-center gap-3">
+            <h1 class="text-lg font-bold gradient-text flex items-center gap-2">
+              <AppIcon scale="md" :name="currentIcon" />
+              {{ currentTitle }}
+            </h1>
+            <!-- 计数徽章：视觉与顶栏其它元素协调 —— 高度 24px、圆角 8px、
+                 字号 11.5px、左右内边距 8px，与顶栏按钮的 36px 图标块并排不突兀 -->
+            <div v-if="topbarStats.length" class="flex items-center gap-2">
+              <span v-for="(s, i) in topbarStats" :key="i" class="topbar-stat"
+                :class="s.tone === 'neutral' ? 'is-neutral' : ''">{{ s.text }}</span>
+            </div>
+          </div>
         </transition>
         <div class="flex items-center gap-3">
           <!-- 壁纸开关与深浅切换已按要求移到侧边栏左下角（替代原「导入/导出」按钮位置），
@@ -251,11 +276,13 @@
               {{ dateDisplay }}
             </div>
             <Teleport to="body">
-              <!-- 时钟气泡：材质/边框/阴影/字号/动画与侧边栏气泡(#sidebar-tip)完全对齐。
-                   唯一保留的差异是 font-mono + tabular-nums —— 时间是数字，
-                   等宽+等宽数字能避免秒数跳动时气泡宽度抖动，这是刻意的例外。 -->
+              <!-- 时钟气泡：外观（材质/描边/阴影/圆角/内边距/字号/动画）完全不写在这里，
+                   统一由 style.css 的 `#clock-tip` 一段决定，与 #sidebar-tip 和 v-tip
+                   生成的 [id^=hover-tip] 是**同一份**声明 —— 全站气泡只有一套皮肤。
+                   这里仅保留 tabular-nums：秒数每跳一次宽度都会变，等宽数字能避免
+                   气泡左右抖动，属于可读性而非风格差异。 -->
               <div id="clock-tip" ref="clockTipRef" role="tooltip"
-                class="pointer-events-none fixed z-[120] px-2.5 py-1.5 rounded-lg app-menu-surface border border-white/40 shadow-lg text-xs font-medium text-gray-700 font-mono tabular-nums transition-opacity duration-150 ease-out"
+                class="pointer-events-none fixed z-[120] whitespace-nowrap tabular-nums"
                 :class="showTimeTip ? 'opacity-100' : 'opacity-0'"
                 :style="clockTipStyle">
                 {{ timeDisplay }}
@@ -266,7 +293,9 @@
       </header>
 
       <!-- 页面内容 -->
-      <main class="flex-1 overflow-auto p-6">
+      <!-- 首屏入场：main 挂载时加 .page-appear 播一次（0.45s spring 上浮淡入），
+           动画结束即移除，之后的页面切换仍由上面的 <transition name="fade"> 负责。 -->
+      <main ref="mainRef" class="flex-1 overflow-auto px-6 py-3" :class="{ 'page-appear': pageAppearing }">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in" appear>
             <component :is="Component" />
@@ -372,6 +401,8 @@ import HelpDialog from './components/HelpDialog.vue'
 import { useAppearance } from './composables/useAppearance'
 import { useDialogFocus } from './composables/useDialogFocus'
 import { useI18n } from './composables/useI18n'
+// 顶栏计数徽章共享状态：各页写入，顶栏读取（见 usePageStats.js）
+import { pageStats } from './composables/usePageStats'
 import logoUrl from './assets/logo.webp'
 
 const route = useRoute()
@@ -1166,7 +1197,17 @@ const currentIcon = computed(() => {
   return item ? item.icon : 'tv'
 })
 
+/**
+ * 顶栏计数徽章：由各页通过 setPageStats() 写入（见 composables/usePageStats.js）。
+ * 用户要求把「本年 N 部 / 总计 N 部 / 共 N 条」这类番单计数从卡片内部移到
+ * 顶栏页面标题旁边，避免每个 div 都占一行标题。
+ */
+const topbarStats = computed(() => pageStats[route.path] || [])
+
 let timer = null
+/** 首屏入场动画开关：main 挂载时置 true，动画结束即置 false（只播一次） */
+const pageAppearing = ref(false)
+const mainRef = ref(null)
 const onUnmountedHooks = []
 
 // 时钟：默认只显示日期 + 星期；时间（时:分:秒）放在悬浮气泡里，减少常驻视觉噪音。
@@ -1194,6 +1235,14 @@ onMounted(() => {
   updateTime()
   lastBackupTs.value = parseInt(localStorage.getItem(BACKUP_KEY)) || 0
   timer = setInterval(updateTime, 1000)
+
+  // 首屏入场动画：main 首次挂载时播一次 0.45s 上浮淡入。
+  // 用 animationend 精确移除类，不靠固定延时猜时长；同时留一个兜底定时器，
+  // 防止 reduced-motion（animation:none 不触发 animationend）时类一直挂着。
+  pageAppearing.value = true
+  const clearAppear = () => { pageAppearing.value = false }
+  mainRef.value?.addEventListener('animationend', clearAppear, { once: true })
+  setTimeout(clearAppear, 600)
 
   // 落盘兜底：写操作改为防抖合并后，页面隐藏/关闭前必须把脏数据发出去
   const flushOnHide = () => {

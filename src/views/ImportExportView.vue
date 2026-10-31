@@ -4,13 +4,16 @@
     <section class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4" data-test="import-card">
       <div class="flex items-center gap-2 mb-1">
         <AppIcon scale="md" name="upload" class="text-primary" />
-        <h2 class="text-base font-bold gradient-text">{{ tm('transfer.importTitle') }}</h2>
+        <!-- 「点击下方按钮选择文件。支持 Excel / CSV …会按文件类型自动识别…」是**卡片用法说明**，
+             改为标题上的悬浮气泡；卡片正文直接从按钮开始，少两行灰字。 -->
+        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+          v-tip="tm('transfer.importHint')">{{ tm('transfer.importTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
-      <!-- 关键交互差异：导入**不让用户先选格式** —— 一个按钮弹系统对话框，
-           accept 同时覆盖五种格式，选中后按扩展名自动分派。少一步心智负担。 -->
-      <p class="xfer-muted text-xs leading-relaxed mb-3">{{ tm('transfer.importHint') }}</p>
 
       <div class="flex items-center gap-3 flex-wrap">
+        <!-- 支持格式清单（xlsx · xls · csv …）是「这个按钮接受什么」的说明：
+             清单本身移入按钮气泡，按钮旁只留一个 info 图标提示「此处可悬浮」。
+             文案 key 未删除，只是渲染位置从正文变成气泡。 -->
         <button type="button" data-test="import-btn" @click="pickFile"
           :disabled="importing || exporting"
           class="btn-base btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
@@ -18,7 +21,11 @@
           <AppIcon scale="sm" name="upload" />
           {{ importing ? tm('transfer.importing') : tm('transfer.importBtn') }}
         </button>
-        <span class="xfer-muted text-xs font-mono break-all">{{ tm('transfer.supportedFormats') }}</span>
+        <span class="xfer-muted inline-flex items-center gap-1 cursor-help border-b border-dashed border-gray-400/50"
+          v-tip="tm('transfer.supportedFormats')" :aria-label="tm('transfer.supportedFormats')"
+          data-test="supported-formats">
+          <AppIcon scale="xs" name="info" class="text-gray-400" />
+        </span>
       </div>
 
       <!-- 同一个隐藏 input 覆盖全部扩展名；accept 是「自动识别」在系统对话框层的第一步 -->
@@ -103,9 +110,10 @@
     <section class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4" data-test="export-card">
       <div class="flex items-center gap-2 mb-1">
         <AppIcon scale="md" name="download" class="text-primary" />
-        <h2 class="text-base font-bold gradient-text">{{ tm('transfer.exportTitle') }}</h2>
+        <!-- 「选择需要导出的格式，文件会直接下载。」是导出选项的用法说明 → 标题气泡 -->
+        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+          v-tip="tm('transfer.exportHint')">{{ tm('transfer.exportTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
-      <p class="xfer-muted text-xs leading-relaxed mb-3">{{ tm('transfer.exportHint') }}</p>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
         <button v-for="fmt in exportFormats" :key="fmt.key" type="button"

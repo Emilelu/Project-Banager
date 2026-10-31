@@ -177,7 +177,7 @@ describe('t() 回退链：当前语言 → zh → key', () => {
 describe('t() 插值', () => {
   it('单占位符替换', () => {
     setLocale('zh')
-    expect(t('watched.thisYear', { count: 3 })).toBe('本年: 3部')
+    expect(t('watched.thisYear', { count: 3 })).toBe('本年: 3 部')
   })
 
   it('多占位符全部替换', () => {
@@ -194,7 +194,7 @@ describe('t() 插值', () => {
 
   it('同一 key 在不同语言下都正确插值', () => {
     setLocale('ja')
-    expect(t('watched.total', { count: 7 })).toBe('合計: 7件')
+    expect(t('watched.total', { count: 7 })).toBe('合計: 7 件')
     setLocale('en')
     expect(t('watched.total', { count: 7 })).toBe('Total: 7')
   })
@@ -207,7 +207,7 @@ describe('t() 插值', () => {
 
   it('参数值为 0 / 空串时照常代入（不被当成缺失）', () => {
     setLocale('zh')
-    expect(t('remaining.count', { count: 0 })).toBe('等番: 0部')
+    expect(t('remaining.count', { count: 0 })).toBe('等番: 0 部')
     expect(t('toast.yearCleared', { year: '' })).toBe(' 已清空')
   })
 
@@ -356,7 +356,7 @@ describe('模板中的 tt 随语言切换即时更新', () => {
     const wrapper = mount(Probe)
 
     expect(wrapper.get('.label').text()).toBe('正在追番')
-    expect(wrapper.get('.count').text()).toBe('总计: 7部')
+    expect(wrapper.get('.count').text()).toBe('总计: 7 部')
 
     setLocale('en')
     await nextTick()
@@ -367,7 +367,7 @@ describe('模板中的 tt 随语言切换即时更新', () => {
     setLocale('ja')
     await nextTick()
     expect(wrapper.get('.label').text()).toBe('視聴中')
-    expect(wrapper.get('.count').text()).toBe('合計: 7件')
+    expect(wrapper.get('.count').text()).toBe('合計: 7 件')
 
     wrapper.unmount()
   })

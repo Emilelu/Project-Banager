@@ -91,6 +91,9 @@ const ensureTip = () => {
   // 动效与侧栏一致：侧栏走 <transition name="fade">，其
   // .fade-enter-active/.fade-leave-active 是 `opacity 0.15s ease-out`，
   // 这里用同样的 150ms / ease-out，两处观感才真正统一（原来是 120ms ease）。
+  // 注：这些内联值只作为兜底；全站气泡统一的时长/曲线由 style.css 的
+  // `#sidebar-tip, #clock-tip, [id^='hover-tip']` 规则用 !important 收口（CSS !important
+  // 优先级高于内联普通声明），因此这里无需跟随调整。
   el.style.transition = 'opacity 150ms ease-out'
   el.style.opacity = '0'
   el.style.visibility = 'hidden'

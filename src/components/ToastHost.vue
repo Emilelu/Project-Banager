@@ -67,6 +67,10 @@ const toasts = useToasts()
   line-height: 1;
   padding: 0 0.25rem;
   border-radius: 0.25rem;
+  /* 与全站交互同一套：颜色过渡走 iOS spring（小元素档 0.25s）。
+     模板里只写了 `transition`（未指定属性），Tailwind 的 utilities 兜底会把曲线统一，
+     这里显式声明一次，避免依赖层序。 */
+  transition: background-color 0.25s var(--ease-spring), color 0.25s var(--ease-spring);
 }
 .toast-close:hover {
   background-color: rgb(255 255 255 / 0.16);

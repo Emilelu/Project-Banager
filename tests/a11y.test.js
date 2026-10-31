@@ -499,8 +499,8 @@ describe('纯图标按钮：aria-label 可读', () => {
       props: { item: watchingRow({ name: '卡片番' }) },
       global: mountOptions.global,
     })
-    const inc = cardWrapper.find('button[title="+1集"]')
-    const dec = cardWrapper.find('button[title="-1集"]')
+    const inc = cardWrapper.find('button.btn-mini-plus')
+    const dec = cardWrapper.find('button.btn-mini-minus')
     expect(inc.attributes('aria-label')).toContain('+1')
     expect(dec.attributes('aria-label')).toContain('-1')
     expect(cardWrapper.findAll('[aria-hidden="true"]').length).toBeGreaterThan(0)

@@ -259,8 +259,8 @@ describe('已看历史 · 年份分组', () => {
     await selectYear(wrapper, thisYear)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('本年: 2部')
-    expect(wrapper.text()).toContain('总计: 7部')
+    expect(wrapper.text()).toContain('本年: 2 部')
+    expect(wrapper.text()).toContain('总计: 7 部')
     expect(dataRows(wrapper)).toHaveLength(2)
   })
 
@@ -584,11 +584,18 @@ describe('已看历史 · 日期与行内编辑', () => {
     await buttonByText(wrapper, '编辑').trigger('click')
     await flushPromises()
 
-    // 年月精度无法用 type="date" 表示：自动切手动输入，原值 '2025/07' 完整回显
-    const textInput = document.querySelector('.app-dialog input[placeholder*="2025"]')
-    expect(textInput).toBeTruthy()
-    expect(textInput.value).toBe('2025/07')
+    // 年月精度现在由 DatePicker 直接表达（不再自动切手动输入）：触发器原值完整回显
+    const trigger = document.querySelector('.app-dialog [data-datepicker-trigger]')
+    expect(trigger, '日期应由 DatePicker 触发器承载，而不是退回文本框').toBeTruthy()
+    expect(trigger.textContent).toContain('2025/07')
+    // 「精度降级」提示仍外显（面板里选某天会降级为具体日期）
     expect(document.querySelector('.app-dialog').textContent).toContain('2025/07')
+    // 「支持的日期格式」原先以灰字外显在输入框下方，现改为「观看日期」标签上的悬浮气泡：
+    // 文案不再进页面正文，改断言气泡文案（v-tip 会把文案同步到 data-tip 属性）。
+    const dateTip = document.querySelector('.app-dialog [data-tip*="年月"]')
+    expect(dateTip, '日期格式说明应挂在气泡上（data-tip）').toBeTruthy()
+    expect(dateTip.getAttribute('data-tip')).toContain('2025/07')
+    expect(dateTip.textContent).toContain('观看日期')
   })
 
   it('compareDateKey：纯年份排在同年前面，混合精度按时间递增', () => {
@@ -644,14 +651,12 @@ describe('已看历史 · 年份维护', () => {
     const nameInput = document.querySelector('.app-dialog input[placeholder="请输入作品名称"]')
     nameInput.value = '新番'
     nameInput.dispatchEvent(new Event('input'))
-    const dateInput = document.querySelector('.app-dialog input[type="date"]')
-    dateInput.value = '2019-04-01'
-    dateInput.dispatchEvent(new Event('input'))
-    await flushPromises()
+
+    // 日期控件已换成自研 DatePicker。本用例只验证「保存后年份列表刷新」，
+    // 不依赖具体日期值 —— 直接保存即可（日期留空也允许新增）。
     dialogButton('保存').click()
     await flushPromises()
 
-    // db.addWatched 会 _ensureYearLabel('2019')，但页面从不重新 fetchYears
     expect(mocks.watchedYearsApi.getAll.mock.calls.length).toBeGreaterThan(callsBefore)
   })
 

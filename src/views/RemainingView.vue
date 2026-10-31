@@ -2,32 +2,41 @@
   <div ref="pageRootRef" class="space-y-5" tabindex="-1">
     <!-- 顶部信息栏 + 操作面板 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
-      <div class="toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
+      <!-- 需求 B：本页计数就放在**顶部第一张卡片标题行的右侧**。
+           表格卡片里那份重复的「☰ 番剧名称 / 共 N 条」已删除（见下方 table 处注释），
+           分页卡片里那份也一并删除；同一页面只剩这一个计数入口。
+           .topbar-stat 与 App.vue 顶栏徽章是同一套样式（更紧凑），两处观感一致。 -->
+      <div class="card-head mb-3 flex-wrap">
+        <AppIcon scale="md" name="clock" class="text-primary" />
+        <h3 class="card-head-title gradient-text">{{ tt('nav.remaining') }}</h3>
+        <span class="topbar-stat">{{ tt('watched.totalCount', { count: sortedRemainingList.length }) }}</span>
+        <span class="stat-chip is-neutral">{{ tt('remaining.count', { count: remainingList.length }) }}</span>
+      </div>
+      <div class="toolbar-enter toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-3">
-          <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl text-sm">
-            {{ tt('remaining.count', { count: remainingList.length }) }}
-          </span>
-          <!-- 本季新番链接（yuc.wiki） -->
+          <!-- 本季新番链接（yuc.wiki）：与工具栏主按钮同一几何/配色（.btn-base + 语义变体） -->
           <a :href="currentSeasonLink.url" target="_blank" rel="noopener"
-            class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-dark text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press inline-flex items-center gap-1">
-            <AppIcon scale="sm" name="tv" /> {{ currentSeasonLink.label }}
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            class="btn-base btn-toned shrink-0">
+            <AppIcon scale="sm" name="tv" />{{ currentSeasonLink.label }}
+            <AppIcon scale="xs" name="link" />
           </a>
           <div class="inline-block">
             <!-- season-trigger 标记必需：onDocClick 靠它判断「点触发按钮不算外部点击」。
                  缺了它会出现「点开→document 监听立刻判为外部→菜单瞬关」，
-                 外部表现就是"点击完全没反应"。 -->
+                 外部表现就是"点击完全没反应"。
+                 外观统一走 .filter-trigger（与 TagFilter / 年份筛选同一套：实色底 +
+                 text-sm + rounded-xl），与工具栏 34px 主按钮同一高度，不再另写一套。 -->
             <button ref="seasonMenuBtn" @click="toggleSeasonMenu"
-              class="season-trigger px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-200 transition btn-press">
-              <AppIcon scale="sm" name="calendar" /> {{ tt('remaining.viewSeasons') }}<AppIcon scale="xs" name="caretDown" class="ml-0.5 inline-block align-middle" />
+              class="filter-trigger season-trigger">
+              <AppIcon scale="sm" name="calendar" />{{ tt('remaining.viewSeasons') }}<AppIcon scale="xs" name="caretDown" class="ml-0.5" />
             </button>
           </div>
           <div class="relative">
             <input v-model="searchQuery" type="text" :placeholder="tt('remaining.searchPlaceholder')"
               class="pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80 w-48" />
-            <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition" :aria-label="tt('common.clear')">
+              <AppIcon scale="xs" name="close" />
             </button>
           </div>
           <!-- 按标签筛选（多选 OR），与搜索框并列 -->
@@ -46,11 +55,12 @@
               class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
           </div>
 
-          <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
+          <div key="sep-1" class="toolbar-sep"></div>
           <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
             <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
           </button>
-          <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length === 0" @click="batchDelete" class="btn-base btn-danger">
+          <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length === 0" @click="batchDelete"
+            class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
             <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
           </button>
           <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
@@ -81,6 +91,11 @@
       @dragover="onTableDragOver"
       @drop="onTableDrop"
       @dragleave="onTableDragLeave">
+      <!-- 需求 B：表格卡片**不再**自带「☰ 番剧名称 / 共 N 条」标题行。
+           下面紧跟着的 <thead> 已经是完整的列名（番剧名称/预计日期/链接/备注），
+           再叠一个伪标题只是重复占一行高度；「共 N 条」这个计数已上提到本页
+           顶部第一张卡片的标题行右侧（见文件开头的 .card-head + .stat-chip），
+           同时也有 setPageStats('/remaining', …) 供 App.vue 顶栏使用。 -->
       <table class="w-full">
         <thead>
           <tr class="bg-gradient-to-r from-primary/10 to-secondary/10 text-sm font-bold border-b border-white/20">
@@ -100,7 +115,11 @@
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition whitespace-nowrap"
               tabindex="0" role="button" :aria-sort="sortField==='expected_date'?(sortOrder==='asc'?'ascending':'descending'):'none'"
               @click="toggleSort('expected_date')" @keydown.enter.prevent="toggleSort('expected_date')" @keydown.space.prevent="toggleSort('expected_date')">
-              <AppIcon scale="sm" name="calendar" /> {{ tt('remaining.colDate') }} <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='expected_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
+              <!-- 日期列的格式说明（原空态副说明「支持: 年月(2025/07)、完整日期…」）
+                   改为列头文字的悬浮气泡：说明归到它解释的那一列，空态只留主文案。 -->
+              <AppIcon scale="sm" name="calendar" /> <span
+                class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span> <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='expected_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="link" /> {{ tt('remaining.colUrl') }}</th>
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="note" /> {{ tt('remaining.colNotes') }}</th>
@@ -108,13 +127,19 @@
         </thead>
         <tbody ref="tbodyRef">
           <tr v-if="paginatedList.length === 0">
-            <td :colspan="batchMode ? 5 : 4" class="py-16 text-center text-gray-400">
-              <div class="text-4xl mb-3"><AppIcon scale="sm" name="emptyBox" /></div>
-              <div>{{ searchQuery ? tt('watched.emptyNoMatch') : tt('remaining.emptyTitle') }}</div>
+            <td :colspan="batchMode ? 6 : 5" class="py-10">
+              <!-- 空态三段式：图标 + 主文案 + 副说明。
+                   副说明这里原本是「支持: 年月(2025/07)、完整日期…」——那是**表格日期列**的格式说明，
+                   不是引导动作，已移到表头「预计日期」的悬浮气泡上；空态只留主文案。 -->
+              <div class="empty-state">
+                <AppIcon scale="xl" name="emptyBox" class="empty-state-icon" />
+                <p class="empty-state-title">{{ searchQuery ? tt('watched.emptyNoMatch') : tt('remaining.emptyTitle') }}</p>
+              </div>
             </td>
           </tr>
           <tr v-for="(item, idx) in paginatedList" :key="item.id"
             :data-row-index="absoluteIndexOf(item)"
+            :data-row-id="item.id"
             class="transition-all duration-200 border-b border-white/10 list-item group"
             :class="[
               batchMode && checkedIds.includes(item.id) ? 'bg-danger/10'
@@ -132,9 +157,10 @@
             @drop="onDrop($event, absoluteIndexOf(item))"
             @dragend="onDragEnd"
             @click="batchMode ? toggleCheck(item.id) : selectItem(item)"
+            @dblclick="onRowDblclick($event, item)"
             @contextmenu.prevent="!batchMode && openContextMenu($event, item)"
             @mousedown.middle.prevent="openItemLink(item)">
-            <td v-if="batchMode" class="text-center px-2 py-2.5" @click.stop="toggleCheck(item.id)">
+            <td v-if="batchMode" class="text-center px-2 py-2.5" @click.stop="toggleCheck(item.id)" @dblclick.stop>
               <div role="checkbox" tabindex="0" :aria-checked="checkedIds.includes(item.id) ? 'true' : 'false'"
                 :aria-label="tt('card.checkLabel', { name: item.name })"
                 @keydown.enter.prevent="toggleCheck(item.id)" @keydown.space.prevent="toggleCheck(item.id)"
@@ -146,7 +172,9 @@
                 </svg>
               </div>
             </td>
-            <td class="px-4 py-2.5" @dblclick.stop="!batchMode && startEdit(item,'name')">
+            <td class="px-4 py-2.5 editable-cell" v-bind="editCellProps(item, 'name')"
+              @dblclick.stop="onFieldDblclick(item, 'name')"
+              @keydown="onCellKeydown($event, item, 'name')">
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 :aria-label="tt('card.editNameLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
@@ -160,14 +188,18 @@
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
             </td>
-            <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'expected_date')">
+            <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'expected_date')"
+              @dblclick.stop="onFieldDblclick(item, 'expected_date')"
+              @keydown="onCellKeydown($event, item, 'expected_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='expected_date'" v-model="editValue"
                 :aria-label="tt('card.editDateLabelShort', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
                 :placeholder="tt('remaining.datePlaceholder')" autofocus />
-              <span v-else class="text-sm text-gray-600 truncate block">{{ item.expected_date || '-' }}</span>
+              <span v-else class="cell-date text-sm truncate block">{{ item.expected_date || '-' }}</span>
             </td>
-            <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'url')">
+            <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'url')"
+              @dblclick.stop="onFieldDblclick(item, 'url')"
+              @keydown="onCellKeydown($event, item, 'url')">
               <input v-if="editing?.id===item.id&&editing?.field==='url'" v-model="editValue"
                 :aria-label="tt('card.editUrlLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
@@ -177,12 +209,20 @@
                 :aria-label="tt('card.openLinkLabel', { name: item.name })"
                 class="text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
             </td>
-            <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'notes')">
+            <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'notes')"
+              @dblclick.stop="onFieldDblclick(item, 'notes')"
+              @keydown="onCellKeydown($event, item, 'notes')">
               <input v-if="editing?.id===item.id&&editing?.field==='notes'" v-model="editValue"
                 :aria-label="tt('card.editNotesLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '-' }}</span>
+              <span v-else class="cell-notes text-sm truncate block">{{ item.notes || '-' }}</span>
             </td>
+            <!-- 需求 A：行的「空白区域」。
+                 本表四列全是可编辑字段（名称/日期/链接/备注），整行没有任何非字段空白，
+                 用户「双击行空白处打开编辑弹窗」就无处可点。这里补一个占位格：
+                 无内容、不可编辑、aria-hidden，只负责吃掉行尾留白并让 dblclick 冒泡到 tr。
+                 加在末尾不影响既有列索引断言（测试取 td[0..3]）。 -->
+            <td class="px-1 py-2.5 w-0" aria-hidden="true"></td>
           </tr>
         </tbody>
       </table>
@@ -192,21 +232,22 @@
         :class="dragOverEnd ? 'bg-primary/15 ring-2 ring-primary/50 ring-inset' : ''"></div>
     </div>
 
-    <!-- 分页 -->
-    <div v-if="sortedRemainingList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-3">
+    <!-- 分页（独立卡片：正文直接是翻页控件。
+         需求 B：去掉「共 N 条」卡片标题行 —— 该计数已上提到顶部第一张卡片标题行右侧，
+         这里再写一遍属于同一页面内第三次重复，且平白多占一整行高度。 -->
+    <div v-if="sortedRemainingList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2 text-sm text-gray-600">
-          <span>{{ tt('watched.totalCount', { count: sortedRemainingList.length }) }}</span>
-          <!-- 手动排序下提供恢复入口，放在翻页栏与分页控件同排，样式对齐 -->
+          <!-- 手动排序下提供恢复入口，与「每页条数」触发器同几何同配色 -->
           <button v-if="isManualOrder" @click="restoreFieldSort"
-            class="px-2 py-1 rounded-lg text-xs border border-primary/20 bg-white/80 text-primary hover:bg-primary/10 transition btn-press whitespace-nowrap">
-            <AppIcon scale="xs" class="inline-block align-middle mr-1" name="undo" />{{ tt('remaining.restoreDateSort') }}
+            class="btn-base btn-sm btn-neutral page-size-trigger">
+            <AppIcon scale="xs" name="undo" />{{ tt('remaining.restoreDateSort') }}
           </button>
           <div class="relative inline-block">
             <button @click="showPageSizeMenu=!showPageSizeMenu"
               :aria-expanded="showPageSizeMenu" aria-haspopup="menu"
-              class="app-btn-ghost page-size-trigger px-2 py-1 rounded-lg text-xs transition whitespace-nowrap">
-              {{ tt('remaining.perPage', { n: pageSize }) }}<AppIcon scale="xs" class="ml-0.5 inline-block align-middle" name="caretDown" />
+              class="btn-base btn-sm btn-neutral page-size-trigger">
+              <AppIcon scale="xs" name="listCheck" />{{ tt('remaining.perPage', { n: pageSize }) }}<AppIcon scale="xs" name="caretDown" />
             </button>
             <!-- 下拉菜单：必须显式给实底 + backdrop-filter，并提升到独立合成层。
                  仅靠 .glass 在液态玻璃下是 linear-gradient 背景，叠加在表格上会显得太透；
@@ -217,7 +258,7 @@
               <!-- 方向变量：本菜单向上展开（bottom-full），原点在底边、起始位移朝下，
                    因此动画是「从触发按钮那一侧向上长出来」。 -->
               <div v-if="showPageSizeMenu" role="menu"
-                class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface"
+                class="page-size-menu app-menu-surface absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface"
                 style="--pop-origin-y: bottom; --pop-from-y: 6px">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
@@ -227,7 +268,7 @@
                 <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
                   <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
                     class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
-                  <button @click="applyCustomPageSize" class="shrink-0 px-2 py-1 text-xs text-primary hover:text-primary-dark transition whitespace-nowrap">{{ tt('common.confirm') }}</button>
+                  <button @click="applyCustomPageSize" class="btn-base btn-sm btn-link shrink-0">{{ tt('common.confirm') }}</button>
                 </div>
               </div>
             </transition>
@@ -235,18 +276,17 @@
         </div>
         <div class="flex items-center gap-1">
           <button :disabled="currentPage<=1" @click="currentPage--"
-            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage<=1?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">{{ tt('watched.prevPage') }}</button>
+            class="btn-base btn-sm" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'">{{ tt('watched.prevPage') }}</button>
           <template v-for="p in displayPages" :key="p">
-            <span v-if="p==='...'" class="px-2 py-1 text-xs text-gray-400">...</span>
+            <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
             <button v-else @click="currentPage=p"
-              class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="p===currentPage?'btn-page-active font-bold':'text-gray-600 hover:bg-primary/10'">{{ p }}</button>
+              class="btn-base btn-sm" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
           <button :disabled="currentPage>=totalPages" @click="currentPage++"
-            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage>=totalPages?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">{{ tt('watched.nextPage') }}</button>
+            class="btn-base btn-sm" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'">{{ tt('watched.nextPage') }}</button>
         </div>
       </div>
     </div>
-
     <!-- 右键菜单 -->
     <Teleport to="body">
       <!-- 右键菜单套统一的 pop 过渡（与每页条数菜单同一套动效） -->
@@ -254,7 +294,7 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
+        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit"
             class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" />
             {{ tt('common.edit') }}</button>
@@ -296,11 +336,9 @@
               </p>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-center gap-3">
-              <button @click="showConfirmDialog = false"
-                class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="confirmActionFn"
-                class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">{{
-                  confirmAction === 'clear' ? tt('confirm.confirmClear') : tt('confirm.confirmDelete') }}</button>
+              <button @click="showConfirmDialog = false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="confirmActionFn" class="btn-base btn-danger">{{
+                confirmAction === 'clear' ? tt('confirm.confirmClear') : tt('confirm.confirmDelete') }}</button>
             </div>
           </div>
         </div>
@@ -328,17 +366,22 @@
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('remaining.colDate') }}</span>
+                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                    v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                   <button type="button" @click="dateManualInput = !dateManualInput"
                     class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>
+                <!-- 日期：自研面板（DatePicker）替代原生 input[type=date]。
+                     原生弹的是浏览器白色日历，压在深色玻璃上非常割裂；且只能表达完整日期，
+                     会把「2025」「2025/07」这类粗精度逼回手动输入。新组件自带精度切换，
+                     因此这里不再需要「无法用 type=date 表示就切手动输入」的退化逻辑。
+                     「手动输入」开关仍然保留：它是与面板并列的第二种输入方式（文本 + validateDate 校验）。 -->
+                <DatePicker v-if="!dateManualInput" v-model="form.expected_date"
+                  :placeholder="tt('remaining.datePlaceholderLong')" />
                 <input v-if="dateManualInput" v-model="form.expected_date" type="text"
                   :placeholder="tt('remaining.datePlaceholderLong')"
+                  :aria-label="tt('remaining.dateFormatsHint')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <input v-else :value="formatToDateInput(form.expected_date)"
-                  @input="form.expected_date = dateInputToFormat($event.target.value)" @click="$event.target.showPicker()" type="date"
-                  class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p v-if="dateManualInput" class="text-xs text-gray-400 mt-1">{{ tt('remaining.dateFormatsHint') }}</p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.url') }}</label>
@@ -346,10 +389,14 @@
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div v-if="form.url">
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.urlParams') }}</label>
+                <!-- 「等番没有集数，动态参数会原样拼到链接后面…」是控件用法说明 → 标签气泡 -->
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                    v-tip="tt('showDialog.episodeTokenHint')">{{ tt('showDialog.urlParams') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
+                </label>
                 <input v-model="form.url_params" type="text" :placeholder="tt('showDialog.urlParamsPlaceholder')"
+                  :aria-label="tt('showDialog.episodeTokenHint')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenHint') }}</p>
               </div>
               <div>
                 <!-- 标签选择：与追番页同一个 TagSelector 组件 -->
@@ -363,10 +410,9 @@
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showDialog = false"
-                class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
+              <button @click="showDialog = false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
               <button @click="saveForm" :disabled="saving"
-                class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40">{{ saving ? tt('common.saving') : tt('common.save') }}</button>
+                class="btn-base btn-primary disabled:opacity-40">{{ saving ? tt('common.saving') : tt('common.save') }}</button>
             </div>
           </div>
         </div>
@@ -403,10 +449,8 @@
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showMoveDialog = false"
-                class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="moveToWatching"
-                class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-secondary to-secondary-dark rounded-xl hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">{{ tt('common.confirm') }}</button>
+              <button @click="showMoveDialog = false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="moveToWatching" class="btn-base btn-toned">{{ tt('common.confirm') }}</button>
             </div>
           </div>
         </div>
@@ -420,7 +464,7 @@
       <div v-if="showSeasonMenu" class="fixed z-[200] season-menu"
         style="--pop-origin-y: top; --pop-from-y: -6px"
         :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[11.25rem] context-menu">
+        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[11.25rem] context-menu">
           <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
             class="block px-4 py-2 text-sm whitespace-nowrap hover:bg-primary/10 transition text-gray-700">{{ s.label }}</a>
         </div>
@@ -442,13 +486,19 @@
               <h3 id="remaining-batch-title" class="text-lg font-bold gradient-text">{{ tt('remaining.batchAddTitle') }}</h3>
             </div>
             <div class="px-6 py-5">
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('remaining.batchAddHint') }}</label>
+              <!-- 原标签「番剧名称（一行一部）」把填写要求写在标签里：标签只留字段名，
+                   「（一行一部）」等格式要求移入气泡；多行示例仍留在 placeholder。 -->
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  v-tip="tt('remaining.batchAddHint')">{{ tt('showDialog.name') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
+              </label>
               <textarea v-model="batchAddText" rows="8" :placeholder="tt('remaining.batchAddPlaceholder')"
+                :aria-label="tt('remaining.batchAddHint')"
                 class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition resize-none bg-white/80"></textarea>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showBatchAddDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="saveBatchAdd" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-success to-emerald-400 rounded-xl hover:shadow-lg hover:shadow-success/30 transition-all btn-press">{{ tt('common.add') }}</button>
+              <button @click="showBatchAddDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="saveBatchAdd" class="btn-base btn-primary">{{ tt('common.add') }}</button>
             </div>
           </div>
         </div>
@@ -460,8 +510,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { remainingApi, batchApi } from '../db/api'
-import { dateInputToFormat, formatToDateInput, compareDateKey, todayStr, validateDate, normalizeDate } from '../composables/useDatePicker'
+import { compareDateKey, todayStr, validateDate, normalizeDate } from '../composables/useDatePicker'
+import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
+import { setPageStats } from '../composables/usePageStats'
 import { defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -908,8 +960,8 @@ const saveBatchAdd = async () => {
   await fetchData()
 }
 
-// 新增时的默认预计日期 = 今天（编辑已有记录时仍沿用记录原值）
-const form = ref({ name: '', expected_date: todayStr(), url: '', url_params: '', notes: '', tags: '' })
+// 新增时的预计日期默认留空（产品要求：除「移至已看」外的日期框都不预填今天）
+const form = ref({ name: '', expected_date: '', url: '', url_params: '', notes: '', tags: '' })
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -998,6 +1050,57 @@ const startEdit = (item, field) => {
   editValue.value = String(item[field] ?? '')
 }
 
+/**
+ * 需求 A：三张番单页统一的双击规则。
+ *
+ *   1. 双击**行内可编辑字段**（名称 / 预计日期 / 链接 / 备注）→ 该字段行内编辑。
+ *      鼠标路径由 <td> 自己的 @dblclick.stop → onFieldDblclick 处理，事件不冒泡到行。
+ *      空值字段同样进入编辑（编辑值取空串，用户可直接填）。
+ *   2. 双击**行的空白区域**（行首/行尾留白、批量勾选框之外的空白 td、行 padding）
+ *      → 冒泡到 <tr> 的 onRowDblclick，打开完整编辑弹窗。
+ *   3. **批量模式**下双击一律无效（勾选优先，与既有 batchMode 语义一致）。
+ *
+ * 为什么把判断放在 tr 上而不是给每个 td 都挂：表格里可编辑的列就是那 4 列，
+ * 其余区域（行 padding、公式列、拖拽留白）都属于「空白」，由一个入口统一处理即可，
+ * 也不会因为将来加列而漏掉。
+ */
+const onFieldDblclick = (item, field) => {
+  if (batchMode.value) return
+  startEdit(item, field)
+}
+
+const onRowDblclick = (e) => {
+  if (batchMode.value) return
+  // 点在可编辑单元格内（含其子节点）→ 已在 td 层 stop，这里再加一道保险
+  if (e.target.closest('.editable-cell, button, input, select, textarea, a, [role="checkbox"]')) return
+  const id = Number(e.currentTarget?.dataset?.rowId)
+  const item = sortedRemainingList.value.find(r => r.id === id)
+  if (!item) return
+  selected.value = item
+  openEditDialog()
+}
+
+/**
+ * 表格里可编辑单元格的键盘等价路径（与 WatchingCard 的 .editable-cell 对齐）。
+ *
+ * 原来等番/已看表的行内编辑只有鼠标路径（双击），纯键盘用户无法改任何字段。
+ * 这里补一条：单元格可聚焦（选中该行之后）→ Enter / Space 进入编辑。
+ * 只在行已选中时进 Tab 序，避免一页 20 行 × 4 字段 = 80 个 Tab 位。
+ */
+const editCellProps = (item, field) => {
+  const isEditing = editing.value?.id === item.id && editing.value?.field === field
+  if (batchMode.value || isEditing || selected.value?.id !== item.id) return {}
+  return { role: 'button', tabindex: '0' }
+}
+
+const onCellKeydown = (e, item, field) => {
+  if (e.target !== e.currentTarget) return
+  if (!selected.value || selected.value.id !== item.id || batchMode.value) return
+  if (e.key !== 'Enter' && e.key !== ' ') return
+  e.preventDefault()
+  startEdit(item, field)
+}
+
 const cancelEdit = () => { editing.value = null }
 
 const saveEdit = async () => {
@@ -1032,7 +1135,8 @@ const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name: '', expected_date: todayStr(), url: '', url_params: '', notes: '', tags: '' }
+  // 新增时预计日期留空（不预填今天），由用户自行选择
+  form.value = { name: '', expected_date: '', url: '', url_params: '', notes: '', tags: '' }
   showDialog.value = true
   focusNameInput()
 }
@@ -1156,6 +1260,18 @@ onMounted(() => {
   document.addEventListener('click', onDocClick)
 })
 
+
+// 计数同步到顶栏（等番总数）
+watch(
+  () => remainingList.value.length,
+  (n) => {
+    setPageStats('/remaining', [
+      { text: tt('watched.totalCount', { count: n }), tone: 'neutral' },
+    ])
+  },
+  { immediate: true },
+)
+
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
@@ -1197,11 +1313,33 @@ const unpinLeavingGroup = (el) => {
 .sel-anim-wrap > .sel-anim-leave-active {
   position: absolute;
   pointer-events: none;
-  transition: opacity 0.22s ease, transform 0.22s ease;
+  /* 离场曲线与 style.css 的 .sel-anim-leave-active 一致：iOS --ease-exit 0.22s */
+  transition: opacity 0.22s var(--ease-exit, cubic-bezier(0.4, 0, 1, 1)),
+    transform 0.22s var(--ease-exit, cubic-bezier(0.4, 0, 1, 1));
 }
 
 .sel-anim-wrap {
   position: relative;
+}
+
+/* 表格单元格文字色：浅色模式沿用原来的灰阶观感，深色模式必须显式提亮。
+   原因：全局 `.dark .text-gray-600` 只到 #94a3b8（压深玻璃 4.25:1）、
+   `.dark .text-gray-400` 只到 #7c8ba5（3.16~3.47:1），都不到 4.5:1 ——
+   表格里的日期与备注在深色下实测就是读不清。这里按 4.5:1 直接给终值。 */
+.cell-date {
+  color: #4b5563;
+}
+
+.cell-notes {
+  color: #6b7280;
+}
+
+.dark .cell-date {
+  color: #cbd5e1;
+}
+
+.dark .cell-notes {
+  color: #a9b6cc;
 }
 
 /* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。

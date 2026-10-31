@@ -1,18 +1,31 @@
 <template>
   <div ref="pageRootRef" class="space-y-5 flex flex-col min-h-full" tabindex="-1">
     <!-- 等番本月提示 -->
-    <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-secondary/30 px-6 py-3 shrink-0">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 text-sm">
-          <AppIcon scale="md" class="text-secondary-dark" name="info" />
-          <span class="font-medium text-secondary-dark">{{ tt('watching.monthReminder', { count: currentMonthRemaining.length }) }}</span>
+    <div v-if="currentMonthRemaining.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
+      <div class="toolbar-enter flex items-center justify-between gap-2 flex-wrap">
+        <div class="card-head">
+          <AppIcon scale="md" name="info" class="text-primary" />
+          <h3 class="card-head-title gradient-text">{{ tt('watching.monthReminder', { count: currentMonthRemaining.length }) }}</h3>
+          <!-- 需求 B：本页计数（共 N 部追番）也在这里给一份 —— 本卡是页面**最顶部**那张，
+               计数紧贴页面标题行右侧，与等番/已看两页同一位置同一套 .topbar-stat 样式。 -->
+          <span class="topbar-stat">{{ tt('watched.totalCount', { count: watchingList.length }) }}</span>
         </div>
-        <router-link to="/remaining" class="px-3 py-1.5 bg-gradient-to-r from-secondary to-secondary-dark text-white rounded-xl text-xs font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">{{ tt('watching.viewRemaining') }}</router-link>
+        <router-link to="/remaining" class="btn-base btn-toned shrink-0">
+          <AppIcon scale="sm" name="clock" />{{ tt('watching.viewRemaining') }}
+        </router-link>
       </div>
     </div>
 
     <!-- 操作面板 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4 shrink-0">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
+        <!-- 标题行：与「标签管理 / 导入 & 导出」同一套卡片标题（图标在前 + gradient-text + 计数 chip） -->
+        <div class="card-head mb-3 flex-wrap">
+          <AppIcon scale="md" name="tv" class="text-primary" />
+          <h3 class="card-head-title gradient-text">{{ tt('nav.watching') }}</h3>
+          <!-- 该卡片在「本月提示」缺席时（本月没有等番）会成为页面第一张卡，
+               所以这里保留一份计数；两者都不会同时缺失，页面上始终恰有一个计数入口。 -->
+          <span :class="currentMonthRemaining.length > 0 ? 'stat-chip is-neutral' : 'topbar-stat'">{{ tt('watched.totalCount', { count: watchingList.length }) }}</span>
+        </div>
         <!-- 按钮配色统一由主题色驱动（.btn-primary/.btn-toned/.btn-neutral/.btn-danger），
              不再为每个按钮写死不同渐变；图标全为 currentColor，天然跟随按钮配色。 -->
         <!-- 整个工具栏是一个 transition-group：
@@ -39,7 +52,7 @@
           </button>
         </div>
 
-        <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
+        <div key="sep-1" class="toolbar-sep"></div>
         <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
           <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
         </button>
@@ -53,7 +66,7 @@
         <button key="clear" @click="openClearDialog" class="btn-base btn-neutral">
           <AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}
         </button>
-        <div key="sep-2" class="border-l border-white/30 h-6 mx-1"></div>
+        <div key="sep-2" class="toolbar-sep"></div>
         <button key="time-sort" @click="toggleTimeSort" class="btn-base btn-toned" v-tip="tt('watching.timeAsc')">
           <AppIcon scale="sm" name="timeSort" /> {{ timeSortAsc ? tt('watching.timeAsc') : tt('watching.timeDesc') }}
         </button>
@@ -77,7 +90,7 @@
       </transition>
     </div>
 
-    <!-- 周历视图 -->
+    <!-- 周历视图（独立卡片：卡片标题行 + 周历本体） -->
     <div class="glass rounded-2xl shadow-lg overflow-hidden border border-white/30 flex-1 flex flex-col">
       <div class="grid grid-cols-7 grid-rows-[auto_1fr] flex-1">
         <!-- 星期表头配色：每个星期用契合「月火水木金土日」意象的颜色，
@@ -101,6 +114,7 @@
             @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
             @toggle-check="toggleCheck(item.id)"
             @context-menu="!batchMode && openContextMenu($event, item)"
+            @open-dialog="openCardDialog(item)"
             @middle-click="handleCardMiddleClick($event, item)"
             @start-edit="startEdit(item, $event)"
             @save-edit="saveEdit"
@@ -110,28 +124,39 @@
           <!-- ⚠️ 勿在此处加无限动画：本元素在 .glass（backdrop-filter）子树内，
                动画会使这块占屏 62% 的玻璃每帧重新捕获背景并模糊，导致 GPU 持续满载。
                详见 .workbuddy/memory/2026-09-13.md -->
-          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center text-gray-300 text-sm">
-            <span><AppIcon scale="sm" name="sparkle" /> {{ tt('watching.noItem') }}</span>
+          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center">
+            <span class="empty-inline"><AppIcon scale="sm" name="sparkle" />{{ tt('watching.noItem') }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 空状态引导：dataLoaded 为 false 时不渲染，避免"有数据用户"首帧闪一下空状态 -->
-    <div v-if="dataLoaded && watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-8 text-center shrink-0">
-      <div class="text-4xl mb-2"><AppIcon scale="sm" name="tv" /></div>
-      <p class="text-sm text-gray-500 mb-4">{{ tt('watching.emptyTitle') }}</p>
-      <div class="flex items-center justify-center gap-3">
-        <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">{{ tt('watching.addShow') }}</button>
-        <router-link to="/import" class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-dark text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press"><AppIcon scale="sm" name="upload" /> {{ tt('watching.importFromExcel') }}</router-link>
+    <!-- 空状态引导：dataLoaded 为 false 时不渲染，避免"有数据用户"首帧闪一下空状态。
+         「图标 + 主文案 + 操作」三段式本身就是这张卡片的标题区，不再额外叠一个 card-head。 -->
+    <div v-if="dataLoaded && watchingList.length === 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
+      <div class="empty-state">
+        <AppIcon scale="xl" name="tv" class="empty-state-icon" />
+        <p class="empty-state-title">{{ tt('watching.emptyTitle') }}</p>
+        <div class="flex items-center justify-center gap-2 flex-wrap mt-2">
+          <button @click="openAddDialog" class="btn-base btn-primary">
+            <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
+          </button>
+          <router-link to="/import" class="btn-base btn-toned">
+            <AppIcon scale="sm" name="upload" />{{ tt('watching.importFromExcel') }}
+          </router-link>
+        </div>
       </div>
     </div>
 
     <!-- 未排期：未分配更新星期的番剧 -->
-    <div v-if="unscheduledItems.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-4 py-3 shrink-0">
-      <div class="flex items-center gap-2 mb-2 flex-wrap">
-        <span class="px-2.5 py-1 bg-warning/10 text-warning-dark rounded-lg text-sm font-bold"><AppIcon scale="sm" name="log" /> {{ tt('watching.unscheduledCount', { count: unscheduledItems.length }) }}</span>
-        <span class="text-xs text-gray-400">{{ tt('watching.unscheduledHint') }}</span>
+    <div v-if="unscheduledItems.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
+      <div class="card-head mb-3 flex-wrap">
+        <AppIcon scale="md" name="log" class="text-primary" />
+        <!-- 「未分配更新星期，选中后『编辑』选择星期即可入列」是在解释「怎么操作」，
+             属于控件用法说明 → 改为标题上的悬浮气泡；卡片标题行的下间距由 mb-1 收到 mb-3 之外不再多占一行。 -->
+        <h3 class="card-head-title gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+          v-tip="tt('watching.unscheduledHint')">{{ tt('watching.unscheduled') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
+        <span class="stat-chip">{{ tt('watching.unscheduledCount', { count: unscheduledItems.length }) }}</span>
       </div>
       <div class="flex flex-wrap gap-2">
         <WatchingCard v-for="item in unscheduledItems" :key="item.id" class="w-64"
@@ -144,6 +169,7 @@
           @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
           @toggle-check="toggleCheck(item.id)"
           @context-menu="!batchMode && openContextMenu($event, item)"
+          @open-dialog="openCardDialog(item)"
           @middle-click="handleCardMiddleClick($event, item)"
           @start-edit="startEdit(item, $event)"
           @save-edit="saveEdit"
@@ -183,7 +209,7 @@
                 <div>
                   <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                     <span>{{ tt('showDialog.time') }}</span>
-                    <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
+                    <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="btn-base btn-sm btn-link">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
                   </label>
                   <div v-if="!formShowTimePicker" class="relative">
                     <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">
@@ -193,16 +219,16 @@
                     <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 left-0 w-[20rem] glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
                       <div class="grid grid-cols-8 gap-1.5">
                         <button v-for="h in 24" :key="'fh'+h" @click="formSelectTimeHour(h-1)"
-                          class="px-1.5 py-1.5 text-xs rounded-lg transition btn-press whitespace-nowrap"
-                          :class="parseInt(formTime?.split(':')[0])===h-1?'bg-primary text-white font-bold':'hover:bg-primary/10 text-gray-700'">
+                          class="btn-base btn-sm"
+                          :class="parseInt(formTime?.split(':')[0])===h-1 ? 'btn-primary font-bold' : 'btn-neutral'">
                           {{ String(h-1).padStart(2,'0') }}:00
                         </button>
                       </div>
                       <div class="border-t border-white/20 my-2"></div>
                       <div class="grid grid-cols-8 gap-1.5">
                         <button v-for="m in 12" :key="'fm'+m" @click="formSelectTimeMinute((m-1)*5)"
-                          class="px-1.5 py-1.5 text-xs rounded-lg transition btn-press whitespace-nowrap"
-                          :class="parseInt(formTime?.split(':')[1])===(m-1)*5?'bg-secondary text-white font-bold':'hover:bg-secondary/10 text-gray-700'">
+                          class="btn-base btn-sm"
+                          :class="parseInt(formTime?.split(':')[1])===(m-1)*5 ? 'btn-primary font-bold' : 'btn-neutral'">
                           :{{ String((m-1)*5).padStart(2,'0') }}
                         </button>
                       </div>
@@ -212,14 +238,16 @@
                   <div v-else class="flex items-center gap-2">
                     <input v-model="formTime" type="text" placeholder="HH:mm"
                       class="flex-1 min-w-0 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                    <button @click="formTime=''" class="shrink-0 px-3 py-2.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('record.clearTime') }}</button>
+                    <button @click="formTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
                   </div>
                 </div>
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('showDialog.episode') }}<span v-if="formTotalEpisodes > 0" class="text-primary"> / {{ formTotalEpisodes }}</span></span>
-                  <span class="text-xs text-gray-400">{{ tt('showDialog.episodeHint') }}</span>
+                  <!-- 「支持 01、02 补零格式」原为标签右侧外显小字，改为标签自身的悬浮气泡：
+                       文案 key 原样保留，只是渲染位置从段落移到气泡；视觉上用虚线底 + info 图标提示可悬浮。 -->
+                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                    v-tip="tt('showDialog.episodeHint')">{{ tt('showDialog.episode') }}<AppIcon scale="xs" name="info" class="text-gray-400" /><span v-if="formTotalEpisodes > 0" class="text-primary"> / {{ formTotalEpisodes }}</span></span>
                 </label>
                 <div class="flex items-center gap-2">
                   <!-- 步进按钮统一为 .btn-step（与输入框同几何、跟随主题色） -->
@@ -246,53 +274,63 @@
                 <input v-model="form.url" @input="onUrlInput" type="text" :placeholder="tt('showDialog.urlPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                 <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <!-- 「快速填充:」是三个按钮的组标题，保留外显（它标的是这组按钮本身，不是控件用法说明）。
+                       三个模板各自的用法说明（原来摊在展开面板里的小字）改为按钮上的悬浮气泡：
+                       说明与触发点同处一处，面板收起后也不再占一行。 -->
                   <span class="text-xs text-gray-400">{{ tt('showDialog.quickFill') }}</span>
                   <button type="button" @click="selectTemplate('video')"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
-                    :class="activeTemplate==='video' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'"><AppIcon scale="xs" name="video" />{{ tt('showDialog.bilibiliVideo') }}</button>
+                    class="btn-base btn-sm"
+                    v-tip="tt('showDialog.bvHint')" :aria-label="tt('showDialog.bilibiliVideo')"
+                    :class="activeTemplate==='video' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="video" />{{ tt('showDialog.bilibiliVideo') }}</button>
                   <button type="button" @click="selectTemplate('space')"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
-                    :class="activeTemplate==='space' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'"><AppIcon scale="xs" name="home" />{{ tt('showDialog.bilibiliSpace') }}</button>
+                    class="btn-base btn-sm"
+                    v-tip="tt('showDialog.spaceHint')" :aria-label="tt('showDialog.bilibiliSpace')"
+                    :class="activeTemplate==='space' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="home" />{{ tt('showDialog.bilibiliSpace') }}</button>
                   <button type="button" @click="selectTemplate('search')"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition btn-press"
-                    :class="activeTemplate==='search' ? 'bg-primary text-white border-primary' : 'border-primary/30 text-primary hover:bg-primary/10'"><AppIcon scale="xs" name="search" />{{ tt('showDialog.bilibiliSearch') }}</button>
+                    class="btn-base btn-sm"
+                    v-tip="tt('showDialog.searchHint')" :aria-label="tt('showDialog.bilibiliSearch')"
+                    :class="activeTemplate==='search' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="search" />{{ tt('showDialog.bilibiliSearch') }}</button>
                 </div>
                 <div v-if="activeTemplate" class="mt-2 p-3 bg-primary/5 border border-primary/20 rounded-xl space-y-2">
                   <template v-if="activeTemplate==='video'">
                     <input v-model="tplVideo.bv" type="text" :placeholder="tt('showDialog.bvPlaceholder')"
+                      :aria-label="tt('showDialog.bvPlaceholder')"
                       class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                    <p class="text-xs text-gray-400">{{ tt('showDialog.bvHint') }}</p>
                   </template>
                   <template v-else-if="activeTemplate==='space'">
                     <input v-model="tplSpace.uid" type="text" :placeholder="tt('showDialog.uidPlaceholder')"
+                      :aria-label="tt('showDialog.uidPlaceholder')"
                       class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                     <div class="grid grid-cols-2 gap-2">
                       <input v-model="tplSpace.name" type="text" :placeholder="tt('showDialog.namePlaceholder')"
+                        :aria-label="tt('showDialog.namePlaceholder')"
                         class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                       <input v-model="tplSpace.season" type="number" min="1" :placeholder="tt('showDialog.seasonPlaceholder')"
+                        :aria-label="tt('showDialog.seasonPlaceholder')"
                         class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                     </div>
-                    <p class="text-xs text-gray-400">{{ tt('showDialog.spaceHint') }}</p>
                   </template>
                   <template v-else>
                     <input v-model="tplSearch.keyword" type="text" :placeholder="tt('showDialog.searchExample')"
+                      :aria-label="tt('showDialog.searchExample')"
                       class="w-full px-3 py-2 border border-primary/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                    <p class="text-xs text-gray-400">{{ tt('showDialog.searchHint') }}</p>
                   </template>
                   <div class="flex justify-end gap-2">
-                    <button type="button" @click="activeTemplate=''" class="px-3 py-1.5 text-xs text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-                    <button type="button" @click="applyTemplate" class="px-3 py-1.5 text-xs text-white bg-gradient-to-r from-primary to-primary-dark rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">{{ tt('showDialog.applyTemplate') }}</button>
+                    <button type="button" @click="activeTemplate=''" class="btn-base btn-sm btn-neutral">{{ tt('common.cancel') }}</button>
+                    <button type="button" @click="applyTemplate" class="btn-base btn-sm btn-primary">{{ tt('showDialog.applyTemplate') }}</button>
                   </div>
                 </div>
               </div>
               <div v-if="form.url">
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('showDialog.urlParams') }}</span>
-                  <button type="button" @click="insertEpisodeToken" class="text-xs text-primary hover:text-primary-dark transition btn-press">{{ tt('showDialog.insertEpisode') }}</button>
+                  <!-- 输入框下方那段长解释（「用 {episode} 代表当前集数…补零格式按原样替换」）
+                       整段移入标签气泡；原占的一行随之收回，纵向节奏不变。 -->
+                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                    v-tip="tt('showDialog.episodeTokenDetail')">{{ tt('showDialog.urlParams') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
+                  <button type="button" @click="insertEpisodeToken" class="btn-base btn-sm btn-link">{{ tt('showDialog.insertEpisode') }}</button>
                 </label>
                 <input ref="urlParamsInput" v-model="form.url_params" type="text" :placeholder="tt('showDialog.urlParamsPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenDetail') }}</p>
               </div>
               <div>
                 <!-- 标签选择：可复用 TagSelector，支持内置标签勾选与内联新建 -->
@@ -306,8 +344,8 @@
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="saveForm" :disabled="saving" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40">{{ saving ? tt('common.saving') : tt('common.save') }}</button>
+              <button @click="showDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="saveForm" :disabled="saving" class="btn-base btn-primary disabled:opacity-40">{{ saving ? tt('common.saving') : tt('common.save') }}</button>
             </div>
           </div>
         </div>
@@ -329,22 +367,28 @@
             <div class="px-6 py-5 space-y-4">
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('moveWatched.date') }}</span>
-                  <button type="button" @click="dateManualInput=!dateManualInput" class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
+                  <!-- 日期格式说明移入标签气泡（虚线 + info 图标提示可悬浮），原灰字一行收回 -->
+                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                    v-tip="tt('record.dateFormatsHint')">{{ tt('moveWatched.date') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
+                  <button type="button" @click="dateManualInput=!dateManualInput" class="btn-base btn-sm btn-link">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>
                 <input v-if="dateManualInput" v-model="moveDate" type="text" :placeholder="tt('moveWatched.datePlaceholder')"
+                  :aria-label="tt('record.dateFormatsHint')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80"
                   :class="{'border-danger/50 ring-danger/20': dateValidationError}" />
-                <input v-else :value="formatToDateInput(moveDate)" @input="moveDate = dateInputToFormat($event.target.value)" @click="$event.target.showPicker()" type="date"
-                  class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                <!-- 日期：自研面板（DatePicker）替代原生 input[type=date]（浏览器自带白色日历
+                     压在深色玻璃上非常割裂，且只能表达完整日期）。「手动输入」开关仍然保留。 -->
+                <DatePicker v-else v-model="moveDate" :placeholder="tt('moveWatched.datePlaceholder')"
+                  :invalid="!!dateValidationError" />
+                <!-- 校验错误必须外显（用户要立刻看到）；「支持的日期格式」这类用法说明
+                     改为输入框自身的 aria-label + 悬浮气泡，不再单独占一行灰字 -->
                 <p v-if="dateValidationError" class="text-xs text-danger mt-1">{{ dateValidationError }}</p>
-                <p v-else-if="dateManualInput" class="text-xs text-gray-400 mt-1">{{ tt('record.dateFormatsHint') }}</p>
               </div>
               <!-- 时间选择 -->
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <span>{{ tt('moveWatched.time') }}</span>
-                  <button type="button" @click="showTimePicker=!showTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ showTimePicker ? tt('showDialog.manualInput') : tt('showDialog.clockPicker') }}</button>
+                  <button type="button" @click="showTimePicker=!showTimePicker" class="btn-base btn-sm btn-link">{{ showTimePicker ? tt('showDialog.manualInput') : tt('showDialog.clockPicker') }}</button>
                 </label>
                 <!-- 时钟选择器 -->
                 <div v-if="!showTimePicker" class="relative">
@@ -355,16 +399,16 @@
                   <div v-if="showTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 w-full glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
                     <div class="grid grid-cols-6 gap-1">
                       <button v-for="h in 24" :key="'h'+h" @click="selectTimeHour(h-1)"
-                        class="px-2 py-1.5 text-xs rounded-lg transition btn-press"
-                        :class="parseInt(moveTime?.split(':')[0])===h-1?'bg-primary text-white font-bold':'hover:bg-primary/10 text-gray-700'">
+                        class="btn-base btn-sm"
+                        :class="parseInt(moveTime?.split(':')[0])===h-1 ? 'btn-primary font-bold' : 'btn-neutral'">
                         {{ String(h-1).padStart(2,'0') }}:00
                       </button>
                     </div>
                     <div class="border-t border-white/20 my-2"></div>
                     <div class="grid grid-cols-6 gap-1">
                       <button v-for="m in 12" :key="'m'+m" @click="selectTimeMinute((m-1)*5)"
-                        class="px-2 py-1.5 text-xs rounded-lg transition btn-press"
-                        :class="parseInt(moveTime?.split(':')[1])===(m-1)*5?'bg-secondary text-white font-bold':'hover:bg-secondary/10 text-gray-700'">
+                        class="btn-base btn-sm"
+                        :class="parseInt(moveTime?.split(':')[1])===(m-1)*5 ? 'btn-primary font-bold' : 'btn-neutral'">
                         :{{ String((m-1)*5).padStart(2,'0') }}
                       </button>
                     </div>
@@ -375,13 +419,13 @@
                 <div v-else class="flex items-center gap-2">
                   <input v-model="moveTime" type="text" placeholder="HH:mm"
                     class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                  <button @click="moveTime=''" class="px-3 py-2.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('record.clearTime') }}</button>
+                  <button @click="moveTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
                 </div>
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showDateDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="moveToWatched" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-secondary to-secondary-dark rounded-xl hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">{{ tt('common.confirm') }}</button>
+              <button @click="showDateDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="moveToWatched" class="btn-base btn-toned">{{ tt('common.confirm') }}</button>
             </div>
           </div>
         </div>
@@ -395,7 +439,7 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
+        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
           <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
           <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
@@ -427,8 +471,9 @@
               </p>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-center gap-3">
-              <button @click="showConfirmDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="confirmActionFn" class="px-5 py-2.5 text-sm font-medium text-white rounded-xl hover:shadow-lg transition-all btn-press" :class="confirmAction==='clear'||confirmAction==='batchDelete'||confirmAction==='delete'?'bg-gradient-to-r from-danger to-red-400 hover:shadow-danger/30':'bg-gradient-to-r from-secondary to-secondary-dark hover:shadow-secondary/30'">{{ confirmAction==='clear' ? tt('confirm.confirmClear') : confirmAction==='batchDelete'||confirmAction==='delete' ? tt('confirm.confirmDelete') : tt('common.confirm') }}</button>
+              <button @click="showConfirmDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="confirmActionFn" class="btn-base"
+                :class="confirmAction==='clear'||confirmAction==='batchDelete'||confirmAction==='delete' ? 'btn-danger' : 'btn-toned'">{{ confirmAction==='clear' ? tt('confirm.confirmClear') : confirmAction==='batchDelete'||confirmAction==='delete' ? tt('confirm.confirmDelete') : tt('common.confirm') }}</button>
             </div>
           </div>
         </div>
@@ -440,13 +485,16 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, onBeforeUpdate, watch, nextTick } from 'vue'
 import { watchingApi, remainingApi, batchApi } from '../db/api'
-import { validateDate, dateInputToFormat, formatToDateInput, todayStr } from '../composables/useDatePicker'
+import { validateDate, todayStr } from '../composables/useDatePicker'
+import DatePicker from '../components/DatePicker.vue'
 import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl, defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { showToast } from '../composables/useToast'
+import { setPageStats } from '../composables/usePageStats'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
 import { useErrorText } from '../composables/useErrorText'
+import { spaceCJK } from '../composables/useCjkSpace'
 import WatchingCard from '../components/WatchingCard.vue'
 
 const { tt } = useI18n()
@@ -718,7 +766,9 @@ const applyTemplate = () => {
     form.value.url = `https://space.bilibili.com/${uid}/search`
     // 存**可读文字**，不做 URL 编码 —— 编码推迟到打开链接时（buildItemUrl 里）。
     // 否则数据库里会存成 %E4%BE%A6%E5%86%96…，用户在「动态参数」框里根本没法编辑。
-    form.value.url_params = `keyword=${String(tplSpace.value.name || '').trim()} | ${season}季 | 第{集数}集`
+    // 排版：这里是**运行时拼接**（季数/集数是变量），写不进语言包，
+    // 因此交给 spaceCJK 统一处理「数字 ↔ 汉字」之间的半角空格（幂等）。
+    form.value.url_params = spaceCJK(`keyword=${String(tplSpace.value.name || '').trim()} | ${season}季 | 第{集数}集`)
   } else if (activeTemplate.value === 'search') {
     const kw = String(tplSearch.value.keyword || '').trim()
     if (!kw) return
@@ -898,6 +948,23 @@ const openAddDialog = () => {
   activeTemplate.value = ''
   showDialog.value = true
   focusNameInput()
+}
+
+/**
+ * 卡片空白处双击 → 打开完整编辑弹窗（需求 A）。
+ *
+ * 为什么不直接复用 openEditDialog：那个函数读 `selected.value`，而双击空白处
+ * 时卡片可能尚未选中（用户只是「想改这一张」，并不想先点它一下）。
+ * 所以先把该卡片设为选中，再走同一条 openEditDialog 路径 —— 这样弹窗里的
+ * 「当前选中」信息、保存后的选中等行为全都沿用既有逻辑，零分叉。
+ *
+ * 批量模式由 WatchingCard 内部拦截（onCardDblclick 直接 return），
+ * 这里再兜一层，防止将来别处也 emit 这个事件。
+ */
+const openCardDialog = (item) => {
+  if (batchMode.value || !item) return
+  selected.value = item
+  openEditDialog()
 }
 
 const openEditDialog = () => {
@@ -1092,6 +1159,18 @@ onMounted(async () => {
   document.addEventListener('click', onDocClick)
 })
 
+
+// 计数同步到顶栏（追番总数）
+watch(
+  () => watchingList.value.length,
+  (n) => {
+    setPageStats('/watching', [
+      { text: tt('watched.totalCount', { count: n }), tone: 'neutral' },
+    ])
+  },
+  { immediate: true },
+)
+
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
@@ -1163,8 +1242,10 @@ const unpinLeavingGroup = (el) => {
   position: absolute;
   pointer-events: none;
   /* 必须显式写 transform 过渡：否则 Vue 只为「有过渡属性」的元素排队等过渡结束，
-     没匹配到过渡会立刻把节点删掉 —— 那样连淡出都没有，-leave-to 也永远不生效。 */
-  transition: opacity 0.22s ease, transform 0.22s ease;
+     没匹配到过渡会立刻把节点删掉 —— 那样连淡出都没有，-leave-to 也永远不生效。
+     曲线/时长与 style.css 的 .sel-anim-leave-active 一致：离场走 iOS --ease-exit 0.22s。 */
+  transition: opacity 0.22s var(--ease-exit, cubic-bezier(0.4, 0, 1, 1)),
+    transform 0.22s var(--ease-exit, cubic-bezier(0.4, 0, 1, 1));
 }
 
 /* 定位参照：必须是参与布局的正常盒子。

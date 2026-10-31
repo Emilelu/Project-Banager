@@ -41,8 +41,7 @@
           </div>
 
           <div class="px-6 py-4 border-t border-white/20 flex justify-end shrink-0">
-            <button @click="$emit('close')"
-              class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">{{ tt('common.confirm') }}</button>
+            <button @click="$emit('close')" class="btn-base btn-primary">{{ tt('common.confirm') }}</button>
           </div>
         </div>
       </div>

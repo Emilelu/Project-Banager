@@ -2,12 +2,14 @@
   <div v-if="allTags.length" class="tag-filter">
     <!-- 触发按钮：显示当前筛选状态 -->
     <div class="relative inline-block">
+      <!-- 触发按钮：统一成 .filter-trigger（实色底 + text-sm + rounded-xl），
+           与「查看新番」等同排按钮一致；点开后的菜单面板仍是 app-menu-surface + pop。 -->
       <button ref="triggerRef" type="button" @click="toggle"
-        class="app-btn-ghost tag-filter-trigger inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition whitespace-nowrap"
-        :class="{ 'tag-filter-active': selected.length > 0 }"
+        class="filter-trigger tag-filter-trigger transition"
+        :class="{ 'is-active': selected.length > 0 }"
         :aria-expanded="open" aria-haspopup="menu"
         :aria-label="tt('tags.filterLabel')">
-        <AppIcon scale="xs" name="filter" />
+        <AppIcon scale="sm" name="filter" />
         <span v-if="selected.length === 0">{{ tt('tags.filter') }}</span>
         <span v-else>{{ tt('tags.filterCount', { count: selected.length }) }}</span>
         <AppIcon scale="xs" :name="open ? 'caretUp' : 'caretDown'" class="ml-0.5" />

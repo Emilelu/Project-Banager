@@ -6,6 +6,12 @@
  * 絵文字はデザイン言語の一部なので保持する。
  */
 export default {
+  // ===== 日付選択 =====
+  'datePicker.open': '日付を選択',
+  'datePicker.panel': '日付選択パネル',
+  'datePicker.prev': '前へ',
+  'datePicker.next': '次へ',
+  'datePicker.precision': '精度',
   // ===== 共通 =====
   'common.cancel': 'キャンセル',
   'common.confirm': '決定',
@@ -34,7 +40,7 @@ export default {
   'nav.watching': '視聴中',
   'nav.remaining': '更新待ち',
   'nav.watched': '視聴履歴',
-  'nav.import': 'Excel取り込み',
+  'nav.import': 'Excel 取り込み',
   'nav.groupLists': 'リスト',
   'nav.groupData': 'データ',
   'nav.groupAppearance': '設定',
@@ -110,7 +116,7 @@ export default {
   'sidebar.neverBackedUp': '未バックアップ',
   'sidebar.backupToday': '今日',
   'sidebar.backupDaysAgo': '{days} 日前',
-  'sidebar.backupWarning': '1週間以上バックアップしていません',
+  'sidebar.backupWarning': '1 週間以上バックアップしていません',
   'sidebar.exportTitle': 'データベースをバックアップファイルに書き出す',
   'sidebar.importTitle': 'バックアップファイルからデータベースを復元する',
 
@@ -133,8 +139,8 @@ export default {
   // ===== 視聴中ページ =====
   'watching.addShow': '作品を追加',
   'watching.edit': '編集',
-  'watching.epPlus': '+1話',
-  'watching.epMinus': '-1話',
+  'watching.epPlus': '+1 話',
+  'watching.epMinus': '-1 話',
   'watching.moveToRemaining': '更新待ちへ移動',
   'watching.moveToWatched': '視聴履歴へ移動',
   'watching.delete': '削除',
@@ -191,7 +197,7 @@ export default {
   'showDialog.episodeTokenDetail': '{episode} は現在の話数を表し、リンクを開くときに自動で置換されます。例：keyword={episode} → keyword=914。01、02 のようなゼロ埋め形式はそのまま置換されます。',
   'showDialog.bvPlaceholder': 'BV 番号または動画リンク、例：BV1GAuw6HEdd',
   'showDialog.bvHint': '入力後の動的パラメータは p={episode} になり、リンクから該当パートへ直接移動できます',
-  'showDialog.spaceHint': 'スペース内検索リンクを生成：keyword=作品名 | 第N期 | 第{episode}話',
+  'showDialog.spaceHint': 'スペース内検索リンクを生成：keyword=作品名 | 第 N 期 | 第 {episode} 話',
   'showDialog.searchExample': '例：「ニコニコ」{episode}【字幕】',
   'showDialog.searchHint': 'キーワードに {episode} を含めると、リンクを開くときに現在の話数へ置換されます',
   'showDialog.uidPlaceholder': '投稿者 UID またはスペースリンク',
@@ -206,10 +212,10 @@ export default {
   'moveWatched.datePlaceholder': '例: 2025 / 2025/07 / 2025/07/15',
 
   // ===== 更新待ちページ =====
-  'remaining.count': '更新待ち: {count}件',
+  'remaining.count': '更新待ち: {count} 件',
   'remaining.thisSeason': '今期の新作',
   'remaining.thisSeasonLabel': '今期の新作',
-  'remaining.seasonLink': '{year}年{season} ({month})',
+  'remaining.seasonLink': '{year} 年 {season} ({month})',
   'remaining.seasonWinter': '冬アニメ',
   'remaining.seasonSpring': '春アニメ',
   'remaining.seasonSummer': '夏アニメ',
@@ -226,10 +232,10 @@ export default {
   'remaining.emptyTitle': '更新待ちの作品はまだありません',
   'remaining.searchPlaceholder': '作品名を検索...',
   'remaining.batchAddTitle': '更新待ちをまとめて追加',
-  'remaining.batchAddHint': '作品名（1行に1作品）',
-  'remaining.batchAddPlaceholder': '作品1\n作品2\n作品3',
+  'remaining.batchAddHint': '作品名（1 行に 1 作品）',
+  'remaining.batchAddPlaceholder': '作品 1\n作品 2\n作品 3',
   'remaining.moveDialogTitle': '視聴中リストへ移動',
-  'remaining.perPage': '1ページ {n} 件',
+  'remaining.perPage': '1 ページ {n} 件',
   'card.editDateLabelShort': '配信予定日を編集：{name}',
   'remaining.datePlaceholder': '例: 2025/07',
   'remaining.datePlaceholderLong': '例: 2025/07 または 2025/07/15',
@@ -248,8 +254,8 @@ export default {
   'watched.yearSelect': '年を選択:',
   'watched.allYears': 'すべての年',
   'watched.unclassified': '未分類',
-  'watched.thisYear': '今年: {count}件',
-  'watched.total': '合計: {count}件',
+  'watched.thisYear': '今年: {count} 件',
+  'watched.total': '合計: {count} 件',
   'watched.addRecord': '記録を追加',
   'watched.addYear': '年を追加',
   'watched.editYear': '年を編集',

@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-5">
     <!-- 新建标签 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center gap-2 mb-3">
         <AppIcon scale="md" name="plus" class="text-primary" />
         <h3 class="text-base font-bold gradient-text">{{ tt('tags.createNew') }}</h3>
@@ -20,11 +20,11 @@
     </div>
 
     <!-- 标签列表 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div class="flex items-center gap-2">
           <AppIcon scale="md" name="bookmark" class="text-primary" />
-          <h3 class="text-base font-bold gradient-text">{{ tt('tags.manageTitle') }}</h3>
+          <h3 class="text-base font-bold gradient-text border-b border-dashed border-gray-400/50 cursor-help" v-tip="tt('tags.builtinHint')">{{ tt('tags.manageTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
           <span class="tag-meta text-xs text-gray-400">{{ tt('tags.totalCount', { count: tags.length }) }}</span>
         </div>
       </div>
@@ -63,7 +63,6 @@
         </div>
       </div>
 
-      <p class="tag-meta text-xs text-gray-400 mt-3 leading-relaxed">{{ tt('tags.builtinHint') }}</p>
     </div>
   </div>
 </template>

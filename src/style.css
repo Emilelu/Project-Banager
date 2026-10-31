@@ -105,6 +105,16 @@ html.pre-app-ready body #app > * * {
   animation: none !important;
 }
 
+/* 例外：首屏入场动画 .page-appear 必须放行。
+   它正好落在 pre-app-ready 窗口内（main 挂载时立即开播），
+   被上面那条 `animation: none !important` 一杀就完全看不到——
+   这正是「首屏像是没有过渡动画」的真正原因。
+   .page-appear 是纯合成动画（only opacity + transform），不会抢首帧，
+   放行是安全的。 */
+html.pre-app-ready body #app .page-appear {
+  animation: page-appear-in 0.45s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1)) both !important;
+}
+
 /* ==================== 背景图 ==================== */
 /* 图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
 
@@ -264,8 +274,8 @@ body {
   outline: 2px solid rgb(var(--c-primary) / 0.55) !important;
   outline-offset: 2px;
   border-radius: inherit;
-  /* 焦点环出现/消失也走统一曲线（原先没有过渡，描边是瞬间弹出，切 Tab 时显得生硬） */
-  transition: outline-color 0.2s var(--ease-smooth), outline-offset 0.2s var(--ease-smooth);
+  /* 焦点环出现/消失走 iOS spring（0.25s）：小元素档，描边"落定"而不是弹出 */
+  transition: outline-color 0.25s var(--ease-spring), outline-offset 0.25s var(--ease-spring);
 }
 
 /* 输入框本身已有 focus:ring，不再叠加 outline，避免双层框 */
@@ -345,10 +355,11 @@ tr[draggable='true'] {
    与 .btn-base 同理：这些分段按钮在主题页上也会被 hover 放大（模板里带 btn-press），
    半透明白底会让放大区透出底下的其他控件，因此底色统一改成不透明合成。 */
 .seg-btn {
-  /* 缩放曲线与时长对齐全站按钮体系（0.2s / --ease-out-soft） */
-  transition: transform 0.25s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
-    border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth),
-    box-shadow 0.2s var(--ease-smooth);
+  /* 缩放走 iOS spring（0.28s，小元素档）：中段猛、末端落定；颜色类同族但更短，
+     避免"颜色还在动、缩放已停"的错位 */
+  transition: transform 0.28s var(--ease-spring), background-color 0.22s var(--ease-spring),
+    border-color 0.22s var(--ease-spring), color 0.22s var(--ease-spring),
+    box-shadow 0.22s var(--ease-spring);
   isolation: isolate;
   position: relative;
 }
@@ -431,20 +442,44 @@ tr[draggable='true'] {
    原先只有内部图标会缩放，整条导航项不动，与顶栏按钮手感不一致。
    间距：py-3 → py-3.5，让相邻导航项的呼吸感更接近顶栏图标按钮的密度。 */
 .nav-item {
-  /* 缩放走出场曲线（起步快、收尾慢，放大的"手感"更丝滑），颜色类属性走标准曲线；
-     时长 0.18s → 0.22s：0.18s 的 ease 在小尺寸导航条上仍偏"跳"，加长后才像被"带过去" */
-  transition: transform 0.22s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
-    box-shadow 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
+  /* 缩放走 iOS spring（0.3s，中等偏小的导航条）：起步快、中段猛、末端落定，
+     整条导航项像被"带过去"而不是弹一下；颜色类同族但更短，避免拖泥带水。 */
+  transition: transform 0.3s var(--ease-spring), background-color 0.22s var(--ease-spring),
+    box-shadow 0.22s var(--ease-spring), color 0.22s var(--ease-spring);
   will-change: transform;
   /* 行高提高一档：py-4 + min-height，让菜单项更有呼吸感（原先 42px 偏紧） */
   min-height: 3rem;
+}
+
+/*
+ * 导航文案：按可用宽度**弹性缩放字号**，永不截断。
+ *
+ * 为什么不用 truncate：i18n 各语言长度差异很大 ——
+ *   「导入 & 导出」11 字符 vs 日语「インポート & エクスポート」13 个全角字符，
+ *   后者在 256px 侧栏里会被截成「インポート & エクス…」，非常难看。
+ * 做法：.nav-item 建 container-type，.nav-label 用 cqw 计算字号 ——
+ * 占宽越多 → 字号自动下调，始终完整显示。
+ * 下限 0.6875rem(11px) 保证日语可读，上限 0.875rem 与正文一致。
+ * 用容器查询而非媒体查询：同视口下侧栏在 64/256px 间切换，媒体查询感知不到。
+ */
+.nav-item {
+  container-type: inline-size;
+}
+.nav-label {
+  white-space: nowrap;
+  font-size: 0.875rem;
+  letter-spacing: -0.02em;
+  min-width: 0;
 }
 /* 整条导航项（含图标与文字）一起缩放，倍率统一 —— 不再让图标单独放大 */
 .nav-item:hover {
   transform: scale(1.03);
 }
+/* 按下：用弹性曲线 + 更短时长，像真被按下去再回弹（缩到 0.97） */
 .nav-item:active {
   transform: scale(0.97);
+  transition: transform 0.2s var(--ease-bounce), background-color 0.18s var(--ease-spring),
+    box-shadow 0.18s var(--ease-spring), color 0.18s var(--ease-spring);
 }
 /* 当前选中项保持稳定的"浮起"观感，不再随悬浮继续放大（避免与路由切换的位移动画打架） */
 /* 当前选中项保持稳定的"浮起"观感；与 hover 用同一倍率，避免切页时缩放跳动 */
@@ -511,10 +546,15 @@ html:not(.dark) body.adaptive .border-primary\/30 {
 /* ==================== 纯白文字压在浅色玻璃上的兜底 ==================== */
 /* 少数位置（如渐变按钮已褪色的禁用态、浅色玻璃上的白色文字）实测对比度不足 1.2:1。
    这里给「浅色背景 + 白字」的常见组合兜底成深色文字。
-   注意排除真正的彩色按钮（btn-primary/btn-danger/btn-toned 已保证白字压在饱和色上）。 */
+   注意排除真正的彩色按钮（btn-primary/btn-danger/btn-toned 已保证白字压在饱和色上）。
+
+   ⚠️ 用 --txt-card-500 而不是 --txt-card-700：后者在自适应模式下会被 JS 重算成
+   rgb(105,121,146)（自适应用来压在**玻璃卡片**上刚好的一档），但 .btn-neutral 自己
+   又给底加了 0.94 白瓷底，合成后实测只有 **3.80:1**（<4.5，脚本 tmp_neutral.mjs 实测）。
+   --txt-card-500 在该合成底上是 **7.58:1**，且不支持自适应时回退值 55 48 70 也有 10.7:1。 */
 html:not(.dark) body.adaptive .btn-neutral,
 html:not(.dark) body.adaptive .app-btn-ghost {
-  color: rgb(var(--txt-card-700, 55 48 70));
+  color: rgb(var(--txt-card-500, 55 48 70));
 }
 
 /* ==================== 星期表头配色（深色模式适配） ==================== */
@@ -571,9 +611,9 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   color: rgb(var(--c-primary));
   isolation: isolate;
   position: relative;
-  transition: transform 0.25s var(--ease-out-soft),
-    background-color 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
-    color 0.2s var(--ease-smooth);
+  transition: transform 0.28s var(--ease-spring),
+    background-color 0.22s var(--ease-spring), border-color 0.22s var(--ease-spring),
+    color 0.22s var(--ease-spring);
 }
 .app-btn-ghost:hover {
   background: linear-gradient(rgb(var(--c-primary) / 0.1), rgb(var(--c-primary) / 0.1)),
@@ -584,6 +624,59 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   background: rgba(30, 22, 58, 0.92);
   border-color: rgba(255, 255, 255, 0.14);
   color: rgb(var(--c-primary-light));
+}
+
+/* ==================== 筛选 / 下拉 触发按钮（统一） ==================== */
+/*
+ * 用户要求：全项目里长得像「标签筛选」的描边小按钮，统一成「查看新番」那种
+ * 实色填充按钮；但**点开后的菜单面板**仍保持「标签筛选」现有那套。
+ *
+ * 之前这类按钮用 app-btn-ghost（描边 + text-xs），与同排的实色按钮放一起
+ * 又小又轻，一排按钮深浅不一。这里统一：实色底 + rounded-xl + text-sm。
+ *
+ * 注意只统一**触发按钮**；菜单面板继续用 app-menu-surface + pop 动画。
+ */
+.filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  cursor: pointer;
+  background: rgb(var(--c-primary) / 0.08);
+  color: rgb(var(--c-primary-dark));
+  border: 1px solid rgb(var(--c-primary) / 0.18);
+  transition: background-color 0.2s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1)),
+    border-color 0.2s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1)),
+    color 0.2s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1));
+}
+.filter-trigger:hover {
+  background: rgb(var(--c-primary) / 0.14);
+  border-color: rgb(var(--c-primary) / 0.32);
+}
+/* 已有筛选条件生效时高亮，让用户一眼看出「当前在筛」 */
+.filter-trigger.is-active {
+  background: rgb(var(--c-primary) / 0.18);
+  border-color: rgb(var(--c-primary) / 0.45);
+}
+
+/* 深色模式：浅底实色按钮在深底上会成刺眼亮块，改深色半透明 + 亮色文字 */
+.dark .filter-trigger {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgb(var(--c-primary-light));
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.dark .filter-trigger:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.dark .filter-trigger.is-active {
+  background: rgb(var(--c-primary) / 0.3);
+  border-color: rgb(var(--c-primary) / 0.55);
 }
 
 /* ==================== 主题色驱动的按钮体系 ==================== */
@@ -645,10 +738,12 @@ html:not(.dark) body.adaptive .app-btn-ghost {
         导致的，逐类在 .btn-neutral / .btn-step / .seg-btn 等处改成不透明合成。 */
   isolation: isolate;
   position: relative;
-  transition: transform 0.25s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
-    background-color 0.2s var(--ease-smooth), background-image 0.2s var(--ease-smooth),
-    opacity 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
-    color 0.2s var(--ease-smooth);
+  /* 缩放走 iOS spring（0.3s，小元素上限）：hover 放大在中段有明显加速度，末端"落定"；
+     颜色/阴影同族但 0.22s，属于属性变化档，不与缩放的物理感抢节奏。 */
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.22s var(--ease-spring),
+    background-color 0.22s var(--ease-spring), background-image 0.22s var(--ease-spring),
+    opacity 0.22s var(--ease-spring), border-color 0.22s var(--ease-spring),
+    color 0.22s var(--ease-spring);
   will-change: transform;
 }
 .btn-base:hover {
@@ -656,8 +751,13 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   z-index: 1;
 }
 .btn-base:active {
+  /* 按下 = "按下-回弹"瞬间：弹性曲线 + 更短的 0.2s，先压下去再弹回 */
   transform: scale(0.975);
   z-index: 1;
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.18s var(--ease-spring),
+    background-color 0.18s var(--ease-spring), background-image 0.18s var(--ease-spring),
+    opacity 0.18s var(--ease-spring), border-color 0.18s var(--ease-spring),
+    color 0.18s var(--ease-spring);
 }
 .btn-base:disabled {
   opacity: 0.4;
@@ -679,9 +779,26 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 
 /* 主要操作：主色渐变（--c-primary → --c-primary-dark）
    不再用 border-color 去「补」边缘：实色边框会盖住渐变，右缘反而多一条亮线。
-   边框保持 transparent，靠 .btn-base 的 background-origin:border-box 让渐变连续铺满。 */
+   边框保持 transparent，靠 .btn-base 的 background-origin:border-box 让渐变连续铺满。
+
+   ⚠️ 白字对比度（实测标定，勿回退成 primary 亮端）：
+   前端必须是 **--c-primary-dark**，不能是 --c-primary 本身。
+   壁纸自适应把 --c-primary 钳在 L∈[40,58] 之后，黄色相（h=60 / s=85 / l=58）
+   会算成 rgb(239,239,57)，白字压上去只有 **1.23:1**；右端再过渡到 ×82% 的深色，
+   全色相 972 组取样下最差仍 ≥5.43:1（脚本 tmp_contrast.mjs 实测）。
+   这样两端都落在同一深色阶上，颜色仍然是"主色系渐变"，不会出现「两个不同色相硬拼」。 */
 .btn-primary {
-  background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-primary-dark)));
+  /* 先给纯深端兜底：不支持 color-mix 的浏览器会保留这条（白字同样 ≥5.43:1） */
+  background-image: linear-gradient(
+    to right,
+    rgb(var(--c-primary-dark)),
+    rgb(var(--c-primary-dark))
+  );
+  background-image: linear-gradient(
+    to right,
+    rgb(var(--c-primary-dark)),
+    color-mix(in srgb, rgb(var(--c-primary-dark)) 82%, black)
+  );
   color: #fff;
   box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.28);
 }
@@ -693,15 +810,94 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    注意：**不要在 background-image 里用 `rgb(var(--x) / a)`** ——
    部分浏览器对 gradient 内的斜杠 alpha 支持不稳定，会导致按钮背景整个消失
    （截图里「编辑 / 移至等番 / 移至已看」三个按钮背景缺失就是这么来的）。
-   gradient 内一律用不带 alpha 的实色端点。 */
+   gradient 内一律用不带 alpha 的实色端点。
+   调节点同 .btn-primary：左端 --c-primary 亮端会让黄/青系配色下白字跌到 1.23:1，
+   故左端取 --c-primary-dark，右端向 --c-secondary-dark 过渡（同为深色阶，
+   全色相实测最差 ≥5.43:1，且仍保有"主色→副色"的走向）。 */
 .btn-toned {
-  background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
+  background-image: linear-gradient(
+    to right,
+    rgb(var(--c-primary-dark)),
+    rgb(var(--c-secondary-dark))
+  );
   /* 同上：边框保持透明，交给 .btn-base 的 background-origin:border-box 解决边缘反色 */
   color: #fff;
   box-shadow: 0 3px 12px rgb(var(--c-primary) / 0.22);
 }
 .btn-toned:hover {
   box-shadow: 0 6px 18px rgb(var(--c-primary) / 0.34);
+}
+
+/* ==================== 尺寸档（只和配色变体组合，不单独使用） ==================== */
+/*
+ * 全站只允许 3 档按钮高度，其余自定义 padding 一律清掉：
+ *   .btn-base              普通按钮  34px / 12.25px（toolbar、弹窗动作）
+ *   .btn-base.btn-sm       小按钮    28px / 10.5px（分页、每页条数、行内动作）
+ *   .btn-base.btn-icon     纯图标    34px×34px   （工具栏图标、关闭按钮）
+ *
+ * 为什么必须收进变体类、而不是继续在模板里写 px-5 py-2.5 / px-3 py-1.5：
+ * 同样的 padding 数字在不同行高（leading-5 / leading-4）下会算出 31.5 / 33.5 / 35
+ * 三种高度 —— 实测全站曾有 14 个高度档位（14/21/23/24.5/28/30/31.5/33.5/34.2/35/
+ * 37/38.5/98.5/100.5px）。收进变体后高度只由这几条声明决定，行高变化也带不走几何。
+ *
+ * ⚠️ 尺寸一律写 px，不写 rem。本工程的根字号是 14px（不是 16px），
+ * 写 1.875rem 实际只有 26.25px、写 2.25rem 只有 31.5px —— 档位会随根字号漂移。
+ * px 才能保证「工具栏 34px、分页 28px」在任何缩放下都是同一个数。
+ *
+ * 小元素档的微动效沿用 style.css 里既有的小尺寸参数（0.25s spring），
+ * 与 .btn-mini / .btn-step / .seg-btn 一致，避免小按钮 hover 时"拖沓"。
+ */
+.btn-sm {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  line-height: 14px;
+  gap: 4px;
+  transition: transform 0.25s var(--ease-spring), box-shadow 0.2s var(--ease-spring),
+    background-color 0.2s var(--ease-spring), background-image 0.2s var(--ease-spring),
+    opacity 0.2s var(--ease-spring), border-color 0.2s var(--ease-spring),
+    color 0.2s var(--ease-spring);
+}
+/* 只带图标的小方块：几何与 .btn-sm 等高，宽度收成正方形 */
+.btn-icon {
+  height: 34px;
+  width: 34px;
+  padding: 0;
+  border-radius: 10px;
+  gap: 0;
+}
+/* 小号纯图标（卡片行内编辑/删除、色块重置换原）：与 .btn-sm 同高 */
+.btn-sm.btn-icon {
+  height: 28px;
+  width: 28px;
+  padding: 0;
+  border-radius: 9px;
+  gap: 0;
+}
+/* 小号「文字按钮」（没有任何底色，只靠 color 表达层级）：用于「手动输入 / 时钟选择 /
+   插入集数 / 自定义颜色」这类弹窗内的次要切换。显式声明透明底，避免继承
+   Tailwind bg-* 时忽有忽无；hover 只换文字色 + 极淡主色底，不改变几何。 */
+.btn-link {
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 7px;
+  font-size: 10.5px;
+  line-height: 14px;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgb(var(--c-primary-dark));
+}
+.btn-link:hover {
+  background: rgb(var(--c-primary) / 0.08);
+  color: rgb(var(--c-primary-darker, var(--c-primary-dark)));
+}
+.dark .btn-link {
+  color: rgb(var(--c-primary-light));
+}
+.dark .btn-link:hover {
+  background: rgb(var(--c-primary-light) / 0.14);
 }
 
 /* 中性操作：玻璃灰底 + 主色描边，不抢主操作视觉 */
@@ -718,7 +914,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 .btn-neutral {
   background: linear-gradient(rgb(var(--c-primary) / 0.10), rgb(var(--c-primary) / 0.10)),
     rgba(255, 255, 255, 0.94);
-  color: rgb(var(--txt-card-700, 55 48 70));
+  color: rgb(var(--txt-card-500, 55 48 70));
   border: 1px solid rgb(var(--c-primary) / 0.18);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -729,8 +925,12 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   border-color: rgb(var(--c-primary) / 0.3);
 }
 .dark .btn-neutral {
-  background: rgba(30, 22, 58, 0.92);
-  color: #d9d4e7;
+  /* 深色下底色是 8% 白（半透明），压在深紫玻璃上合成约 rgb(44,39,65)。
+     原先字色用 --c-primary-light：该变体在随机配色下会被收敛到 rgb(211,222,238) 附近，
+     实测最低只有 **4.39:1**（<4.5）。改用固定亮灰 #e2e8f0 → **11.05:1**，
+     与「标签管理」等页深色次级文字的既有取值一致，不再随配色漂移。 */
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
   border-color: rgba(255, 255, 255, 0.14);
 }
 .dark .btn-neutral:hover {
@@ -741,14 +941,91 @@ html:not(.dark) body.adaptive .app-btn-ghost {
     rgba(30, 22, 58, 0.92);
 }
 
-/* 破坏性操作：危险色 */
+/* 破坏性操作：危险色
+   端点同样按白字标定：--c-danger 原色 rgb(239,68,68) 白字只有 **3.76:1**（实测），
+   滚到 --c-danger-dark rgb(220,38,38) 是 4.85:1 —— 两端都不够稳。
+   故两端各混黑：→ ×78%（rgb 186,53,53）与 ×62%（rgb 136,24,24），
+   全段最差 **5.76:1**，色相仍是同一族红色（不是"两个色相硬拼"）。 */
 .btn-danger {
-  background-image: linear-gradient(to right, rgb(var(--c-danger)), rgb(var(--c-danger-dark)));
+  /* 兜底：纯 --c-danger-dark，白字 4.85:1 */
+  background-image: linear-gradient(to right, rgb(var(--c-danger-dark)), rgb(var(--c-danger-dark)));
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, rgb(var(--c-danger)) 78%, black),
+    color-mix(in srgb, rgb(var(--c-danger-dark)) 62%, black)
+  );
   color: #fff;
   box-shadow: 0 4px 14px rgb(var(--c-danger) / 0.28);
 }
 .btn-danger:hover {
   box-shadow: 0 6px 20px rgb(var(--c-danger) / 0.42);
+}
+
+/* ==================== BUTTON HOVER GLOW (unified) ==================== */
+/*
+ * Every button variant gets a colored hover glow, tinted by its own hue.
+ *
+ * Colored variants (.btn-primary/.btn-toned/.btn-danger) already glowed, but the
+ * neutral / ghost / filter / segmented / mini / step ones only brightened their
+ * background. Side by side in one toolbar that reads as inconsistent, not intentional.
+ *
+ * Color rule: glow uses the SAME token the variant is built from, so switching the
+ * theme palette keeps the glow in sync automatically.
+ *   neutral / ghost / filter / segmented / mini-plus / step -> --c-primary
+ *   mini-minus                                              -> --c-danger
+ *
+ * Dark mode lowers alpha slightly: the same alpha over dark glass looks muddier.
+ */
+.btn-neutral:hover {
+  box-shadow: 0 6px 18px rgb(var(--c-primary) / 0.26);
+}
+.app-btn-ghost:hover {
+  box-shadow: 0 6px 16px rgb(var(--c-primary) / 0.26);
+}
+.filter-trigger:hover {
+  box-shadow: 0 6px 16px rgb(var(--c-primary) / 0.26);
+}
+.seg-btn:hover {
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.2);
+}
+.btn-mini:hover {
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.28);
+}
+.btn-mini:hover {
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.28);
+}
+.btn-step:hover {
+  box-shadow: 0 4px 12px rgb(var(--c-primary) / 0.22);
+}
+
+/* Dark mode: slightly lower alpha, same hue */
+.dark .btn-neutral:hover {
+  box-shadow: 0 6px 18px rgb(var(--c-primary-light) / 0.24);
+}
+.dark .app-btn-ghost:hover {
+  box-shadow: 0 6px 16px rgb(var(--c-primary-light) / 0.24);
+}
+.dark .filter-trigger:hover {
+  box-shadow: 0 6px 16px rgb(var(--c-primary-light) / 0.24);
+}
+.dark .seg-btn:hover {
+  box-shadow: 0 4px 14px rgb(var(--c-primary-light) / 0.18);
+}
+.dark .btn-mini:hover {
+  box-shadow: 0 4px 14px rgb(var(--c-primary-light) / 0.24);
+}
+.dark .btn-step:hover {
+  box-shadow: 0 4px 12px rgb(var(--c-primary-light) / 0.2);
+}
+
+/* Keyboard parity: focus-visible gets the same glow */
+.btn-neutral:focus-visible,
+.app-btn-ghost:focus-visible,
+.filter-trigger:focus-visible,
+.seg-btn:focus-visible,
+.btn-mini:focus-visible,
+.btn-step:focus-visible {
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.26);
 }
 
 /* 迷你按钮（卡片上的集数 +/-、表单里的步进）：与主按钮同色系但更紧凑，
@@ -760,7 +1037,11 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s var(--ease-smooth);
+  /* 迷你按钮是「小元素」里最小的：缩放 0.25s spring（再长会显得拖沓），
+     颜色/滤镜同族 0.2s —— filter 也走 spring，避免 brightness 的匀速感 */
+  transition: transform 0.25s var(--ease-spring), background-color 0.2s var(--ease-spring),
+    filter 0.2s var(--ease-spring), box-shadow 0.2s var(--ease-spring),
+    color 0.2s var(--ease-spring);
   color: #fff;
 }
 /* 集数加减迷你按钮：白字必须压在**饱和实色**上才够对比度。
@@ -795,7 +1076,10 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   background: rgba(255, 255, 255, 0.96);
   color: rgb(var(--c-primary));
   font-weight: 700;
-  transition: all 0.2s var(--ease-smooth);
+  /* 步进按钮同理：小元素档 0.25s spring；颜色/描边跟同一条曲线，只是更短 */
+  transition: transform 0.25s var(--ease-spring), background 0.2s var(--ease-spring),
+    border-color 0.2s var(--ease-spring), color 0.2s var(--ease-spring),
+    box-shadow 0.2s var(--ease-spring);
 }
 .btn-step:hover {
   background: linear-gradient(rgb(var(--c-primary) / 0.14), rgb(var(--c-primary) / 0.14)),
@@ -822,20 +1106,36 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    - 离开时反向淡出（不占位，故用 max-height 收拢，避免工具栏高度跳变） */
 .sel-anim-enter-active,
 .sel-anim-leave-active {
-  /* 进入 = 软出场（快起慢收），离开 = 软离场（慢起快收）：两段方向相反的缓动，收放成对 */
-  transition: opacity 0.22s var(--ease-out-soft), transform 0.22s var(--ease-out-soft),
-    max-height 0.22s var(--ease-smooth), margin 0.22s var(--ease-smooth),
-    padding 0.22s var(--ease-smooth);
+  /* 进出场分离（Vue 的 enter/leave 方向不同，用一条规则无法区分快慢，故交给下方
+     各自的 -enter-active / -leave-active 覆盖）：这里只保留"所有方向一致"的
+     属性（max-height / margin / padding 收拢），走 spring 的进场时长。
+     进出场各自的 opacity/transform 曲线见下方两条。 */
+  transition: opacity 0.3s var(--ease-spring), transform 0.3s var(--ease-spring),
+    max-height 0.3s var(--ease-spring), margin 0.3s var(--ease-spring),
+    padding 0.3s var(--ease-spring);
   overflow: hidden;
+}
+/* 进场（出现）= spring 0.3s；离场（消失）= accelerate 0.22s，比进场短，收得干脆 */
+.sel-anim-enter-active {
+  /* 进场：只做「透明度 + 轻微位移缩放」渐入，**不改自身尺寸**（不参与 max-height/margin/padding 收拢）。
+     为什么：用户要的是「随邻居移位腾出空间时同步渐入，而不是等移位完成才突然出现」。
+     旧实现把 max-height/margin/padding 也做成 0→正常，等于按钮先"从 0 宽度撑开"，
+     这段撑开期间它自己不可见（opacity 也是 0），邻居的 -move 位移和它的渐入是两套节奏，
+     观感就是"先让位、再弹出"。
+     现在尺寸由 flex 布局立即占位（-move 同步把邻居推过去），
+     按钮只做 0.3s 渐入 —— 两者同时进行，就是「边让位边浮现」。 */
+  transition: opacity 0.3s var(--ease-smooth), transform 0.3s var(--ease-spring);
+}
+.sel-anim-leave-active {
+  transition: opacity 0.22s var(--ease-exit), transform 0.22s var(--ease-exit);
 }
 .sel-anim-enter-from,
 .sel-anim-leave-to {
+  /* 只渐变透明度 + 很小幅度的上浮/缩放：不足以感知为"位移"，纯粹是浮现感。
+     不要加 max-height/margin/padding —— 那会让本元素在动画期间不占位，
+     导致邻居的归位位移（-move）提前发生，两者脱节。 */
   opacity: 0;
   transform: translateY(4px) scale(0.96);
-  max-height: 0;
-  margin: 0;
-  padding-top: 0;
-  padding-bottom: 0;
 }
 .sel-anim-enter-to,
 .sel-anim-leave-from {
@@ -849,7 +1149,8 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    —— 这正是「取消选中一项时，部分按钮隐藏后其他按钮归位没有过渡」的原因。
    加上这一条，剩余按钮会平滑滑动到新位置。 */
 .sel-anim-move {
-  transition: transform 0.22s var(--ease-smooth);
+  /* 归位是"被动位移"，属于属性变化：用 spring 但不带过冲，0.3s 与进场同步 */
+  transition: transform 0.3s var(--ease-spring);
 }
 
 /* ==================== 折叠/展开统一过渡 ==================== */
@@ -868,11 +1169,16 @@ html:not(.dark) body.adaptive .app-btn-ghost {
  */
 .collapse-enter-active,
 .collapse-leave-active {
-  /* 高度/边距走标准缓动，透明度走软出场；grid-template-rows 是唯一有「收拢」语义的属性 */
-  transition: opacity 0.25s var(--ease-out-soft),
-    grid-template-rows 0.28s var(--ease-smooth), margin 0.25s var(--ease-smooth);
+  /* 折叠属于「大块」：进场 0.4s spring（内容展开要看清），离场 0.25s ease-exit
+     （收起要干脆）。grid-template-rows 是唯一有"收拢"语义的属性，与 opacity 同步。 */
+  transition: opacity 0.4s var(--ease-spring),
+    grid-template-rows 0.4s var(--ease-spring), margin 0.4s var(--ease-spring);
   display: grid;
   grid-template-rows: 1fr;
+}
+.collapse-leave-active {
+  transition: opacity 0.25s var(--ease-exit),
+    grid-template-rows 0.25s var(--ease-exit), margin 0.25s var(--ease-exit);
 }
 .collapse-enter-from,
 .collapse-leave-to {
@@ -1464,6 +1770,59 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   min-width: 0;
 }
 
+/* ==================== toolbar button entrance (staggered) ==================== */
+/*
+ * Buttons in the main content toolbar also need an entrance animation.
+ * Same motion language as the "enter while neighbours shift" rule:
+ * rise 6px + fade in, with --ease-spring for an iOS-like settle.
+ * Difference: STAGGERED -- item n is delayed n*40ms, forming a left-to-right wave.
+ * All buttons appearing at once looks mechanical (like a single frame flash).
+ *
+ * Uses animation, not transition-group: this plays once when the container mounts,
+ * with no elements being added or removed.
+ * Usage: add class="toolbar-enter" to the toolbar container.
+ */
+.toolbar-enter > .btn-base,
+.toolbar-enter > .filter-trigger,
+.toolbar-enter > .app-btn-ghost,
+.toolbar-enter > .seg-btn {
+  animation: toolbar-btn-in 0.34s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+}
+.toolbar-enter > .border-l {
+  animation: toolbar-sep-in 0.3s ease-out both;
+}
+
+/* stagger by DOM order (first 12 is enough for all three pages) */
+.toolbar-enter > *:nth-child(1) { animation-delay: 0ms; }
+.toolbar-enter > *:nth-child(2) { animation-delay: 40ms; }
+.toolbar-enter > *:nth-child(3) { animation-delay: 80ms; }
+.toolbar-enter > *:nth-child(4) { animation-delay: 120ms; }
+.toolbar-enter > *:nth-child(5) { animation-delay: 160ms; }
+.toolbar-enter > *:nth-child(6) { animation-delay: 200ms; }
+.toolbar-enter > *:nth-child(7) { animation-delay: 240ms; }
+.toolbar-enter > *:nth-child(8) { animation-delay: 280ms; }
+.toolbar-enter > *:nth-child(9) { animation-delay: 320ms; }
+.toolbar-enter > *:nth-child(10) { animation-delay: 360ms; }
+.toolbar-enter > *:nth-child(11) { animation-delay: 400ms; }
+.toolbar-enter > *:nth-child(12) { animation-delay: 440ms; }
+
+@keyframes toolbar-btn-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toolbar-sep-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-enter > .btn-base,
+  .toolbar-enter > .filter-trigger,
+  .toolbar-enter > .app-btn-ghost,
+  .toolbar-enter > .seg-btn,
+  .toolbar-enter > .border-l { animation: none; }
+}
+
 /* 容器查询按宽度分档缩小；@container 只作用于 .toolbar-adaptive 的后代 */
 @container (max-width: 1180px) {
   .toolbar-adaptive {
@@ -1531,6 +1890,40 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   opacity: 0;
   transform: translateY(8px);
 }
+/*
+ * ==================== 首屏入场（appear）====================
+ *
+ * 用户反馈「首屏入场看不清 / 主区像没有过渡动画」。
+ * 原首屏复用 .fade-*，但那套是为**页面切换**调的（0.15s 淡入 + 0.3s 位移）：
+ * 切换时有"上一屏"作参照所以能感知，而首屏是从"空"到"有"，
+ * 0.15s 淡完太快、8px 位移偏小，观感就是"页面直接出现"。
+ *
+ * 首屏是用户看到的第一眼，值得更明显的入场：
+ * 0.45s + spring 曲线（有落定的物理感）+ 14px 位移 + 轻微缩放（从下方浮起）。
+ * 页面切换仍走 .fade-*，完全不受影响（该部分用户已确认完美）。
+ */
+.page-appear {
+  animation: page-appear-in 0.45s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+}
+
+@keyframes page-appear-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 无障碍：系统要求减少动态效果时取消 */
+@media (prefers-reduced-motion: reduce) {
+  .page-appear {
+    animation: none;
+  }
+}
+
 
 .fade-leave-to {
   opacity: 0;
@@ -1564,10 +1957,14 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
   -webkit-backdrop-filter: blur(0px) saturate(1);
 }
 
-/* 滑入动画 */
+/* 滑入动画（侧栏等） */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s var(--ease-smooth);
+  transition: all 0.3s var(--ease-spring);
+}
+
+.slide-leave-active {
+  transition: all 0.22s var(--ease-exit);
 }
 
 .slide-enter-from {
@@ -1620,15 +2017,16 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
 
 /* 模态框动画 - 内容窗口 */
 .modal-enter-active {
-  transition: all 0.35s var(--ease-out-soft);
+  /* 弹窗属于「大块」：进场 0.4s spring（落在 0.35~0.45 区间）。
+     曲线单调无过冲，所以 scale(0.95)→1 不会弹到 1.02，观感是"长回来并落定"。 */
+  transition: all 0.4s var(--ease-spring);
 }
 
 .modal-leave-active {
-  /* 业界通行做法（Material 3 / Radix / shadcn 的 Dialog）：**退场用 accelerate（ease-in）
-     + 150~250ms 短时长**，与「进场用 decelerate」成对 —— 这是有规范依据的标准姿势，
-     故退场依然走"加速"侧，只是换成统一体系里的 --ease-in-soft 0.22s。
-     （本项目曾试过 decelerate 与对齐壁纸的长时长，都不对；真正的问题见下方 .modal-leave-to） */
-  transition: all 0.22s var(--ease-in-soft);
+  /* 退场用 accelerate（--ease-exit）+ 0.24s 短时长，与进场成对：
+     离场必须比进场短（0.24 < 0.4），关得干脆。
+     （Material 3 / Radix 的 Dialog 也是"进场 decelerate、退场 accelerate"这一标准姿势。） */
+  transition: all 0.24s var(--ease-exit);
 }
 
 /* 进场只动 transform、不动 opacity：opacity<1 会形成 backdrop root，
@@ -1677,14 +2075,14 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 
 /* 弹窗玻璃模糊与开合动画同步：入场/出场时让内部 .glass 的 backdrop-filter 模糊值
    随外层 transform 进度从 0 渐显到目标值，消除“动画播完才突然叠加模糊”的突兀感。
-   时长/曲线与弹窗开合严格一致（开 0.35s / 关 0.25s），不动画曲线本身。 */
+   时长/曲线与弹窗开合严格一致（开 0.4s spring / 关 0.24s exit）。 */
 .modal-enter-active .glass {
-  transition: backdrop-filter 0.35s var(--ease-out-soft),
-    -webkit-backdrop-filter 0.35s var(--ease-out-soft);
+  transition: backdrop-filter 0.4s var(--ease-spring),
+    -webkit-backdrop-filter 0.4s var(--ease-spring);
 }
 .modal-leave-active .glass {
-  transition: backdrop-filter 0.2s var(--ease-in-soft),
-    -webkit-backdrop-filter 0.2s var(--ease-in-soft);
+  transition: backdrop-filter 0.24s var(--ease-exit),
+    -webkit-backdrop-filter 0.24s var(--ease-exit);
 }
 .modal-enter-from .glass,
 .modal-leave-to .glass {
@@ -1694,12 +2092,12 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 
 /* 模态框动画 - 背景遮罩（模糊渐变） */
 .modal-overlay-enter-active {
-  transition: opacity 0.35s var(--ease-out-soft);
+  transition: opacity 0.4s var(--ease-spring);
 }
 
 .modal-overlay-leave-active {
-  /* 比弹窗略慢一点点（0.24s vs 0.2s）：遮罩若先消失会露出「弹窗尚在、底已透」的中间态 */
-  transition: opacity 0.24s var(--ease-in-soft);
+  /* 比弹窗略慢一点点（0.26s vs 0.24s）：遮罩若先消失会露出「弹窗尚在、底已透」的中间态 */
+  transition: opacity 0.26s var(--ease-exit);
 }
 
 .modal-overlay-enter-from,
@@ -1726,17 +2124,18 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
  * 动画本身只读变量，因此无论菜单出现在哪个方向，都从锚点一侧"长出来"。
  */
 .pop-enter-active {
-  /* 菜单出现：transform 走软出场（快起慢收，"从锚点长出来"的手感更顺），
-     opacity 稍短先行到位，避免菜单在位移期间一直半透明 */
-  transition: opacity 0.2s var(--ease-out-soft),
-    transform 0.26s var(--ease-out-soft);
+  /* 菜单属于「中等」块：进场 0.32s spring（落在 0.3~0.35 区间）。
+     opacity 与 transform 用同一时长：opacity 若先跑完，菜单会在位移期间"半透明地长出来"，
+     看起来像叠影；同步后才是一次完整的"从锚点弹出来"。 */
+  transition: opacity 0.32s var(--ease-spring),
+    transform 0.32s var(--ease-spring);
   transform-origin: center var(--pop-origin-y, top);
   will-change: transform, opacity;
 }
 
 .pop-leave-active {
-  /* 菜单消失：成对使用软离场（慢起快收），收得干脆 */
-  transition: opacity 0.16s var(--ease-in-soft), transform 0.16s var(--ease-in-soft);
+  /* 菜单消失：--ease-exit 加速离场 + 0.2s（离场统一 0.2~0.25s），收得干脆 */
+  transition: opacity 0.2s var(--ease-exit), transform 0.2s var(--ease-exit);
   transform-origin: center var(--pop-origin-y, top);
 }
 
@@ -1758,10 +2157,11 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   min-width: 60px;
 }
 
-/* 卡片悬浮效果 */
+/* 卡片悬浮效果：中等块，0.35s spring（落在 0.3~0.35 上沿，因为位移+阴影双属性） */
 .card-hover {
   @apply transition-all duration-300;
-  transition-timing-function: var(--ease-out-soft);
+  transition-timing-function: var(--ease-spring);
+  transition-duration: 0.35s;
 }
 
 .card-hover:hover {
@@ -1772,19 +2172,15 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 /* ==================== 按钮统一动效（悬浮放大 / 按下回弹） ==================== */
 /* 全项目所有可点元素（.btn-press）共享同一套微动效，避免「有些按钮悬浮会放大、
    有些纹丝不动」的不一致感（顶栏语言按钮曾因此被单独遗漏）。
-   - 悬浮：轻微放大，暗示可点击
-   - 按下：缩小，给出触感反馈
-   - 放大/缩小时长与曲线与 .btn-base 完全对齐（0.2s / --ease-out-soft / 1.02）：
-     主题页里「随机配色」这类按钮同时带 .btn-base 与 .btn-press，两者若写不同参数，
-     实际生效的是后声明者 —— 统一后无论谁赢结果都一样，不会再出现"有的按钮跳得快、
-     有的慢"的漂移感
-   - 幅度同样收到 1.02：主题页那些 23~30px 的小按钮用 1.045 会明显"跳"一下
-   - 用时 0.2s 而非 0.24s：见 .btn-base 处的实测说明（软出场前段推进太猛，需要把总时长压短）
-   - 用 transform 而非改宽高，不触发重排 */
+   - 悬浮：轻微放大 1.02，暗示可点击 → 0.3s spring（小元素上限）
+   - 按下：缩小到 0.975 → 0.2s bounce（弹性过冲约 2%，像被真按下去再回弹）
+   - 颜色/阴影：0.22s spring，与缩放同族但更短，不抢缩放的节奏
+   - 与 .btn-base 参数完全对齐：两个类常常同时出现，写不同参数就会"谁后声明谁生效"，
+     统一后无论谁赢结果都一样 */
 .btn-press {
-  transition: transform 0.25s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
-    background-color 0.2s var(--ease-smooth), opacity 0.2s var(--ease-smooth),
-    border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.22s var(--ease-spring),
+    background-color 0.22s var(--ease-spring), opacity 0.22s var(--ease-spring),
+    border-color 0.22s var(--ease-spring), color 0.22s var(--ease-spring);
   will-change: transform;
 }
 
@@ -1794,6 +2190,10 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 
 .btn-press:active {
   transform: scale(0.975);
+  /* 按下瞬间换弹性曲线 + 更短时长：这是"按下-回弹"该有的触感 */
+  transition: transform 0.2s var(--ease-bounce), box-shadow 0.18s var(--ease-spring),
+    background-color 0.18s var(--ease-spring), opacity 0.18s var(--ease-spring),
+    border-color 0.18s var(--ease-spring), color 0.18s var(--ease-spring);
   /* 按下时不要再叠加悬浮的位移，保持干脆 */
 }
 
@@ -1978,25 +2378,81 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   .transition,
   .transition-all,
   .transition-transform,
-  .transition-colors,
+  .transition-colors {
+    transition-timing-function: var(--ease-spring);
+    transition-duration: 0.24s;
+  }
+  /* opacity 单独排除：悬浮气泡与页面 fade 用各自的短促淡入（见下方 #clock-tip 规则），
+     若这里也压成 0.24s spring，气泡会显得迟钝、与页面切换节奏不一致 */
   .transition-opacity {
     transition-timing-function: var(--ease-smooth);
     transition-duration: 0.24s;
   }
 }
 
+/* ==================== 全站悬浮气泡：唯一一套外观 + 唯一一套动画 ==================== */
 /*
- * 例外：悬浮气泡（侧边栏 #sidebar-tip、时钟 #clock-tip、全站 v-tip hover-tip-N）
- * 必须用**同一套**短促淡入（0.15s ease-out），与页面切换 `.fade-*` 的
- * `opacity 0.15s ease-out` 对齐。
+ * 项目里其实有**三类**悬浮气泡，之前各写各的：
+ *   1. 侧边栏 #sidebar-tip —— 模板内联，外观 app-menu-surface，0.15s ease-out 淡入；
+ *   2. 时钟 #clock-tip —— 模板内联，外观却是 .glass + border-white/30 + font-mono；
+ *   3. 全站 `v-tip` 指令生成的 [id^="hover-tip"] —— 外观已对齐，但 transition 由
+ *      JS 写成**内联** `opacity 120ms ease`，且没被下面那条按 id 写的规则覆盖。
+ * 结果是同一个"悬停看提示"的交互，指针移到不同控件上会看到两种底色、两种手感。
  *
- * 原因：气泡是"跟随指针的即时反馈"，0.24s 的柔和缓动会显得迟钝；
- * 而且三个气泡如果各用各的时长，用户能明显感到"同一个交互两种手感"。
- * 这里用 !important 压过上面对 .transition-opacity 的全局兜底。
+ * 这里统一到侧边栏气泡那一套（它本来就是全站的参照系）：
+ *   · 外观 = .app-menu-surface 同款：0.82 白底 + blur(20px) saturate(1.7) + 40% 白描边
+ *     + 12/40 大投影 + 8px 圆角 + px-2.5 py-1.5 + 12px/500；
+ *   · 动画 = opacity 0.2s + transform 0.2s，曲线统一 --ease-spring（与菜单/按钮同族）。
+ *     气泡是"跟随指针的即时反馈"，所以取 spring 里最短的一档 0.2s：再长就显迟钝，
+ *     再短就只剩"啪一下"，都不像 iOS。
+ *
+ * 为什么必须 !important：v-tip 把 transition 直接写在元素**内联样式**上（见
+ * useHoverTip.js 的 ensureTip），只有 CSS !important 能压过内联；#sidebar-tip
+ * 平时又被页面切换的 .fade-enter-active 套着，同样要 !important 才能统一节奏。
+ * 时钟气泡额外保留 tabular-nums：秒数每跳一次宽度都会变，等宽数字避免气泡左右抖 ——
+ * 那是可读性，不是风格差异。
  */
+#sidebar-tip,
 #clock-tip,
-#sidebar-tip {
-  transition: opacity 0.15s ease-out !important;
+[id^='hover-tip'] {
+  background: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 0.5rem;
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: #374151; /* gray-700，与侧栏气泡的 text-gray-700 一致 */
+  /* 与侧栏气泡的 <transition name="fade"> 对齐：opacity 0.15s ease-out */
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out !important;
+}
+
+#clock-tip {
+  font-variant-numeric: tabular-nums;
+}
+
+.dark #sidebar-tip,
+.dark #clock-tip,
+.dark [id^='hover-tip'] {
+  background: rgba(26, 20, 48, 0.88);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* !important 是必需的：style.css 里已有成组的 `.dark .text-gray-700 { color: #d1d5db
+     !important }` 兜底（v-tip 生成的气泡带模板写的 text-gray-700），不加 !important
+     就会有三类气泡里"只有一类被那条兜底改色"的差异 —— 这正是要消灭的手感/观感分歧。 */
+  color: #E5E7EB !important; /* gray-200 */
+}
+
+/* 尊重「减少动态效果」：气泡直接显隐，不做淡入淡出 */
+@media (prefers-reduced-motion: reduce) {
+  #sidebar-tip,
+  #clock-tip,
+  [id^='hover-tip'] {
+    transition: none !important;
+  }
 }
 
 /* 玻璃效果 */
@@ -2012,28 +2468,27 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
 }
 
 /* ==================== 侧边栏折叠宽度过渡的曲线覆盖 ==================== */
-/* App.vue 里侧栏是 `transition-[width] duration-300 ease-out`（Tailwind 工具类），
-   该文件不在本次修改范围内。宽度过渡属于「属性变化」而非「进入/离开」，
-   按曲线体系应走 --ease-smooth（与壁纸同族）。这里用属性选择器精确命中
+/* App.vue 里侧栏是 `transition-[width] duration-300 ease-out`（Tailwind 工具类）。
+   折叠 = 导航交互，改走 iOS spring：宽度是单调变化的属性，spring 曲线不会越界，
+   300ms 也正好落在"中等交互"的时长档（0.3~0.35s）。这里用属性选择器精确命中
    「带 transition-[width] 工具类 且 有 sidebar-bg」的元素，只改曲线、不动时长。 */
 .sidebar-bg[class*='transition-[width]'] {
-  transition-timing-function: var(--ease-smooth) !important;
+  transition-timing-function: var(--ease-spring) !important;
 }
 
 /* ==================== 组件内 scoped 过渡的曲线兜底 ==================== */
 /* 有三个组件（ColorPicker / TagFilter / TagSelector）的 scoped 样式里写着 `ease`，
    另有三个列表页的 scoped 样式给 `.sel-anim-wrap > .sel-anim-leave-active` 写了 `ease`。
-   它们不在本文件的修改权限内（任务限定只改 style.css 与 AppearanceView.vue），
-   但 `transition-timing-function` 可以被**同层优先级更低**的规则整体覆盖 ——
-   这里用带 !important 的一条兜底把这些 scoped 过渡统一到 --ease-smooth。
-   为什么可以放心 !important：这些元素的过渡属性全部是颜色/滤镜类（background、
-   border-color、filter、opacity、transform），本来就是标准缓动该管的范畴，
+   它们不在本文件的修改权限内，但 `transition-timing-function` 可以被**同层优先级更低**
+   的规则整体覆盖 —— 这里用带 !important 的一条把这些 scoped 过渡统一到 iOS spring。
+   为什么可以放心 !important：这些元素的过渡属性全部是颜色/滤镜/位移类
+   （background、border-color、filter、opacity、transform），都在 spring 曲线的适用范畴，
    不存在"故意用其它曲线"的语义。 */
 .color-picker-swatch,
 .tag-chip,
 .tag-filter-chip,
 .sel-anim-wrap > .sel-anim-leave-active {
-  transition-timing-function: var(--ease-smooth) !important;
+  transition-timing-function: var(--ease-spring) !important;
 }
 
 
@@ -2132,7 +2587,7 @@ body[data-glass='liquid'] .sidebar-bg {
 /* 双击编辑提示 */
 .editable-cell {
   @apply cursor-pointer transition-all duration-200 rounded px-1 -mx-1;
-  transition-timing-function: var(--ease-smooth);
+  transition-timing-function: var(--ease-spring);
 }
 
 .editable-cell:hover {
@@ -2141,17 +2596,18 @@ body[data-glass='liquid'] .sidebar-bg {
 
 /* Toast 动画 */
 .toast-enter-active {
-  /* 弹入：软出场曲线 + 0.4s，保留了"冒出来再稳稳落定"的松紧变化；
-     原先的 cubic-bezier(0.34, 1.56, 0.64, 1) 带过冲回弹，与全站其余曲线不是一个手感 */
-  transition: all 0.4s var(--ease-out-soft);
+  /* 弹入：spring + 0.4s（大块偏上沿，toast 位移+缩放+透明度三属性同时跑）；
+     spring 是单调曲线，不会越过 1，与"冒出来再稳稳落定"语义一致 */
+  transition: all 0.4s var(--ease-spring);
 }
 
 .toast-leave-active {
-  transition: all 0.2s var(--ease-in-soft);
+  /* 离场 0.2s（统一区间下沿）：toast 是即时反馈，消失必须比出现快 */
+  transition: all 0.2s var(--ease-exit);
 }
 
 .toast-move {
-  transition: transform 0.2s var(--ease-smooth);
+  transition: transform 0.3s var(--ease-spring);
 }
 
 .toast-enter-from {
@@ -2164,10 +2620,11 @@ body[data-glass='liquid'] .sidebar-bg {
   transform: translateX(30px) scale(0.9);
 }
 
-/* 列表项动画 */
+/* 列表项动画：属性变化档，0.3s spring（hover 背景色 + 可能的位移一起走） */
 .list-item {
   @apply transition-all duration-200;
-  transition-timing-function: var(--ease-smooth);
+  transition-timing-function: var(--ease-spring);
+  transition-duration: 0.3s;
 }
 
 .list-item:hover {
@@ -2408,4 +2865,385 @@ td .truncate {
     opacity: 0.5;
     transform: scale(0.8) rotate(180deg);
   }
+}
+
+/* ==========================================================================
+ * 全站视觉一致性工具类
+ * --------------------------------------------------------------------------
+ * 标杆来源：TagsView（标签管理）与 ImportExportView（导入 & 导出）。
+ * 这两页已收敛成同一套语言，其余页面只允许「照着用」，不再各写一套：
+ *
+ *   页面骨架  根容器 .space-y-5；每个功能区一张**独立卡片**，卡片刻度
+ *             = .glass + rounded-2xl + shadow-lg + border border-white/30
+ *             + px-6 py-4（标签页个别卡片用 px-5，以「导入 & 导出」为准）。
+ *   标题行    AppIcon scale="md" text-primary（图标在前）+ .gradient-text 标题
+ *             （text-base / 700）+ 可选副说明 —— 统一由 .card-head 表达，
+ *             避免每页再手写一遍 flex + gap。
+ *   说明文字  正文下一级：.card-sub = text-xs / 行高 1.6 / 次级灰。
+ *   空态      「图标 + 主文案 + 副说明」三段式（.empty-state 系列），
+ *             图标一律 AppIcon（专业线条 SVG），全站禁止 emoji。
+ *   计数 chip 页面头部的小统计（.stat-chip），主色淡底 + 主色深字；
+ *             .is-neutral 为不需要主色强调的次级计数。
+ *
+ * 深色模式纪律：一律 body.dark + `.dark .xxx`。本工程没有 darkMode:'class' 的
+ * dark: 变体，scoped 里也**不能**写 :global(.dark)（会被编译成空选择器）。
+ * 次级文字在深色下必须显式提亮：全局 .dark .text-gray-400 是 #7c8ba5，
+ * 压在深玻璃（rgba(20,15,40,0.8)）上不足 4.5:1，故这里给 #a9b6cc。
+ * ========================================================================== */
+
+/* 卡片标题行：图标在前、标题在后 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-head-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+}
+
+/*
+ * 图标与标题的视觉对齐补偿。
+ *
+ * .card-head 用 align-items:center，对齐的是「行盒中心」而非文字视觉中线；
+ * 标题 line-height 1.5rem(24px) 与 20px 图标尺寸不匹配，加上中日文字形重心偏下，
+ * 图标看上去会高 1~2px。这里加一个极小下移补偿（transform 不参与布局）。
+ */
+.card-head > .app-icon {
+  flex-shrink: 0;
+  transform: translateY(1px);
+}
+/* 按钮内图标同理：inline-flex + center 也有同量级的视觉差 */
+.btn-base > .app-icon,
+.filter-trigger > .app-icon {
+  flex-shrink: 0;
+  transform: translateY(0.5px);
+}
+
+
+/* 卡片副说明 / 表单提示：正文下一级 */
+.card-sub {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #6b7280;
+}
+
+.dark .card-sub {
+  color: #a9b6cc;
+}
+
+/* 空态：图标 + 主文案 + 副说明（三段式，居中） */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  color: rgb(var(--c-primary) / 0.6);
+  margin-bottom: 0.25rem;
+}
+
+.empty-state-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+  color: #4b5563;
+}
+
+.empty-state-desc {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #6b7280;
+}
+
+.dark .empty-state-icon {
+  color: rgb(var(--c-primary-light) / 0.72);
+}
+
+.dark .empty-state-title {
+  color: #e2e8f0;
+}
+
+.dark .empty-state-desc {
+  color: #a9b6cc;
+}
+
+/* 表格空行 / 周历空列等「内联空态」：单行图标 + 文字 */
+.empty-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .empty-inline {
+  color: #a9b6cc;
+}
+
+/* 页面头部的小统计 chip：主色淡底 + 主色深字，字重 700、字号 text-xs */
+/* ==================== 顶栏计数徽章 ==================== */
+/*
+ * 各页的番单计数（本年 N 部 / 总计 N 部 / 共 N 条）现在放在**顶栏页面标题旁边**，
+ * 不再在卡片内部单占一行（用户要求「标题有几部几条的就放到顶栏标题旁」）。
+ *
+ * 尺寸刻意比 .stat-chip 更紧凑：顶栏高度只有 56px，标题 h1 是 text-lg(18px)，
+ * 右侧还有 36px 的图标按钮。徽章必须「小一档」才不抢视觉、也不撑高顶栏：
+ *   高约 24px、圆角 8px、字号 11.5px、内边距 4px/8px —— 与顶栏其它元素并排协调。
+ */
+.topbar-stat {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.71875rem;
+  font-weight: 600;
+  line-height: 1rem;
+  white-space: nowrap;
+  color: rgb(var(--c-primary-dark));
+  background-color: rgb(var(--c-primary) / 0.12);
+  border: 1px solid rgb(var(--c-primary) / 0.18);
+  transition: background-color 0.2s var(--ease-spring, cubic-bezier(0.32, 0.72, 0, 1));
+}
+.topbar-stat.is-neutral {
+  color: rgb(var(--txt-card-700, 55 48 70));
+  background-color: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+/* 深色模式：浅底徽章在深顶栏上会成亮块，反转为半透明白 + 亮色字 */
+.dark .topbar-stat {
+  color: rgb(var(--c-primary-light));
+  background-color: rgb(var(--c-primary) / 0.22);
+  border-color: rgb(var(--c-primary) / 0.38);
+}
+.dark .topbar-stat.is-neutral {
+  color: #d9d4e7;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  color: rgb(var(--c-primary-dark));
+  background-color: rgb(var(--c-primary) / 0.12);
+  border: 1px solid rgb(var(--c-primary) / 0.18);
+}
+
+.stat-chip.is-neutral {
+  color: #4b5563;
+  background-color: rgb(255 255 255 / 0.55);
+  border-color: rgb(255 255 255 / 0.45);
+}
+
+.dark .stat-chip {
+  color: rgb(var(--c-primary-light));
+  background-color: rgb(var(--c-primary-light) / 0.16);
+  border-color: rgb(255 255 255 / 0.16);
+}
+
+.dark .stat-chip.is-neutral {
+  color: #cbd5e1;
+  background-color: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+
+/* ==================== BUTTON GEOMETRY — unified ==================== */
+/*
+ * Measured audit (1600x900, zh) found three real inconsistencies:
+ *   1. .filter-trigger had justify-content normal -> its label hugged the left edge,
+ *      while every sibling .btn-base centers its content. Visually the row looked ragged.
+ *   2. Some icon-only buttons ended up 21-25px tall because their padding and the
+ *      icon's intrinsic size disagreed with .btn-base.
+ *   3. A few buttons were 37px instead of the standard 34px, again from padding drift.
+ *
+ * Fix: give every button-level element the same centering + a single line-height,
+ * and pin a min-height so padding changes can never change the row height.
+ *
+ * NOTE: this must not fight .btn-base (which already sets these); it only fills the gaps
+ * for .filter-trigger / .app-btn-ghost / .seg-btn / .btn-mini / .btn-step.
+ */
+.filter-trigger {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.app-btn-ghost,
+.seg-btn,
+.btn-mini,
+.btn-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* One line-height everywhere -> identical content-box height before padding */
+.btn-base,
+.filter-trigger,
+.app-btn-ghost,
+.seg-btn,
+.btn-mini,
+.btn-step {
+  line-height: 1.25rem;
+  min-height: 2.125rem;
+}
+/* 小号档必须能真正压到 28px：上面那条 min-height: 2.125rem 是给「普通档」兜底的
+   （防止 .app-btn-ghost / .seg-btn 被内容或图标撑成 21/25px），它同样命中了 .btn-sm，
+   会把 28px 顶成 34px（实测 29.8 → 34.2 的漂移正是这条造成的）。
+   这里给小号档单独放开下限，让三档高度保持 34 / 28 / 34(图标) px 各就各位。 */
+.btn-sm {
+  min-height: 0;
+}
+/* Mini / step variants are intentionally smaller: exempt from min-height,
+   but keep the same line-height so their text still sits centered. */
+.btn-mini,
+.btn-step {
+  /* 与主按钮同档：32px 下限，避免图标尺寸差异把按钮压到 21/25px */
+  min-height: 2rem;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+
+/* ==================== SELECTED STATE — strengthened ==================== */
+/*
+ * Users reported that "selected" buttons are hard to tell apart from unselected ones.
+ *
+ * Root cause: the difference was only one shade of white --
+ *   .seg-btn  idle   rgba(255,255,255,.5)  ->  active  #fff
+ * and the filter trigger only moved its primary tint from 12% to 18%.
+ * Two near-identical light surfaces cannot communicate "this one is on".
+ *
+ * Fix: make selection a *fill-vs-outline* distinction, not a brightness nudge.
+ *   selected -> primary tinted fill + primary border + semibold text
+ *   unselected -> plain glass, no border accent
+ * On dark glass the same recipe uses a stronger primary tint so it still reads.
+ */
+.seg-btn.seg-active {
+  background: rgb(var(--c-primary) / 0.9);
+  border-color: rgb(var(--c-primary));
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.38);
+}
+.dark .seg-btn.seg-active {
+  background: rgb(var(--c-primary) / 0.75);
+  border-color: rgb(var(--c-primary) / 0.9);
+  color: #fff;
+  font-weight: 700;
+}
+
+.filter-trigger.is-active {
+  background: rgb(var(--c-primary) / 0.85);
+  border-color: rgb(var(--c-primary));
+  color: #fff;
+  font-weight: 700;
+}
+.dark .filter-trigger.is-active {
+  background: rgb(var(--c-primary) / 0.7);
+  border-color: rgb(var(--c-primary) / 0.9);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* nav-item active already had bg-white/20 + shadow; add a primary left rail
+   so the current page is unmistakable even on a light wallpaper */
+
+/* tag chips in the filter menu when checked */
+.tag-filter-chip.is-on,
+.tag-filter-chip.is-active {
+  background: rgb(var(--c-primary) / 0.85);
+  border-color: rgb(var(--c-primary));
+  color: #fff;
+  font-weight: 600;
+}
+.dark .tag-filter-chip.is-on,
+.dark .tag-filter-chip.is-active {
+  background: rgb(var(--c-primary) / 0.7);
+  color: #fff;
+}
+
+
+/* ==================== 隐藏「侧栏 ↔ 顶栏」交界分割线 ==================== */
+/*
+ * The seam where the sidebar meets the top bar showed a visible edge:
+ * the header's own border-b runs the full width, so it starts right at the
+ * sidebar's right edge and reads as a hard vertical junction.
+ *
+ * Fix: move the header's divider from `border-b` to a ::after pseudo-element
+ * that is offset by the sidebar's current width. The line then begins exactly
+ * where the content area begins, so there is no seam at the junction -- while
+ * every *other* divider (between toolbar/cards/table rows) stays visible.
+ *
+ * The sidebar width is exposed as --sb-w by App.vue (64px collapsed / 240px expanded).
+ */
+.app-header {
+  border-bottom: 0 !important;
+}
+.app-header::after {
+  content: '';
+  position: absolute;
+  left: var(--sb-w, 15rem);
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+.dark .app-header::after {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+
+/* ==================== 方形/紧凑按钮的尺寸意图优先 ==================== */
+/*
+ * The general geometry rule above (min-height + line-height) was meant to stop
+ * text buttons from drifting to 21/25px. But it also applied to buttons whose
+ * SIZE IS THE DESIGN: .btn-step is a 2.5rem SQUARE stepper (+/-) and .btn-mini
+ * is a compact icon button. Constraining their height without constraining
+ * width turned them into wide flat rectangles.
+ *
+ * Fix: these variants keep their authored width AND height, and are excluded
+ * from the generic min-height/padding overrides. Flex must not stretch them.
+ */
+.btn-step {
+  width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  line-height: 1;
+}
+.btn-mini {
+  flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+
+/* TOOLTIP NOWRAP: the collapsed-sidebar bubble is single-line (whitespace-nowrap).
+   The v-tip directive sets white-space:normal so long hints can wrap, but short
+   labels should never wrap -- otherwise one tooltip wraps and another does not,
+   which is exactly the inconsistency being fixed here. */
+#sidebar-tip,
+#clock-tip {
+  white-space: nowrap;
 }

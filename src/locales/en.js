@@ -6,6 +6,12 @@
  * Emoji are part of the visual design language — keep them.
  */
 export default {
+  // ===== Date picker =====
+  'datePicker.open': 'Pick a date',
+  'datePicker.panel': 'Date picker panel',
+  'datePicker.prev': 'Previous',
+  'datePicker.next': 'Next',
+  'datePicker.precision': 'Precision',
   // ===== Common =====
   'common.cancel': 'Cancel',
   'common.confirm': 'OK',

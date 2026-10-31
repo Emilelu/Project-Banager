@@ -13,6 +13,7 @@
     :aria-label="summaryLabel"
     @click="$emit('select')"
     @keydown="onCardKeydown"
+    @dblclick="onCardDblclick"
     @mousedown="$emit('middle-click', $event)"
     @contextmenu.prevent="$emit('context-menu', $event)"
   >
@@ -139,7 +140,7 @@ const props = defineProps({
 const emit = defineEmits([
   'select', 'toggle-check', 'context-menu', 'middle-click',
   'start-edit', 'save-edit', 'cancel-edit', 'update:editValue',
-  'increment', 'decrement'
+  'increment', 'decrement', 'open-dialog'
 ])
 
 /**
@@ -238,6 +239,26 @@ const editCellProps = (field) => {
   // 批量模式（勾选优先）与「该字段正在编辑」时，单元格不再承担键盘入口
   if (props.batchMode || isEditing || !props.selected) return {}
   return { role: 'button', tabindex: '0' }
+}
+
+/**
+ * 卡片「空白处」双击 → 打开完整编辑弹窗。
+ *
+ * 规则与三张番单页保持一致：
+ *   · 双击**有值的字段** → 该字段的行内编辑（鼠标路径已在各 .editable-cell 上
+ *     用 @dblclick.stop 处理，事件到不了这里）
+ *   · 双击**空值字段** → 同样进入行内编辑（.editable-cell 的 stop 同样覆盖）
+ *   · 双击**空白区域**（卡片 padding、集数行里的弹性占位、进度条槽、名称行右侧留白）
+ *     → 冒泡到这里，打开编辑弹窗，让用户一次改完所有字段
+ *   · **批量模式**下双击一律禁用（勾选优先，与 batchMode 既有语义一致）
+ *
+ * 为什么要排除 button / a / input：+/- 按钮、外链图标、行内输入框自身都有
+ * 既有点击语义；双击它们不应顺带弹窗（+/- 上另有 @dblclick.stop 双保险）。
+ */
+const onCardDblclick = (e) => {
+  if (props.batchMode) return
+  if (e.target.closest('.editable-cell, button, a, input, textarea, select')) return
+  emit('open-dialog')
 }
 
 const onCellKeydown = (e, field) => {
