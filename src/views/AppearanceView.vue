@@ -1,25 +1,9 @@
 <template>
-  <Teleport to="body">
-    <transition name="modal-overlay">
-      <div v-if="show" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[8px]" @click="$emit('close')"></div>
-    </transition>
-    <transition name="modal">
-      <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <!-- 结构：外层 flex 列 + overflow-hidden；标题栏与底部栏在**滚动容器之外**，
-             只有中间内容区滚动。
-             此前标题/底部是 sticky、位于滚动容器内，宽度会被滚动条挤掉 6px，
-             右侧露出 track 底色 —— 看上去像弹窗上下缺了两块。
-             移出滚动容器后二者天然占满全宽，也就不再需要 sticky。 -->
-        <div ref="panelEl" class="relative glass rounded-2xl shadow-2xl w-[34rem] max-h-[85vh] border border-white/40 pointer-events-auto flex flex-col overflow-hidden"
-          role="dialog" aria-modal="true" aria-labelledby="theme-settings-title">
-          <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 glass rounded-t-2xl shrink-0 z-10">
-            <AppIcon scale="lg" name="palette" />
-            <h3 id="theme-settings-title" class="text-lg font-bold gradient-text">{{ tt('theme.title') }}</h3>
-          </div>
-
-          <!-- 唯一滚动容器：滚动条只出现在中间区域，不再与标题/底部栏争宽度 -->
-          <div class="flex-1 overflow-y-auto app-dialog px-6 py-5 space-y-6">
-            <!-- 玻璃风格 -->
+  <div class="space-y-5">
+    <!-- 请注意：本页面由弹窗改造而来，三大区块的交互逻辑与弹窗版完全一致，
+         仅外壳从 fixed 遮罩换成普通页面流。 -->
+    <div class="page-card px-6 py-5 space-y-6">
+      <!-- 玻璃风格 -->
             <section>
               <h4 class="text-sm font-bold text-gray-700 mb-2">{{ tt('theme.glassStyle') }}</h4>
               <div class="grid grid-cols-2 gap-3">
@@ -210,38 +194,19 @@
               </template>
               <p v-else class="text-xs text-gray-400">{{ tt('theme.bgOffHint') }}</p>
             </section>
-          </div>
-
-          <div class="px-6 py-4 border-t border-white/20 flex justify-end glass rounded-b-2xl shrink-0">
-            <button @click="onFinish" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">{{ tt('theme.done') }}</button>
-          </div>
-        </div>
-      </div>
-    </transition>
-  </Teleport>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
-import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
 
 const { tt } = useI18n()
 
-const props = defineProps({ show: Boolean })
-const emit = defineEmits(['close'])
-
 const { state, setGlass, setPalette, setPaletteMode, setAutoSwitch, randomizePalette, shuffleBackground, applyCustomBackground, toggleBackground, applyBackground } = useAppearance()
-
-// 主题面板是全局弹窗，App.vue 没有页面级 Esc 处理，所以由组合式接管 Esc 关闭
-const panelEl = ref(null)
-useDialogFocus({
-  isOpen: () => props.show,
-  getDialog: () => panelEl.value,
-  onEscape: () => emit('close'),
-})
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -396,11 +361,10 @@ watch(
 
 onUnmounted(resetPreview)
 
-// 记录打开面板时的图源，用于「完成」时判断是否切换了图源并立即应用
+// 记录进入页面时的图源，用于判断是否切换了图源并立即应用。
+// 弹窗版靠 watch(props.show) 重置；页面版在挂载时记录一次即可。
 const providerAtOpen = ref(state.bgProvider)
-watch(() => props.show, (v) => {
-  if (v) providerAtOpen.value = state.bgProvider
-})
+onMounted(() => { providerAtOpen.value = state.bgProvider })
 
 const presets = [
   { key: 'preset.sakura', p: [263, 67, 55], s: [329, 81, 60] },
@@ -465,8 +429,12 @@ const onShuffle = async () => {
   }
 }
 
-// 「完成」：图源或地址有变化时立即应用并持久化，无需刷新或点「换一张」
-const onFinish = async () => {
+/**
+ * 应用壁纸变更：图源或地址有变化时立即生效并持久化。
+ * 弹窗版由「完成」按钮触发；页面版改为图源/地址变化时自动调用，
+ * 用户改完立刻能看到效果，不需要额外确认动作。
+ */
+const applyWallpaperChanges = async () => {
   if (state.bgEnabled) {
     if (state.bgProvider === 'custom') {
       // 自定义图源：应用地址（为空则报错并留在面板内让用户补填）
@@ -493,7 +461,6 @@ const onFinish = async () => {
       }
     }
   }
-  emit('close')
 }
 
 const onBgError = () => {

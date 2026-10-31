@@ -28,6 +28,19 @@ const routes = [
     name: 'Import',
     component: () => import('../views/ImportView.vue'),
     meta: { title: '导入Excel', icon: 'upload' }
+  },
+  // 以下两项原为顶栏按钮弹出的弹窗，按要求改为侧边导航中的独立页面
+  {
+    path: '/tags',
+    name: 'Tags',
+    component: () => import('../views/TagsView.vue'),
+    meta: { title: '标签管理', icon: 'bookmark' }
+  },
+  {
+    path: '/appearance',
+    name: 'Appearance',
+    component: () => import('../views/AppearanceView.vue'),
+    meta: { title: '主题与背景', icon: 'palette' }
   }
 ]
 

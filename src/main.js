@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import AppIcon from './components/AppIcon.vue'
+import TagSelector from './components/TagSelector.vue'
+import TagFilter from './components/TagFilter.vue'
 import router from './router'
 import './style.css'
 import { initAppearance } from './composables/useAppearance'
@@ -55,6 +57,8 @@ async function boot() {
   const app = createApp(App)
   // 统一图标组件全局注册：全站图标唯一来源，风格与顶栏一致（24 视框 / 1.9 描边 / round 端点）
   app.component('AppIcon', AppIcon)
+  app.component('TagSelector', TagSelector)
+  app.component('TagFilter', TagFilter)
   app.use(router)
   app.mount('#app')
   console.log('[boot] mounted')

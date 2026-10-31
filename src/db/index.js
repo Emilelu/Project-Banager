@@ -255,6 +255,20 @@ class BangumiDatabase {
       )
     `)
 
+    // 标签表：内置常用标签 + 用户自定义。
+    // is_builtin=1 的标签不允许删除（避免误删后无法恢复语义），但允许改名/改色。
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT DEFAULT '',
+        is_builtin INTEGER DEFAULT 0,
+        sort_order REAL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
     // 迁移
     let structuralChange = false
     structuralChange = this._migrateAddColumn('watching', 'sort_order', 'REAL DEFAULT 0') || structuralChange
@@ -273,6 +287,20 @@ class BangumiDatabase {
     structuralChange = this._migrateAddColumn('watched_years', 'created_at', 'TIMESTAMP') || structuralChange
     structuralChange = this._migrateAddColumn('watched_years', 'updated_at', 'TIMESTAMP') || structuralChange
     structuralChange = this._migrateAddColumn('watched_years', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+
+    // 三张主表加 tags 字段：存标签名，多个用逗号分隔（如 "热血,原创"）。
+    // 选逗号而非 JSON 是为了能直接 WHERE LIKE 过滤，且导出 Excel 时可读。
+    structuralChange = this._migrateAddColumn('watching', 'tags', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('remaining', 'tags', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'tags', 'TEXT') || structuralChange
+
+    // 总集数：用于显示追番进度百分比（如 3/12 = 25%）。
+    // 存 TEXT 而非 INTEGER：兼容「12」「12+」「?」这类不确定情况，
+    // 解析失败时进度条自动隐藏，不会显示错误数字。
+    structuralChange = this._migrateAddColumn('watching', 'total_episodes', 'TEXT') || structuralChange
+
+    // 内置常用标签：首次启动时播种。已存在的名字跳过，不会覆盖用户改过的颜色。
+    if (this._seedBuiltinTags()) structuralChange = true
     if (structuralChange) {
       try {
         this.db.run("UPDATE watched_years SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP), updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)")
@@ -291,6 +319,137 @@ class BangumiDatabase {
 
     // 只有结构/数据真的变了才落盘：避免每次启动都白写一遍全库
     if (structuralChange) this.save()
+  }
+
+  /**
+   * 播种内置常用标签。只在首次启动（tags 表为空）时执行一次。
+   * 命名与配色按动漫作品常见分类习惯挑选，用户可改名/改色，但内置标签不允许删除。
+   */
+  _seedBuiltinTags() {
+    try {
+      const count = this._all('SELECT COUNT(*) AS n FROM tags')[0]?.n || 0
+      if (count > 0) return false
+      const builtins = [
+        ['热血', '#EF4444'],
+        ['日常', '#10B981'],
+        ['恋爱', '#EC4899'],
+        ['奇幻', '#8B5CF6'],
+        ['科幻', '#0EA5E9'],
+        ['悬疑', '#6B7280'],
+        ['搞笑', '#F59E0B'],
+        ['治愈', '#14B8A6'],
+        ['机战', '#6366F1'],
+        ['运动', '#F97316'],
+        ['音乐', '#D946EF'],
+        ['剧场版', '#84CC16'],
+      ]
+      let i = 0
+      for (const [name, color] of builtins) {
+        this.db.run(
+          'INSERT OR IGNORE INTO tags (name, color, is_builtin, sort_order) VALUES (?, ?, 1, ?)',
+          [name, color, ++i],
+        )
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // ========== 标签 CRUD ==========
+  getAllTags() {
+    return this._all('SELECT * FROM tags ORDER BY sort_order ASC, id ASC')
+  }
+
+  addTag(name, color = '') {
+    const trimmed = String(name || '').trim()
+    if (!trimmed) return { success: false, error: '标签名不能为空' }
+    // 去重：同名标签不再重复插入（中英文名都按原样比较）
+    const exists = this._all('SELECT id FROM tags WHERE name = ?', [trimmed])
+    if (exists.length) return { success: false, error: '该标签已存在' }
+    try {
+      this.db.run('INSERT INTO tags (name, color, is_builtin, sort_order) VALUES (?, ?, 0, ?)', [
+        trimmed,
+        String(color || '').trim(),
+        (this._all('SELECT MAX(sort_order) AS m FROM tags')[0]?.m || 0) + 1,
+      ])
+      this.save()
+      const row = this._all('SELECT * FROM tags WHERE name = ?', [trimmed])[0]
+      return { success: true, id: row?.id, data: row }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+  }
+
+  updateTag(id, { name, color } = {}) {
+    const row = this._all('SELECT * FROM tags WHERE id = ?', [id])[0]
+    if (!row) return { success: false, error: '标签不存在' }
+    const nextName = name !== undefined ? String(name).trim() : row.name
+    if (!nextName) return { success: false, error: '标签名不能为空' }
+    // 改名时要检查重名（排除自己）
+    if (nextName !== row.name) {
+      const dup = this._all('SELECT id FROM tags WHERE name = ? AND id != ?', [nextName, id])
+      if (dup.length) return { success: false, error: '该标签已存在' }
+      // 条目上记录的是标签名，改名后要同步更新，否则条目会指向不存在的标签
+      this._renameTagOnItems(row.name, nextName)
+    }
+    try {
+      this.db.run('UPDATE tags SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [
+        nextName,
+        color !== undefined ? String(color).trim() : row.color,
+        id,
+      ])
+      this.save()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+  }
+
+  deleteTag(id) {
+    const row = this._all('SELECT * FROM tags WHERE id = ?', [id])[0]
+    if (!row) return { success: false, error: '标签不存在' }
+    if (row.is_builtin) return { success: false, error: '内置标签不能删除' }
+    try {
+      this.db.run('DELETE FROM tags WHERE id = ?', [id])
+      // 同时从所有条目上摘掉这个标签
+      this._removeTagFromItems(row.name)
+      this.save()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+  }
+
+  /** 标签改名后，把所有条目 tags 字段里的旧名替换为新名 */
+  _renameTagOnItems(oldName, newName) {
+    const tables = ['watching', 'remaining', 'watched']
+    for (const t of tables) {
+      try {
+        const rows = this._all(`SELECT id, tags FROM ${t} WHERE tags IS NOT NULL AND tags != ''`)
+        for (const r of rows) {
+          const list = String(r.tags).split(',').map(s => s.trim()).filter(Boolean)
+          if (!list.includes(oldName)) continue
+          const next = list.map(x => (x === oldName ? newName : x)).join(',')
+          this.db.run(`UPDATE ${t} SET tags = ? WHERE id = ?`, [next, r.id])
+        }
+      } catch { /* 表不存在则跳过 */ }
+    }
+  }
+
+  /** 删除标签时，把它从所有条目的 tags 字段中移除 */
+  _removeTagFromItems(name) {
+    const tables = ['watching', 'remaining', 'watched']
+    for (const t of tables) {
+      try {
+        const rows = this._all(`SELECT id, tags FROM ${t} WHERE tags IS NOT NULL AND tags != ''`)
+        for (const r of rows) {
+          const list = String(r.tags).split(',').map(s => s.trim()).filter(Boolean)
+          if (!list.includes(name)) continue
+          this.db.run(`UPDATE ${t} SET tags = ? WHERE id = ?`, [list.filter(x => x !== name).join(','), r.id])
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   _ensureIndexes() {
@@ -331,13 +490,18 @@ class BangumiDatabase {
           url TEXT,
           url_params TEXT,
           notes TEXT,
+          tags TEXT,
+          total_episodes TEXT,
           sort_order REAL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `)
+      // 注意：重建表时必须把**所有新增列**都带上（tags / total_episodes），
+      // 否则迁移后表里缺字段，后续 addWatching 的 INSERT 会因列不存在而失败。
+      // 旧表没有这些列时由 col() 兜底为空串。
       this.db.run(`
-        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order, created_at, updated_at)
+        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, total_episodes, sort_order, created_at, updated_at)
         SELECT id, name,
           ${col('day_of_week', "''")},
           ${col('time_slot', "''")},
@@ -345,6 +509,8 @@ class BangumiDatabase {
           ${col('url', 'NULL')},
           ${col('url_params', 'NULL')},
           ${col('notes', 'NULL')},
+          ${col('tags', "''")},
+          ${col('total_episodes', "''")},
           ${col('sort_order', '0')},
           ${col('created_at', 'CURRENT_TIMESTAMP')},
           ${col('updated_at', 'CURRENT_TIMESTAMP')}
@@ -451,11 +617,11 @@ class BangumiDatabase {
 
   // ========== 追番表操作 ==========
 
-  addWatching({ name, day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', sort_order = 0 }) {
+  addWatching({ name, day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', tags = '', total_episodes = '', sort_order = 0 }) {
     try {
       this._run(
-        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order]
+        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, total_episodes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, String(total_episodes ?? ''), sort_order]
       )
       // name 上有 UNIQUE 约束，按名称回查 id 比依赖 rowid 时序更可靠
       const row = this._get('SELECT id FROM watching WHERE name = ?', [name])
@@ -470,7 +636,7 @@ class BangumiDatabase {
 
   getAllWatching() {
     return this._all(
-      'SELECT id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order FROM watching ORDER BY sort_order, id'
+      'SELECT id, name, day_of_week, time_slot, current_episode, total_episodes, url, url_params, notes, tags, sort_order FROM watching ORDER BY sort_order, id'
     )
   }
 
@@ -482,7 +648,7 @@ class BangumiDatabase {
   }
 
   updateWatching(id, fields) {
-    const allowedFields = ['name', 'day_of_week', 'time_slot', 'current_episode', 'url', 'url_params', 'notes', 'sort_order']
+    const allowedFields = ['name', 'day_of_week', 'time_slot', 'current_episode', 'total_episodes', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
@@ -550,12 +716,12 @@ class BangumiDatabase {
 
   // ========== 等番表操作 ==========
 
-  addRemaining({ name, expected_date = '', url = '', url_params = '', notes = '', sort_order = 0 }) {
+  addRemaining({ name, expected_date = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 }) {
     try {
       const normalizedDate = this._normalizeDate(expected_date)
       this._run(
-        'INSERT INTO remaining (name, expected_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [name, normalizedDate, url, url_params, notes, sort_order]
+        'INSERT INTO remaining (name, expected_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name, normalizedDate, url, url_params, notes, tags, sort_order]
       )
       const row = this._get('SELECT id FROM remaining WHERE name = ?', [name])
       return { success: true, id: row ? Number(row.id) : null }
@@ -569,12 +735,12 @@ class BangumiDatabase {
 
   getAllRemaining() {
     return this._all(
-      'SELECT id, name, expected_date, url, url_params, notes, sort_order FROM remaining ORDER BY sort_order, id'
+      'SELECT id, name, expected_date, url, url_params, notes, tags, sort_order FROM remaining ORDER BY sort_order, id'
     )
   }
 
   updateRemaining(id, fields) {
-    const allowedFields = ['name', 'expected_date', 'url', 'url_params', 'notes', 'sort_order']
+    const allowedFields = ['name', 'expected_date', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
@@ -612,13 +778,13 @@ class BangumiDatabase {
 
   // ========== 已看表操作 ==========
 
-  addWatched({ name, watch_date, url = '', url_params = '', notes = '', sort_order = 0 }) {
+  addWatched({ name, watch_date, url = '', url_params = '', notes = '', tags = '', sort_order = 0 }) {
     try {
       const normalizedDate = this._normalizeDate(watch_date)
       this.beginBatch()
       this._run(
-        'INSERT INTO watched (name, watch_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [name, normalizedDate, url, url_params, notes, sort_order]
+        'INSERT INTO watched (name, watch_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name, normalizedDate, url, url_params, notes, tags, sort_order]
       )
       this._ensureYearLabel(normalizedDate)
       // watched 表 name 无 UNIQUE，用最新一行的 id（新插入必然 sort_order/id 最大）
@@ -634,7 +800,7 @@ class BangumiDatabase {
 
   getAllWatched() {
     return this._all(
-      'SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched ORDER BY sort_order, id'
+      'SELECT id, name, watch_date, url, url_params, notes, tags, sort_order FROM watched ORDER BY sort_order, id'
     )
   }
 
@@ -645,7 +811,7 @@ class BangumiDatabase {
       const start = parseInt(range[1], 10)
       const end = parseInt(range[2], 10)
       return this._all(
-        'SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched ORDER BY sort_order, id'
+        'SELECT id, name, watch_date, url, url_params, notes, tags, sort_order FROM watched ORDER BY sort_order, id'
       ).filter(row => {
         const d = String(row.watch_date || '')
         if (d === label) return true
@@ -675,7 +841,7 @@ class BangumiDatabase {
   }
 
   updateWatched(id, fields) {
-    const allowedFields = ['name', 'watch_date', 'url', 'url_params', 'notes', 'sort_order']
+    const allowedFields = ['name', 'watch_date', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {

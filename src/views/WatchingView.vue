@@ -13,36 +13,43 @@
 
     <!-- 操作面板 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-5 py-4 shrink-0">
-      <div class="flex items-center gap-2 flex-wrap">
         <!-- 按钮配色统一由主题色驱动（.btn-primary/.btn-toned/.btn-neutral/.btn-danger），
              不再为每个按钮写死不同渐变；图标全为 currentColor，天然跟随按钮配色。 -->
-        <button @click="openAddDialog" class="btn-base btn-primary">{{ tt('watching.addShow') }}</button>
-
-        <!-- 选中项相关按钮：用 transition-group 平滑淡入/收起，避免突然出现导致工具栏跳动 -->
+        <!-- 整个工具栏是一个 transition-group：
+             若只把「选中项按钮」放进组内，取消选中时该组宽度骤减，
+             **组外的分隔线与其后按钮会瞬间跳位**（没有过渡）。
+             全部元素共处一组后，任一元素出入场时其余元素都会平滑归位（.sel-anim-move）。 -->
+        <!-- 注意：tag 容器不能是 display:contents —— 那样元素不参与布局，
+             Vue 的 -move 位移计算失去参照，归位动画不会播放。用正常 flex 盒子。 -->
         <transition-group name="sel-anim" tag="div" class="flex items-center gap-2 flex-wrap">
-          <button v-for="btn in selectedActions" :key="btn.key" v-if="!!selected" @click="btn.onClick"
-            class="btn-base" :class="btn.cls">
-            <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
-          </button>
-        </transition-group>
+        <button key="add" @click="openAddDialog" class="btn-base btn-primary">
+          <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
+        </button>
 
-        <div class="border-l border-white/30 h-6 mx-1"></div>
-        <button @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
+        <button v-for="btn in selectedActions" :key="btn.key" v-if="!!selected" @click="btn.onClick"
+          class="btn-base" :class="btn.cls">
+          <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
+        </button>
+
+        <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
+        <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
           <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
         </button>
-        <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete"
+        <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length===0" @click="batchDelete"
           class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
           <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
         </button>
-        <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}</button>
-        <button @click="openClearDialog" class="btn-base btn-neutral">
+        <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
+          <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
+        </button>
+        <button key="clear" @click="openClearDialog" class="btn-base btn-neutral">
           <AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}
         </button>
-        <div class="border-l border-white/30 h-6 mx-1"></div>
-        <button @click="toggleTimeSort" class="btn-base btn-toned" :title="tt('watching.timeAsc')">
+        <div key="sep-2" class="border-l border-white/30 h-6 mx-1"></div>
+        <button key="time-sort" @click="toggleTimeSort" class="btn-base btn-toned" :title="tt('watching.timeAsc')">
           <AppIcon scale="sm" name="timeSort" /> {{ timeSortAsc ? tt('watching.timeAsc') : tt('watching.timeDesc') }}
         </button>
-      </div>
+        </transition-group>
       <transition name="sel-anim">
           <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
             <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
@@ -203,7 +210,7 @@
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('showDialog.episode') }}</span>
+                  <span>{{ tt('showDialog.episode') }}<span v-if="formTotalEpisodes > 0" class="text-primary"> / {{ formTotalEpisodes }}</span></span>
                   <span class="text-xs text-gray-400">{{ tt('showDialog.episodeHint') }}</span>
                 </label>
                 <div class="flex items-center gap-2">
@@ -212,11 +219,19 @@
                     <AppIcon scale="sm" name="minus" />
                   </button>
                   <input v-model="form.current_episode" type="text" inputmode="decimal" :placeholder="tt('showDialog.timePlaceholder')"
-                    class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                    class="flex-1 min-w-0 px-4 py-2.5 border border-primary/20 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                   <button type="button" @click="formEpisodeIncrement" class="btn-step btn-press" :aria-label="tt('watching.epPlus')">
                     <AppIcon scale="sm" name="plus" />
                   </button>
+                  <!-- 总集数：用于显示追番进度百分比；留空则不显示进度 -->
+                  <input v-model="form.total_episodes" type="text" inputmode="numeric"
+                    :placeholder="tt('showDialog.totalEpisodesPlaceholder')"
+                    :aria-label="tt('showDialog.totalEpisodes')"
+                    class="w-20 shrink-0 px-2 py-2.5 border border-primary/20 rounded-xl text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                 </div>
+                <p v-if="formProgressPct !== null" class="text-[0.6875rem] text-gray-400 mt-1">
+                  {{ tt('showDialog.progressPreview', { pct: formProgressPct }) }}
+                </p>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.url') }}</label>
@@ -270,6 +285,11 @@
                 <input ref="urlParamsInput" v-model="form.url_params" type="text" :placeholder="tt('showDialog.urlParamsPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                 <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenDetail') }}</p>
+              </div>
+              <div>
+                <!-- 标签选择：可复用 TagSelector，支持内置标签勾选与内联新建 -->
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('tags.label') }}</label>
+                <TagSelector v-model="form.tags" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.notes') }}</label>
@@ -362,8 +382,12 @@
 
     <!-- 右键菜单 -->
     <Teleport to="body">
-      <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
+      <!-- 右键菜单同样套统一的 pop 过渡：从指针处向下展开 -->
+      <transition name="pop">
+      <div v-if="contextMenu.show" class="fixed z-[200]"
+        style="--pop-origin-y: top; --pop-from-y: -4px"
+        :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
+        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">{{ tt('watching.edit') }}</button>
           <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
           <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
@@ -372,6 +396,7 @@
           <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
         </div>
       </div>
+      </transition>
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
     </Teleport>
 
@@ -602,7 +627,20 @@ const editing = ref(null)
 const editValue = ref('')
 const dateManualInput = ref(false)
 
-const form = ref({ name:'', day_of_week:'', time_slot:'', current_episode:'0', url:'', url_params:'', notes:'' })
+const form = ref({ name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', url:'', url_params:'', notes:'', tags:'' })
+
+/** 总集数（数字形式，无法解析时为 0） */
+const formTotalEpisodes = computed(() => {
+  const n = Number.parseFloat(String(form.value.total_episodes ?? '').replace(/[^\d.]/g, ''))
+  return Number.isFinite(n) && n > 0 ? n : 0
+})
+
+/** 弹窗内的进度预览：与卡片上显示的百分比用同一套算法，保持一致 */
+const formProgressPct = computed(() => {
+  const cur = Number.parseFloat(String(form.value.current_episode ?? '').replace(/[^\d.]/g, ''))
+  if (!Number.isFinite(cur) || formTotalEpisodes.value <= 0) return null
+  return Math.max(0, Math.min(100, Math.round((cur / formTotalEpisodes.value) * 100)))
+})
 
 // ========== URL 输入辅助 ==========
 // 粘贴含 ? 的完整链接时，自动把查询参数移到「URL 动态参数」，URL 只保留基础地址
@@ -843,7 +881,7 @@ const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name:'', day_of_week:'', time_slot:'', current_episode:'0', url:'', url_params:'', notes:'' }
+  form.value = { name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', url:'', url_params:'', notes:'', tags:'' }
   formTime.value = ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
@@ -860,9 +898,11 @@ const openEditDialog = () => {
     day_of_week: selected.value.day_of_week || '',
     time_slot: '',
     current_episode: String(selected.value.current_episode || '0'),
+    total_episodes: String(selected.value.total_episodes || ''),
     url: selected.value.url || '',
     url_params: selected.value.url_params || '',
-    notes: selected.value.notes || ''
+    notes: selected.value.notes || '',
+    tags: selected.value.tags || ''
   }
   formTime.value = selected.value.time_slot || ''
   formShowTimePicker.value = false
@@ -892,6 +932,8 @@ const saveForm = async () => {
   saving.value = true
   // 规范化集数：保留补零（01）与小数（26.19），非法输入归 0
   form.value.current_episode = normalizeEpisodeInput(form.value.current_episode)
+  // 总集数：只保留数字部分（用户可能写成「12 集」），空值保持空串以便隐藏进度
+  form.value.total_episodes = String(form.value.total_episodes ?? '').replace(/[^\d.]/g, '')
   // 合并时间选择到 time_slot
   form.value.time_slot = formTime.value || ''
   try {

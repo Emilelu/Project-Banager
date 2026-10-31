@@ -21,7 +21,7 @@
         :aria-label="tt('card.checkLabel', { name: item.name })"
         @keydown.enter.prevent="$emit('toggle-check')" @keydown.space.prevent="$emit('toggle-check')"
         class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
-        :class="checked ? 'bg-danger border-danger' : 'border-gray-300 bg-white/80 hover:border-primary'">
+        :class="checked ? 'bg-primary border-primary' : 'border-gray-300 bg-white/80 hover:border-primary'">
         <svg v-if="checked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
       </div>
     </div>
@@ -45,8 +45,13 @@
           @input="$emit('update:editValue', $event.target.value)"
           type="text" inputmode="decimal" @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')"
           class="inline-edit-input w-16" autofocus />
-        <span v-else class="text-sm font-bold text-gray-800">{{ item.current_episode }}</span>
+        <span v-else class="text-sm font-bold text-gray-800">{{ item.current_episode }}<span v-if="progress" class="text-gray-400 font-normal">/{{ progress.total }}</span></span>
       </span>
+      <!-- 追番进度条：仅当总集数可解析为正数、且当前集数有效时显示。
+           总集数留空或写成「?」时不渲染，避免出现 0/0 或错误百分比。 -->
+      <span v-if="progress" class="text-[0.625rem] font-semibold ml-1"
+        :class="progress.pct >= 100 ? 'text-success' : 'text-primary'"
+        :title="tt('card.progressLabel', { pct: progress.pct })">{{ progress.pct }}%</span>
       <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 ml-auto">
         <!-- 集数加减：统一用主题色驱动的迷你按钮（.btn-mini-plus / .btn-mini-minus），
              尺寸、圆角、字形与其他组件一致；原先「+ 绿 / - 橙」与主题色无关且割裂 -->
@@ -78,12 +83,13 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { buildItemUrl } from '../composables/useEpisode'
 import { useI18n } from '../composables/useI18n'
 
 const { tt } = useI18n()
 
-defineProps({
+const props = defineProps({
   item: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   batchMode: { type: Boolean, default: false },
@@ -97,6 +103,22 @@ const emit = defineEmits([
   'start-edit', 'save-edit', 'cancel-edit', 'update:editValue',
   'increment', 'decrement'
 ])
+
+/**
+ * 追番进度：current_episode / total_episodes。
+ *
+ * 返回 null 的情形（模板据此隐藏进度，绝不显示 0/0 或假百分比）：
+ *   · 总集数未填、非数字、≤0（例如「?」「12+」这类不确定写法）
+ *   · 当前集数非数字
+ * 百分比夹在 0..100，避免集数超出总集数时进度条溢出。
+ */
+const progress = computed(() => {
+  const cur = Number.parseFloat(String(props.item?.current_episode ?? '').replace(/[^\d.]/g, ''))
+  const total = Number.parseFloat(String(props.item?.total_episodes ?? '').replace(/[^\d.]/g, ''))
+  if (!Number.isFinite(cur) || !Number.isFinite(total) || total <= 0) return null
+  const pct = Math.max(0, Math.min(100, Math.round((cur / total) * 100)))
+  return { cur, total, pct }
+})
 
 /**
  * 卡片本体承载「选中 / 批量勾选」，但卡片内有行内编辑输入框与 +/- 按钮。

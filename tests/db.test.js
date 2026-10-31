@@ -109,18 +109,22 @@ describe('数据库单例初始化', () => {
 // ---------------------------------------------------------------------------
 
 describe('表初始化与迁移', () => {
-  it('全新数据库建出四张表且 watching.current_episode 为 TEXT', () => {
+  it('全新数据库建出五张表且 watching.current_episode 为 TEXT', () => {
     const db = makeDb()
     const tables = rawRows(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .map(r => r.name)
-    expect(tables).toEqual(['remaining', 'watched', 'watched_years', 'watching'])
+    // tags 表承载「标签分类」（内置常用标签 + 用户 CRUD）
+    expect(tables).toEqual(['remaining', 'tags', 'watched', 'watched_years', 'watching'])
 
     const cols = rawRows(db, 'PRAGMA table_info(watching)')
     expect(cols.map(c => c.name)).toEqual([
       'id', 'name', 'day_of_week', 'time_slot', 'current_episode', 'url',
-      'url_params', 'notes', 'sort_order', 'created_at', 'updated_at'
+      'url_params', 'notes', 'sort_order', 'created_at', 'updated_at', 'tags',
+      'total_episodes'
     ])
     expect(cols.find(c => c.name === 'current_episode').type).toBe('TEXT')
+    // 总集数同样用 TEXT：兼容「12+」「?」等不确定写法，解析失败时进度条隐藏
+    expect(cols.find(c => c.name === 'total_episodes').type).toBe('TEXT')
   })
 
   it('watching / remaining 的 name 具备 UNIQUE 约束', () => {
@@ -256,6 +260,47 @@ describe('追番 CRUD 与集数', () => {
 
     expect(db.deleteWatching(row.id)).toEqual({ success: true })
     expect(db.getAllWatching()).toHaveLength(0)
+  })
+
+  it('tags 贯通写入 / 读取 / 更新三条路径', () => {
+    // 回归护栏：曾出现只改 INSERT 没改 SELECT 的情况 ——
+    // 保存看似成功，重开编辑弹窗里标签却是空的。
+    const db = makeDb()
+    const res = db.addWatching({ name: '带标签番', day_of_week: '周二', tags: '热血,日常' })
+    expect(res).toMatchObject({ success: true })
+
+    const row = db.getAllWatching().find(r => r.name === '带标签番')
+    expect(row.tags).toBe('热血,日常')
+
+    expect(db.updateWatching(row.id, { tags: '治愈' })).toEqual({ success: true })
+    expect(db.getAllWatching().find(r => r.id === row.id).tags).toBe('治愈')
+
+    // 等番与已看同样要贯通
+    const rem = db.addRemaining({ name: '等番T', expected_date: '2026/05', tags: '悬疑' })
+    expect(rem).toMatchObject({ success: true })
+    expect(db.getAllRemaining().find(r => r.name === '等番T').tags).toBe('悬疑')
+
+    const wch = db.addWatched({ name: '已看T', watch_date: '2025/07', tags: '治愈' })
+    expect(wch).toMatchObject({ success: true })
+    expect(db.getAllWatched().find(r => r.name === '已看T').tags).toBe('治愈')
+  })
+
+  it('total_episodes 贯通写入 / 读取 / 更新三条路径', () => {
+    // 与 tags 同理：漏改 SELECT 会让「总集数填了但进度不显示」。
+    const db = makeDb()
+    const res = db.addWatching({ name: '进度番', day_of_week: '周一', current_episode: '3', total_episodes: '12' })
+    expect(res).toMatchObject({ success: true })
+
+    const row = db.getAllWatching().find(r => r.name === '进度番')
+    expect(row.total_episodes).toBe('12')
+
+    expect(db.updateWatching(row.id, { total_episodes: '24' })).toEqual({ success: true })
+    expect(db.getAllWatching().find(r => r.id === row.id).total_episodes).toBe('24')
+
+    // 未填时保持空串（而非 undefined/null），前端据此隐藏进度
+    const blank = db.addWatching({ name: '无总集数番', current_episode: '5' })
+    expect(blank).toMatchObject({ success: true })
+    expect(db.getAllWatching().find(r => r.name === '无总集数番').total_episodes).toBe('')
   })
 
   it('重复番名返回友好错误且不落库', () => {

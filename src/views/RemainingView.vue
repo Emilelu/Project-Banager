@@ -30,6 +30,8 @@
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
+          <!-- 按标签筛选（多选 OR），与搜索框并列 -->
+          <TagFilter v-model="tagFilter" />
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <button @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('remaining.addRemaining') }}</button>
@@ -48,7 +50,9 @@
           <button v-if="batchMode" :disabled="checkedIds.length === 0" @click="batchDelete" class="btn-base btn-danger">
             <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
           </button>
-          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}</button>
+          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">
+            <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
+          </button>
           <button @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
         </div>
       </div>
@@ -81,7 +85,7 @@
               <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
                 class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
-                :class="isAllChecked?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
+                :class="isAllChecked?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="isAllChecked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
             </th>
@@ -132,7 +136,7 @@
                 :aria-label="tt('card.checkLabel', { name: item.name })"
                 @keydown.enter.prevent="toggleCheck(item.id)" @keydown.space.prevent="toggleCheck(item.id)"
                 class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
-                :class="checkedIds.includes(item.id) ? 'bg-danger border-danger' : 'border-gray-300 bg-white/80 hover:border-primary'">
+                :class="checkedIds.includes(item.id) ? 'bg-primary border-primary' : 'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="checkedIds.includes(item.id)" class="w-3 h-3 text-white" fill="none" stroke="currentColor"
                   viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -199,8 +203,11 @@
             <!-- 菜单带弹出/收起过渡：从按钮方向轻微上移 + 缩放淡入，
                  收起时反向淡出。用 pop 过渡类，避免硬切显得突兀。 -->
             <transition name="pop">
+              <!-- 方向变量：本菜单向上展开（bottom-full），原点在底边、起始位移朝下，
+                   因此动画是「从触发按钮那一侧向上长出来」。 -->
               <div v-if="showPageSizeMenu" role="menu"
-                class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface origin-bottom">
+                class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface"
+                style="--pop-origin-y: bottom; --pop-from-y: 6px">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
                   class="w-full text-left px-4 py-2 text-sm transition hover:bg-primary/10 whitespace-nowrap"
@@ -231,9 +238,12 @@
 
     <!-- 右键菜单 -->
     <Teleport to="body">
+      <!-- 右键菜单套统一的 pop 过渡（与每页条数菜单同一套动效） -->
+      <transition name="pop">
       <div v-if="contextMenu.show" class="fixed z-[200]"
+        style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
+        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit"
             class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" />
             {{ tt('common.edit') }}</button>
@@ -249,6 +259,7 @@
             {{ tt('common.delete') }}</button>
         </div>
       </div>
+      </transition>
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu"
         @contextmenu.prevent="closeContextMenu"></div>
     </Teleport>
@@ -330,6 +341,11 @@
                 <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenHint') }}</p>
               </div>
               <div>
+                <!-- 标签选择：与追番页同一个 TagSelector 组件 -->
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('tags.label') }}</label>
+                <TagSelector v-model="form.tags" />
+              </div>
+              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.notes') }}</label>
                 <textarea v-model="form.notes" rows="2" :placeholder="tt('showDialog.notesPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition resize-none bg-white/80"></textarea>
@@ -388,12 +404,17 @@
 
     <!-- 季度新番下拉菜单 -->
     <Teleport to="body">
-      <div v-if="showSeasonMenu" class="fixed z-[200] season-menu" :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[11.25rem] animate-scale-in context-menu">
+      <!-- 季节菜单在按钮下方展开：原点顶边、起始位移朝上，与全站 pop 动效一致 -->
+      <transition name="pop">
+      <div v-if="showSeasonMenu" class="fixed z-[200] season-menu"
+        style="--pop-origin-y: top; --pop-from-y: -6px"
+        :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
+        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[11.25rem] context-menu">
           <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
             class="block px-4 py-2 text-sm whitespace-nowrap hover:bg-primary/10 transition text-gray-700">{{ s.label }}</a>
         </div>
       </div>
+      </transition>
       <div v-if="showSeasonMenu" class="fixed inset-0 z-[199]" @click="showSeasonMenu=false"></div>
     </Teleport>
 
@@ -451,6 +472,8 @@ const selected = ref(null)
 // 排序：偏好持久化到 localStorage；预计日期用数字位比较（兼容 2025/07、2025/07/15 混排）
 // 默认按预计日期升序，让最近的等番排在最前。「等待更新」列表用户预期也是这样
 const searchQuery = ref('')
+// 标签筛选：逗号分隔的已选标签名，空串表示不筛选
+const tagFilter = ref('')
 const SORT_KEY_F = 'remaining_sort_field'
 const SORT_KEY_O = 'remaining_sort_order'
 const SORT_MIGRATED_KEY = 'remaining_sort_default_migrated'
@@ -509,6 +532,14 @@ const sortedRemainingList = computed(() => {
     const q = searchQuery.value.trim().toLowerCase()
     list = list.filter(item => item.name.toLowerCase().includes(q))
   }
+  // 标签筛选：多选之间 OR（任一所选标签命中即保留），与搜索是 AND 叠加
+  if (tagFilter.value.trim()) {
+    const wanted = tagFilter.value.split(',').map(s => s.trim()).filter(Boolean)
+    list = list.filter(item => {
+      const itemTags = String(item.tags || '').split(',').map(s => s.trim()).filter(Boolean)
+      return wanted.some(w => itemTags.includes(w))
+    })
+  }
   if (isManualOrder.value) return manualSort(list)
   if (sortField.value) {
     list = [...list].sort((a, b) => {
@@ -524,7 +555,7 @@ const sortedRemainingList = computed(() => {
 // HTML5 拖拽：只在「非批量模式、无搜索过滤」时允许拖动，
 // 否则拖动的目标位置和过滤后的列表对不上，落库顺序会错乱。
 const canDrag = computed(() =>
-  !batchMode.value && !searchQuery.value.trim() && sortedRemainingList.value.length > 1
+  !batchMode.value && !searchQuery.value.trim() && !tagFilter.value.trim() && sortedRemainingList.value.length > 1
 )
 
 const onDragStart = (e, index) => {
@@ -863,7 +894,7 @@ const saveBatchAdd = async () => {
 }
 
 // 新增时的默认预计日期 = 今天（编辑已有记录时仍沿用记录原值）
-const form = ref({ name: '', expected_date: todayStr(), url: '', url_params: '', notes: '' })
+const form = ref({ name: '', expected_date: todayStr(), url: '', url_params: '', notes: '', tags: '' })
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -986,7 +1017,7 @@ const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name: '', expected_date: todayStr(), url: '', url_params: '', notes: '' }
+  form.value = { name: '', expected_date: todayStr(), url: '', url_params: '', notes: '', tags: '' }
   showDialog.value = true
   focusNameInput()
 }

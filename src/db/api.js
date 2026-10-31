@@ -138,6 +138,27 @@ export const watchedYearsApi = {
   }
 }
 
+// ========== 标签 API ==========
+
+export const tagsApi = {
+  getAll: async () => {
+    const db = await getDb()
+    return { data: { success: true, data: db.getAllTags() } }
+  },
+  add: async (name, color = '') => {
+    const db = await getDb()
+    return { data: db.addTag(name, color) }
+  },
+  update: async (id, data) => {
+    const db = await getDb()
+    return { data: db.updateTag(id, data) }
+  },
+  delete: async (id) => {
+    const db = await getDb()
+    return { data: db.deleteTag(id) }
+  },
+}
+
 // ========== 批量操作 API ==========
 
 export const batchApi = {

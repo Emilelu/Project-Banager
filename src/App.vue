@@ -1,7 +1,10 @@
 <template>
   <div class="flex h-screen overflow-hidden" :class="{ 'dark-mode': isDark }">
     <!-- 侧边栏 -->
-    <aside class="w-60 flex flex-col shadow-xl relative overflow-hidden sidebar-bg">
+    <!-- 侧边栏可折叠：展开 15rem / 收起 4rem（只留图标）。
+         宽度用 transition 平滑变化，收起后文字与分区标题隐藏、图标居中。 -->
+    <aside class="flex flex-col shadow-xl relative overflow-hidden sidebar-bg transition-[width] duration-300 ease-out"
+      :class="sidebarCollapsed ? 'w-16' : 'w-60'">
       <!-- 装饰圆 -->
       <!-- ⚠️ 装饰元素勿加无限动画：它们位于 .sidebar-bg（backdrop-filter）子树内，
            动画会使侧栏玻璃每帧重新捕获背景并模糊。实测动画值约 20pt GPU 占用。
@@ -9,39 +12,66 @@
       <div class="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-white/5"></div>
       <div class="absolute bottom-20 -right-8 w-24 h-24 rounded-full bg-secondary/10"></div>
 
-      <!-- Logo区域 -->
-      <div class="relative z-10 px-5 py-5 border-b border-white/10">
-        <div class="flex items-center gap-3">
-          <img :src="logoUrl" alt="PBM Logo" class="w-8 h-8 rounded-lg" width="32" height="32" />
-          <div>
-            <h1 class="text-white text-base font-bold tracking-wide">{{ tt('app.title') }}</h1>
-            <p class="text-white/50 text-xs">{{ tt('app.subtitle') }}</p>
+      <!-- Logo区域：收起时只显示 logo（居中） -->
+      <div class="relative z-10 border-b border-white/10"
+        :class="sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-4'">
+        <div class="flex items-center gap-3" :class="sidebarCollapsed ? 'justify-center' : ''">
+          <img :src="logoUrl" alt="PBM Logo" class="w-8 h-8 rounded-lg shrink-0" width="32" height="32" />
+          <div v-if="!sidebarCollapsed" class="min-w-0 flex-1">
+            <h1 class="text-white text-base font-bold tracking-wide truncate">{{ tt('app.title') }}</h1>
+            <p class="text-white/50 text-xs truncate">{{ tt('app.subtitle') }}</p>
           </div>
         </div>
+        <!-- 折叠按钮单独一行：位置固定，不随 logo 尺寸/文案变化而漂移。
+             用 panelLeft / panelRight 图标，方向语义与「收起 / 展开」一致。 -->
+        <button @click="toggleSidebar"
+          class="mt-2 w-full h-7 rounded-lg flex items-center gap-1.5 text-white/50 hover:text-white hover:bg-white/10 transition btn-press"
+          :class="sidebarCollapsed ? 'justify-center' : 'justify-center'"
+          :aria-label="sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse')"
+          :aria-expanded="!sidebarCollapsed"
+          :title="sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse')">
+          <AppIcon scale="sm" :name="sidebarCollapsed ? 'panelRight' : 'panelLeft'" />
+          <span v-if="!sidebarCollapsed" class="text-xs truncate">{{ tt('sidebar.collapse') }}</span>
+        </button>
       </div>
 
-      <!-- 导航菜单 -->
-      <nav class="flex-1 py-4 space-y-1 px-3 relative z-10">
-        <router-link v-for="(item, idx) in navItems" :key="item.path" :to="item.path"
-          class="nav-item flex items-center px-4 py-4 rounded-xl text-sm font-medium transition-all duration-150 group" :class="[
-            $route.path === item.path
-              ? 'bg-white/20 text-white shadow-lg shadow-black/10 backdrop-blur-sm nav-active'
-              : 'text-white/60 hover:bg-white/10 hover:text-white'
-          ]" :style="{ animationDelay: idx * 80 + 'ms' }">
+      <!-- 导航菜单（分区渲染） -->
+      <nav class="flex-1 py-3 relative z-10 overflow-y-auto overflow-x-hidden"
+        :class="sidebarCollapsed ? 'px-2' : 'px-3'">
+        <div v-for="(group, gi) in navGroups" :key="group.key"
+          :class="gi > 0 ? (sidebarCollapsed ? 'mt-3 pt-3 border-t border-white/10' : 'mt-5') : ''">
+          <!-- 分区标题（收起时改为一条细分割线，已由上面的 border 表达） -->
+          <div v-if="!sidebarCollapsed"
+            class="px-3 mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-white/40">
+            {{ tt(group.labelKey) }}
+          </div>
+          <router-link v-for="item in group.items" :key="item.path" :to="item.path"
+            class="nav-item flex items-center rounded-xl text-sm font-medium transition-all duration-150 group"
+            :class="[
+              $route.path === item.path
+                ? 'bg-white/20 text-white shadow-lg shadow-black/10 backdrop-blur-sm nav-active'
+                : 'text-white/60 hover:bg-white/10 hover:text-white',
+              sidebarCollapsed ? 'justify-center px-2 py-3.5' : 'px-4 py-3.5'
+            ]"
+            :title="sidebarCollapsed ? tt(item.labelKey) : undefined">
           <!-- 导航图标与文字**都要跟随整条导航项一起缩放**（见 .nav-item）。
                踩坑：早先给图标单独加 group-hover:scale-110，文字只跟 1.02 的整体缩放，
                两者倍率不同 → 悬浮时"图标放大了、文字没跟上"，看起来没一起动。
                现在去掉图标的独立 scale，统一由 .nav-item 整体 transform 驱动。 -->
-          <AppIcon scale="md" class="mr-3" :name="item.icon" />
-          <span>{{ tt(item.labelKey) }}</span>
-          <span v-if="$route.path === item.path"
-            class="ml-auto w-2 h-2 rounded-full bg-sakura"></span>
-        </router-link>
+            <AppIcon scale="md" :class="sidebarCollapsed ? '' : 'mr-3'" :name="item.icon" />
+            <span v-if="!sidebarCollapsed" class="truncate">{{ tt(item.labelKey) }}</span>
+            <!-- 收起时用一个小红点表示当前页，替代原来的文字+圆点 -->
+            <span v-if="$route.path === item.path"
+              class="w-2 h-2 rounded-full bg-sakura"
+              :class="sidebarCollapsed ? 'absolute top-1.5 right-1.5' : 'ml-auto'"></span>
+          </router-link>
+        </div>
       </nav>
 
-      <!-- 底部数据操作 -->
-      <div class="relative z-10 px-4 py-3 border-t border-white/10 space-y-2">
-        <div class="flex gap-2">
+      <!-- 底部数据操作：收起时改为竖排图标按钮，与导航图标列对齐 -->
+      <div class="relative z-10 border-t border-white/10 space-y-2"
+        :class="sidebarCollapsed ? 'px-2 py-2' : 'px-4 py-3'">
+        <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'flex gap-2'">
           <!-- 导出备份：上次备份时间改为悬浮气泡，不再常驻占位 -->
           <div class="relative flex-1 group"
             @mouseenter="showBackupTip = true" @mouseleave="showBackupTip = false">
@@ -49,7 +79,7 @@
               :aria-label="tt('sidebar.exportBackup')"
               :aria-describedby="'backup-tip'"
               @focus="showBackupTip = true" @blur="showBackupTip = false">
-              <AppIcon scale="sm" name="download" /><span class="truncate">{{ tt('sidebar.exportBackupShort') }}</span>
+              <AppIcon scale="sm" name="download" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportBackupShort') }}</span>
             </button>
             <!-- 气泡用 fixed + 动态坐标：侧栏仅 240px，长文案（尤其中日）绝对居中会横向溢出页面。
                  必须 Teleport 到 body：祖先若带 backdrop-filter(.glass)，会成为 fixed 的包含块，
@@ -72,12 +102,43 @@
           <div class="relative flex-1">
             <button @click="triggerImportDb" class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
               :aria-label="tt('sidebar.importBackup')" :title="tt('sidebar.importTitle')">
-              <AppIcon scale="sm" name="folderOpen" /><span class="truncate">{{ tt('sidebar.importBackupShort') }}</span>
+              <AppIcon scale="sm" name="folderOpen" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.importBackupShort') }}</span>
             </button>
           </div>
         </div>
         <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak" class="hidden" @change="onBackupFileChosen" />
-        <div class="flex items-center justify-center gap-2 text-white/30 text-xs">
+
+        <!-- 导出数据（Excel / JSON）：与「导出备份」分开 ——
+             备份是 .db 用于整库迁移恢复，这里是**可读的表格/结构化数据**，
+             便于在 Excel 里查看或给别的工具处理。 -->
+        <div class="relative">
+          <button ref="exportTriggerRef" @click="toggleExportMenu"
+            class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+            :aria-label="tt('sidebar.exportData')"
+            :aria-expanded="showExportMenu" aria-haspopup="menu">
+            <AppIcon scale="sm" name="log" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportDataShort') }}</span>
+            <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showExportMenu ? 'caretUp' : 'caretDown'" />
+          </button>
+          <Teleport to="body">
+            <div v-if="showExportMenu" class="fixed inset-0 z-[100]" @click="showExportMenu = false"></div>
+            <transition name="pop">
+              <div v-if="showExportMenu" ref="exportMenuRef" role="menu"
+                class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
+                :style="exportMenuStyle">
+                <!-- 五种格式统一由一个按钮的下拉菜单提供：
+                     xlsx/csv 适合 Excel 查看，json 适合程序处理，
+                     md 适合贴到笔记，db 是整库备份（等价于原来的「导出备份」）。 -->
+                <button v-for="fmt in exportFormats" :key="fmt.key" role="menuitem"
+                  @click="exportData(fmt.key)"
+                  class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
+                  <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
+                  <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
+                </button>
+              </div>
+            </transition>
+          </Teleport>
+        </div>
+        <div v-if="!sidebarCollapsed" class="flex items-center justify-center gap-2 text-white/30 text-xs">
           <AppIcon scale="xs" name="sparkle" />
           <span>{{ appVersion }}</span>
           <AppIcon scale="xs" name="sparkle" />
@@ -111,19 +172,9 @@
               <path v-if="!bgActive" d="M3 3l18 18" stroke-width="2.5" />
             </svg>
           </button>
-          <button @click="showThemeSettings = true"
-            class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
-            :aria-label="tt('topbar.theme')"
-            :title="tt('topbar.theme')">
-            <svg class="w-5 h-5 transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <!-- 调色板 -->
-              <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.21-1.79 4-4 4h-2.5a2 2 0 0 0-1.5 3.32A1.99 1.99 0 0 1 12 21z" />
-              <circle cx="7.5" cy="10.5" r="1" />
-              <circle cx="12" cy="7.5" r="1" />
-              <circle cx="16.5" cy="10.5" r="1" />
-            </svg>
-          </button>
+          <!-- 主题设置已改为侧边导航中的 /appearance 页面，顶栏不再保留入口。
+               （上一轮迁移时遗漏了这个按钮，导致同一功能在顶栏和侧栏各有一个入口。） -->
+
           <button @click="toggleTheme"
             class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
             :aria-label="themeLabel"
@@ -167,9 +218,11 @@
                  挂到 body 后是独立的顶层元素，再按按钮位置用 fixed 定位。 -->
             <Teleport to="body">
               <div v-if="showLangMenu" class="fixed inset-0 z-[100]" @click="showLangMenu = false"></div>
-              <transition name="fade">
+              <!-- 与「每页条数」菜单同一套 pop 过渡；本菜单贴在按钮下方展开，原点在顶边 -->
+              <transition name="pop">
                 <div v-if="showLangMenu" ref="langMenuRef" role="menu"
-                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/30 py-1 min-w-[8.5rem]"
+                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[8.5rem]"
+                  style="--pop-origin-y: top; --pop-from-y: -6px"
                   :style="langMenuStyle">
                   <button v-for="l in SUPPORTED_LOCALES" :key="l.code" role="menuitemradio"
                     :aria-checked="locale === l.code"
@@ -189,6 +242,8 @@
               </transition>
             </Teleport>
           </div>
+          <!-- 标签管理与主题背景已改为侧边导航中的独立页面（/tags 与 /appearance），
+               顶栏不再保留入口，避免同一功能有两个入口造成困惑。 -->
           <!-- 帮助：键盘快捷键 + 操作小贴士，统一收纳在弹窗里，不占页面空间 -->
           <button @click="showHelp = true"
             class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press group"
@@ -243,9 +298,6 @@
     <!-- 全局 Toast 通知 -->
     <ToastHost />
 
-    <!-- 主题与背景设置 -->
-    <ThemeSettings :show="showThemeSettings" @close="showThemeSettings = false" />
-
     <!-- 帮助弹窗：键盘快捷键 + 操作小贴士 -->
     <HelpDialog :show="showHelp" @close="showHelp = false" />
 
@@ -282,9 +334,12 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from './composables/useTheme'
 import { getDb } from './db/index'
+import {
+  buildExportWorkbook, buildExportCsv, buildExportJson, buildExportMarkdown,
+  downloadBlob, exportTimestamp,
+} from './db/excelExporter'
 import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
-import ThemeSettings from './components/ThemeSettings.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { useAppearance } from './composables/useAppearance'
 import { useDialogFocus } from './composables/useDialogFocus'
@@ -299,6 +354,128 @@ const appVersion = `v${__APP_VERSION__}`
 const REPO_URL = 'https://github.com/Emilelu/Project-Banager'
 const showBackupTip = ref(false)
 const showTimeTip = ref(false)
+
+// ===== 导出数据（Excel / JSON）=====
+// 与「导出备份」(.db) 区分：备份用于整库迁移恢复，这里是给人看/给别的工具处理的表格
+const showExportMenu = ref(false)
+const exportMenuRef = ref(null)
+const exportMenuPos = ref({ left: 0, top: 0 })
+// 展开方向：向上弹（菜单在按钮上方）时原点在底边、起始位移朝下；
+// 向下弹时相反。写入 CSS 变量，让 pop 动画始终"从按钮那一侧长出来"。
+const exportMenuDir = ref('up')
+const exportTriggerRef = ref(null)
+
+const exportMenuStyle = computed(() => ({
+  left: `${exportMenuPos.value.left}px`,
+  top: `${exportMenuPos.value.top}px`,
+  '--pop-origin-y': exportMenuDir.value === 'up' ? 'bottom' : 'top',
+  '--pop-from-y': exportMenuDir.value === 'up' ? '6px' : '-6px',
+}))
+
+// 菜单 Teleport 到 body，需按触发按钮位置算坐标（右对齐、贴上方）
+const measureExportMenu = () => {
+  const btn = exportTriggerRef.value
+  const menu = exportMenuRef.value
+  if (!btn) return
+  const b = btn.getBoundingClientRect()
+  const w = menu?.offsetWidth || 150
+  const h = menu?.offsetHeight || 90
+  const gap = 6
+  const margin = 8
+  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
+  // 优先向上弹（侧边栏按钮贴近屏幕底部）；空间不足才向下，并同步方向变量
+  let top = b.top - h - gap
+  let dir = 'up'
+  if (top < margin) {
+    top = b.bottom + gap
+    dir = 'down'
+  }
+  exportMenuDir.value = dir
+  exportMenuPos.value = { left: Math.round(left), top: Math.round(top) }
+}
+
+const toggleExportMenu = async () => {
+  showExportMenu.value = !showExportMenu.value
+  if (showExportMenu.value) {
+    await nextTick()
+    measureExportMenu()
+  }
+}
+
+// 拉取三类数据 → 交给导出器
+const collectAllData = async () => {
+  const db = await getDb()
+  return {
+    watching: db.getAllWatching() || [],
+    remaining: db.getAllRemaining() || [],
+    watched: db.getAllWatched() || [],
+  }
+}
+
+/**
+ * 导出格式清单。一个按钮 + 下拉菜单即可覆盖全部格式，避免侧边栏堆一排按钮。
+ * 顺序按「最常用 → 最特殊」排列：xlsx 给 Excel 看，md 给笔记，db 是整库备份。
+ */
+const exportFormats = [
+  { key: 'xlsx', labelKey: 'sidebar.exportXlsx', icon: 'log' },
+  { key: 'csv', labelKey: 'sidebar.exportCsv', icon: 'log' },
+  { key: 'json', labelKey: 'sidebar.exportJson', icon: 'note' },
+  { key: 'md', labelKey: 'sidebar.exportMd', icon: 'note' },
+  { key: 'db', labelKey: 'sidebar.exportDb', icon: 'download' },
+]
+
+const exportData = async (kind) => {
+  showExportMenu.value = false
+  try {
+    const ts = exportTimestamp()
+
+    // .db 是整库备份：走 database 的 export()，与「导出备份」完全等价
+    if (kind === 'db') {
+      await exportDb()
+      return
+    }
+
+    const data = await collectAllData()
+    const total = data.watching.length + data.remaining.length + data.watched.length
+    if (total === 0) {
+      showToast(tt('toast.noDataToExport'), 'warning')
+      return
+    }
+
+    switch (kind) {
+      case 'xlsx': {
+        const bytes = buildExportWorkbook(data)
+        downloadBlob(
+          new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+          `bangumi_data_${ts}.xlsx`,
+        )
+        showToast(tt('toast.exportedXlsx', { count: total }))
+        break
+      }
+      case 'csv': {
+        // 带 BOM，Excel 打开不会把中文显示成乱码
+        downloadBlob(buildExportCsv(data), `bangumi_data_${ts}.csv`, 'text/csv;charset=utf-8')
+        showToast(tt('toast.exportedCsv', { count: total }))
+        break
+      }
+      case 'json': {
+        downloadBlob(buildExportJson(data), `bangumi_data_${ts}.json`, 'application/json')
+        showToast(tt('toast.exportedJson', { count: total }))
+        break
+      }
+      case 'md': {
+        downloadBlob(buildExportMarkdown(data), `bangumi_data_${ts}.md`, 'text/markdown;charset=utf-8')
+        showToast(tt('toast.exportedMd', { count: total }))
+        break
+      }
+      default:
+        break
+    }
+  } catch (e) {
+    console.error('[export] failed:', e)
+    showToast(tt('toast.exportDataFailed', { message: e?.message || 'unknown' }), 'error')
+  }
+}
 
 // ========== 悬浮气泡定位（fixed + 视口感知） ==========
 // 侧边栏只有 240px 宽，气泡若用 absolute 居中，长文案（尤其中日）会横向溢出页面。
@@ -435,7 +612,6 @@ const onResizeLang = () => {
   if (showLangMenu.value) measureLangMenu()
 }
 const fileInputRef = ref(null)
-const showThemeSettings = ref(false)
 const showHelp = ref(false)
 
 const appearance = useAppearance()
@@ -562,12 +738,50 @@ const themeLabel = computed(() => {
   return tt('topbar.themeAuto')
 })
 
-const navItems = [
-  { path: '/watching', labelKey: 'nav.watching', icon: 'tv' },
-  { path: '/remaining', labelKey: 'nav.remaining', icon: 'clock' },
-  { path: '/watched', labelKey: 'nav.watched', icon: 'book' },
-  { path: '/import', labelKey: 'nav.import', icon: 'upload' }
+/**
+ * 侧边导航分区：
+ *   data      — 追番 / 等番 / 已看 / 导入（日常主流程）
+ *   appearance— 主题背景 / 标签管理（低频设置项）
+ * 分区让「每天用的」和「偶尔调的」在视觉上分层，不再是一长条平铺菜单。
+ */
+const navGroups = [
+  {
+    key: 'data',
+    labelKey: 'nav.groupData',
+    items: [
+      { path: '/watching', labelKey: 'nav.watching', icon: 'tv' },
+      { path: '/remaining', labelKey: 'nav.remaining', icon: 'clock' },
+      { path: '/watched', labelKey: 'nav.watched', icon: 'book' },
+      { path: '/import', labelKey: 'nav.import', icon: 'upload' },
+    ],
+  },
+  {
+    key: 'appearance',
+    labelKey: 'nav.groupAppearance',
+    items: [
+      { path: '/appearance', labelKey: 'nav.appearance', icon: 'palette' },
+      { path: '/tags', labelKey: 'nav.tags', icon: 'bookmark' },
+    ],
+  },
 ]
+
+// 扁平化后用于「当前页标题/图标」查找
+const navItems = navGroups.flatMap(g => g.items)
+
+// ===== 侧边栏折叠 =====
+// 持久化到 localStorage：用户收起后重开页面仍是收起状态，不必每次再点。
+const SIDEBAR_KEY = 'banager_sidebar_collapsed'
+const sidebarCollapsed = ref(false)
+try {
+  sidebarCollapsed.value = localStorage.getItem(SIDEBAR_KEY) === '1'
+} catch { /* localStorage 不可用时保持默认展开 */ }
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try {
+    localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+  } catch { /* ignore */ }
+}
 
 const currentTitle = computed(() => {
   const item = navItems.find(n => n.path === route.path)

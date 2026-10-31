@@ -18,7 +18,9 @@ setLocale('zh')
 // 测试里直接 mount 视图不会经过 main.js，不注册会报 Failed to resolve component: AppIcon
 import { config } from '@vue/test-utils'
 import AppIcon from '../src/components/AppIcon.vue'
-config.global.components = { ...(config.global.components || {}), AppIcon }
+import TagSelector from '../src/components/TagSelector.vue'
+import TagFilter from '../src/components/TagFilter.vue'
+config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter }
 
 // jsdom 缺失的浏览器 API 兜底
 if (typeof window !== 'undefined') {

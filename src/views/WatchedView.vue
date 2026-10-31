@@ -29,6 +29,8 @@
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
+          <!-- 按标签筛选（多选 OR），与搜索框并列 -->
+          <TagFilter v-model="tagFilter" />
         </div>
         <div class="flex items-center gap-2 flex-wrap">
           <button @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addRecord') }}</button>
@@ -46,7 +48,9 @@
           <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="btn-base btn-danger">
             <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
           </button>
-          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}</button>
+          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">
+            <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
+          </button>
           <button @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
           <div class="border-l border-white/30 h-6 mx-1"></div>
           <button @click="openAddYearDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addYear') }}</button>
@@ -78,7 +82,7 @@
               <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
                 class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
-                :class="isAllChecked?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
+                :class="isAllChecked?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="isAllChecked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
             </th>
@@ -115,7 +119,7 @@
                 :aria-label="tt('card.checkLabel', { name: item.name })"
                 @keydown.enter.prevent="toggleCheck(item.id)" @keydown.space.prevent="toggleCheck(item.id)"
                 class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
-                :class="checkedIds.includes(item.id)?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
+                :class="checkedIds.includes(item.id)?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="checkedIds.includes(item.id)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
             </td>
@@ -163,18 +167,21 @@
             <button @click="showPageSizeMenu=!showPageSizeMenu" class="px-2 py-1 border border-primary/20 rounded-lg text-xs hover:bg-primary/5 transition bg-white/80">
               {{ tt('remaining.perPage', { n: pageSize }) }}<AppIcon scale="xs" class="inline-block align-middle ml-0.5" name="caretDown" />
             </button>
-            <!-- 与等待更新页一致：加宽到 12rem + 全程 nowrap，避免「确定」被挤成两行 -->
-            <div v-if="showPageSizeMenu" role="menu"
-              class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface">
-              <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
-                class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition whitespace-nowrap" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
-              <div class="border-t border-gray-200/60 my-1"></div>
-              <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
-                <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
-                  class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
-                <button @click="applyCustomPageSize" class="shrink-0 px-2 py-1 text-xs text-primary hover:text-primary-dark transition whitespace-nowrap">{{ tt('common.confirm') }}</button>
+            <!-- 与等待更新页完全一致：同样宽度、同样 nowrap、同样向上展开的 pop 过渡 -->
+            <transition name="pop">
+              <div v-if="showPageSizeMenu" role="menu"
+                class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface"
+                style="--pop-origin-y: bottom; --pop-from-y: 6px">
+                <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
+                  class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition whitespace-nowrap" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
+                <div class="border-t border-gray-200/60 my-1"></div>
+                <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
+                  <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
+                    class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
+                  <button @click="applyCustomPageSize" class="shrink-0 px-2 py-1 text-xs text-primary hover:text-primary-dark transition whitespace-nowrap">{{ tt('common.confirm') }}</button>
+                </div>
               </div>
-            </div>
+            </transition>
             <div v-if="showPageSizeMenu" class="fixed inset-0 z-40" @click="showPageSizeMenu=false"></div>
           </div>
         </div>
@@ -194,14 +201,19 @@
 
     <!-- 右键菜单 -->
     <Teleport to="body">
-      <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
+      <!-- 右键菜单套统一的 pop 过渡（与每页条数菜单同一套动效） -->
+      <transition name="pop">
+      <div v-if="contextMenu.show" class="fixed z-[200]"
+        style="--pop-origin-y: top; --pop-from-y: -4px"
+        :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
+        <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('common.edit') }}</button>
           <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
           <div class="border-t border-white/20 my-1"></div>
           <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
         </div>
       </div>
+      </transition>
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
     </Teleport>
 
@@ -347,6 +359,11 @@
                 <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenHint') }}</p>
               </div>
               <div>
+                <!-- 标签选择：与追番页同一个 TagSelector 组件 -->
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('tags.label') }}</label>
+                <TagSelector v-model="form.tags" />
+              </div>
+              <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.notes') }}</label>
                 <textarea v-model="form.notes" rows="2" :placeholder="tt('showDialog.notesPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition resize-none bg-white/80"></textarea>
@@ -416,6 +433,8 @@ const dialogMode = ref('add')
 const yearDialogMode = ref('add')
 const editingYearId = ref(null)
 const searchQuery = ref('')
+// 标签筛选：逗号分隔的已选标签名，空串表示不筛选
+const tagFilter = ref('')
 
 // 时间选择器
 const formTime = ref('')
@@ -475,6 +494,14 @@ const filteredList = computed(() => {
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.trim().toLowerCase()
     list = list.filter(item => item.name.toLowerCase().includes(q))
+  }
+  // 标签筛选：多选之间 OR（任一所选标签命中即保留），与搜索是 AND 叠加
+  if (tagFilter.value.trim()) {
+    const wanted = tagFilter.value.split(',').map(s => s.trim()).filter(Boolean)
+    list = list.filter(item => {
+      const itemTags = String(item.tags || '').split(',').map(s => s.trim()).filter(Boolean)
+      return wanted.some(w => itemTags.includes(w))
+    })
   }
   if (sortField.value) {
     list = [...list].sort((a, b) => {
@@ -592,7 +619,7 @@ const editValue = ref('')
 const dateManualInput = ref(false)
 
 // 新增时的默认观看日期 = 今天（编辑已有记录时仍沿用记录原值）
-const form = ref({ name:'', watch_date: todayStr(), url:'', url_params:'', notes:'' })
+const form = ref({ name:'', watch_date: todayStr(), url:'', url_params:'', notes:'', tags:'' })
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -873,7 +900,7 @@ const openAddDialog = () => {
   form.value = {
     name:'',
     watch_date: isRealYear(selectedYear.value) ? selectedYear.value : todayStr(),
-    url:'', url_params:'', notes:''
+    url:'', url_params:'', notes:'', tags:''
   }
   formTime.value = ''
   formDateValidationError.value = ''
@@ -906,7 +933,8 @@ const openEditDialog = () => {
     watch_date: datePart,
     url: selected.value.url || '',
     url_params: selected.value.url_params || '',
-    notes: selected.value.notes || ''
+    notes: selected.value.notes || '',
+    tags: selected.value.tags || ''
   }
   formTime.value = timePart
   formDateValidationError.value = ''

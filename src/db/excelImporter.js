@@ -369,12 +369,24 @@ async function importWatched(db, workbook) {
         const url = getHyperlink(sheet, row, col)
 
         if (parsed.name) {
+          // 日期精度还原：导出的 xlsx 会把「作品名 (2025/07/15)」写成括号形式，
+          // 用于保留模板列头（只有年份）装不下的月份/日。这里若括号内容
+          // **形如更精确的日期**且包含与列头一致的年份，就用它代替列头年份；
+          // 否则视为普通备注，保持原样。这样「导出→导入」不再丢失日期精度。
+          const notesLooksLikeDate =
+            parsed.notes &&
+            /\d{4}/.test(parsed.notes) &&
+            /[\/\-:~]/.test(parsed.notes) &&
+            String(parsed.notes).includes(String(year))
+          const effectiveDate = notesLooksLikeDate ? String(parsed.notes).trim() : year
+          const effectiveNotes = notesLooksLikeDate ? '' : parsed.notes
+
           try {
             const result = db.addWatched({
               name: parsed.name,
-              watch_date: year,
+              watch_date: effectiveDate,
               url: url,
-              notes: parsed.notes,
+              notes: effectiveNotes,
               sort_order: nextSortOrder()
             })
             if (result.success) {

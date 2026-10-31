@@ -161,6 +161,41 @@ body {
   transition: background 0.3s ease, color 0.3s ease;
 }
 
+/* ==================== 焦点环（去掉浏览器默认白/黑圈） ==================== */
+/*
+ * 现象：鼠标点中一个可聚焦元素（卡片是 role=button + tabindex=0）后，
+ * 再按 Shift（或其它修饰键），Chrome 会把该元素提升为「键盘焦点」——
+ * `:focus-visible` 由 false 变 true，于是画出浏览器默认的焦点环
+ * （实测 outline: auto，浅色下是黑圈、深色底上看着像白圈），很突兀。
+ *
+ * 解法：全局关掉浏览器默认 outline，仅用 `:focus-visible` 给**真正的键盘导航**
+ * （Tab 走动）一个与主题色协调的细描边。这样：
+ *   - 鼠标点击后再按 Shift：不出现任何圈
+ *   - 纯键盘 Tab：仍有清晰但柔和的焦点提示（可访问性不受损）
+ */
+*:focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+/* 键盘导航时的焦点提示：主题色细描边 + 轻微外发光，比系统默认圈更贴合毛玻璃风格 */
+:focus-visible {
+  outline: 2px solid rgb(var(--c-primary) / 0.55) !important;
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* 输入框本身已有 focus:ring，不再叠加 outline，避免双层框 */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
+}
+
+/* 深色模式提亮描边，保证在深底上可见 */
+.dark :focus-visible {
+  outline-color: rgb(var(--c-primary-light) / 0.7) !important;
+}
+
 /* ==================== 全局禁止文字被框选 ==================== */
 /*
  * 问题：任意位置按住 Shift 拖动（或三击、Ctrl+A）时，浏览器会显示文字选区高亮，
@@ -619,10 +654,19 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   max-height: 4rem;
 }
 
+/* ★ transition-group 的 -move 类：当某个按钮离场、其后的按钮需要**归位**时，
+   Vue 会给这些"被挤动"的元素加 `*-move` 类。若不定义它，归位是**瞬间跳过去**的
+   —— 这正是「取消选中一项时，部分按钮隐藏后其他按钮归位没有过渡」的原因。
+   加上这一条，剩余按钮会平滑滑动到新位置。 */
+.sel-anim-move {
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* 尊重减少动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   .sel-anim-enter-active,
-  .sel-anim-leave-active {
+  .sel-anim-leave-active,
+  .sel-anim-move {
     transition: none;
   }
 }
@@ -1265,23 +1309,41 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   opacity: 1;
 }
 
-/* 弹出动画 */
+/* ==================== 菜单弹出动画（全站统一，方向感知） ==================== */
+/*
+ * 目标：所有下拉/弹出菜单用同一套「缩放 + 位移」动画。
+ *
+ * 关键难点：菜单可能出现在锚点的**上方或下方**（空间不够时会翻转），
+ * 若位移方向写死（例如永远 translateY(10px)），向上打开时动画会朝反方向跑，
+ * 看起来"从错的位置弹出来"。
+ *
+ * 解法：由 JS 测量时写入两个 CSS 变量：
+ *   --pop-origin-y : 缩放原点（'top' 表示菜单顶边贴着锚点 → 从顶边向下长出来）
+ *   --pop-from-y   : 动画起始位移（向下弹时为正、向上弹时为负）
+ * 动画本身只读变量，因此无论菜单出现在哪个方向，都从锚点一侧"长出来"。
+ */
 .pop-enter-active {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.22s ease,
+    transform 0.26s cubic-bezier(0.34, 1.4, 0.64, 1);
+  transform-origin: center var(--pop-origin-y, top);
+  will-change: transform, opacity;
 }
 
 .pop-leave-active {
-  transition: all 0.2s ease-in;
+  transition: opacity 0.16s ease, transform 0.16s ease-in;
+  transform-origin: center var(--pop-origin-y, top);
 }
 
+/* 起始态：略小 + 朝锚点反方向偏移 + 透明 */
 .pop-enter-from {
   opacity: 0;
-  transform: scale(0.8) translateY(10px);
+  transform: scale(0.94) translateY(var(--pop-from-y, -6px));
 }
 
+/* 结束态：只淡出，不再位移（避免"滑走"感） */
 .pop-leave-to {
   opacity: 0;
-  transform: scale(0.9);
+  transform: scale(0.97);
 }
 
 /* 内联编辑输入框 */
@@ -1483,6 +1545,27 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/*
+ * 页面级卡片：比 .glass 更实一些。
+ * 原因：弹窗有半透明遮罩压暗背景，0.7 的玻璃底足够看清内容；
+ * 但独立页面直接铺在壁纸上，同样的透明度会让文字与壁纸混在一起。
+ * 这里把 alpha 提到 0.88，并保留同样的 blur 与描边，视觉语言仍然一致。
+ */
+.page-card {
+  background: rgba(255, 255, 255, calc(0.88 * var(--glass-fade, 1)));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+body[data-glass='liquid'] .page-card {
+  background: rgba(255, 255, 255, calc(0.9 * var(--glass-fade, 1)));
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
 

@@ -892,7 +892,8 @@ describe('App · 备份导出与恢复', () => {
     await router.isReady()
     wrapper = mount(App, {
       attachTo: document.body,
-      global: { plugins: [router], stubs: { ThemeSettings: true } },
+      // ThemeSettings 已改为独立页面（/appearance），App 不再挂载该组件，无需 stub
+      global: { plugins: [router] },
     })
     await flushPromises()
     return wrapper
