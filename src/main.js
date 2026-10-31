@@ -3,6 +3,7 @@ import App from './App.vue'
 import AppIcon from './components/AppIcon.vue'
 import TagSelector from './components/TagSelector.vue'
 import TagFilter from './components/TagFilter.vue'
+import ColorPicker from './components/ColorPicker.vue'
 import router from './router'
 import './style.css'
 import { initAppearance } from './composables/useAppearance'
@@ -59,6 +60,7 @@ async function boot() {
   app.component('AppIcon', AppIcon)
   app.component('TagSelector', TagSelector)
   app.component('TagFilter', TagFilter)
+  app.component('ColorPicker', ColorPicker)
   app.use(router)
   app.mount('#app')
   console.log('[boot] mounted')

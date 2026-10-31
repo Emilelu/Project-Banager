@@ -38,21 +38,23 @@
       </a>
     </div>
     <div class="flex items-center gap-1 mt-0.5">
-      <span class="text-sm font-bold text-gray-800" aria-hidden="true">e</span>
-      <span @dblclick.stop="!batchMode && $emit('start-edit', 'current_episode')" class="editable-cell">
+      <span class="text-sm font-bold text-gray-800 shrink-0" aria-hidden="true">e</span>
+      <span @dblclick.stop="!batchMode && $emit('start-edit', 'current_episode')" class="editable-cell min-w-0">
         <input v-if="editing?.id === item.id && editing?.field === 'current_episode'" :value="editValue"
           :aria-label="tt('card.editEpisodeLabel', { name: item.name })"
           @input="$emit('update:editValue', $event.target.value)"
           type="text" inputmode="decimal" @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')"
           class="inline-edit-input w-16" autofocus />
-        <span v-else class="text-sm font-bold text-gray-800">{{ item.current_episode }}<span v-if="progress" class="text-gray-400 font-normal">/{{ progress.total }}</span></span>
+        <!-- 集数排布：`3 / 12`（斜杠两侧留白，不与数字粘连），百分比独立右对齐到行末。
+             无进度时保持原来的纯 `e 5`，不渲染任何占位文字。 -->
+        <span v-else class="text-sm font-bold text-gray-800 card-ep-line">{{ item.current_episode }}<span v-if="progress" class="text-gray-400 font-normal"> / {{ progress.total }}</span></span>
       </span>
-      <!-- 追番进度条：仅当总集数可解析为正数、且当前集数有效时显示。
-           总集数留空或写成「?」时不渲染，避免出现 0/0 或错误百分比。 -->
-      <span v-if="progress" class="text-[0.625rem] font-semibold ml-1"
-        :class="progress.pct >= 100 ? 'text-success' : 'text-primary'"
+      <!-- 用弹性占位把百分比推到行末（+/- 按钮之左）；无进度时占位仍撑开，
+           按钮位置与原来一致，因此有/无进度的卡片行内元素不跳动 -->
+      <span class="flex-1 min-w-0" aria-hidden="true"></span>
+      <span v-if="progress" class="card-progress-pct" :class="{ 'is-complete': progress.pct >= 100 }"
         :title="tt('card.progressLabel', { pct: progress.pct })">{{ progress.pct }}%</span>
-      <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 ml-auto">
+      <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 shrink-0">
         <!-- 集数加减：统一用主题色驱动的迷你按钮（.btn-mini-plus / .btn-mini-minus），
              尺寸、圆角、字形与其他组件一致；原先「+ 绿 / - 橙」与主题色无关且割裂 -->
         <button @click.stop="$emit('increment')" :aria-label="tt('card.incEpisodeLabel', { name: item.name })"
@@ -63,6 +65,17 @@
           class="btn-mini btn-mini-minus btn-press" :title="tt('watching.epMinus')">
           <AppIcon scale="xs" name="minus" />
         </button>
+      </div>
+    </div>
+    <!-- 追番进度条：仅当总集数可解析为正数、当前集数有效且不超过总集数时显示。
+         总集数留空 /「?」/ 当前集数超出总集数时不渲染进度条（保持纯 `e 5`），
+         但 .card-progress-slot 恒定占位，保证同列卡片文字基线不错位。 -->
+    <div class="card-progress-slot">
+      <div v-if="progress" class="card-progress" role="progressbar"
+        :aria-label="tt('card.progressLabel', { pct: progress.pct })"
+        :aria-valuenow="progress.pct" aria-valuemin="0" aria-valuemax="100">
+        <div class="card-progress-fill" :class="{ 'is-complete': progress.pct >= 100 }"
+          :style="{ width: progress.pct + '%' }" aria-hidden="true"></div>
       </div>
     </div>
     <div @dblclick.stop="!batchMode && $emit('start-edit', 'time_slot')" class="editable-cell">
@@ -107,15 +120,17 @@ const emit = defineEmits([
 /**
  * 追番进度：current_episode / total_episodes。
  *
- * 返回 null 的情形（模板据此隐藏进度，绝不显示 0/0 或假百分比）：
+ * 返回 null 的情形（模板据此隐藏进度条，绝不显示 0/0 或假百分比）：
  *   · 总集数未填、非数字、≤0（例如「?」「12+」这类不确定写法）
  *   · 当前集数非数字
- * 百分比夹在 0..100，避免集数超出总集数时进度条溢出。
+ *   · 当前集数 > 总集数（数据没录准，画进度条只会误导，故整条不显示）
+ * 百分比夹在 0..100，避免任何情况下填充条溢出轨道。
  */
 const progress = computed(() => {
   const cur = Number.parseFloat(String(props.item?.current_episode ?? '').replace(/[^\d.]/g, ''))
   const total = Number.parseFloat(String(props.item?.total_episodes ?? '').replace(/[^\d.]/g, ''))
   if (!Number.isFinite(cur) || !Number.isFinite(total) || total <= 0) return null
+  if (cur > total) return null
   const pct = Math.max(0, Math.min(100, Math.round((cur / total) * 100)))
   return { cur, total, pct }
 })

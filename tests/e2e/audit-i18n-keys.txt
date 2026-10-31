@@ -1,0 +1,11 @@
+===== key 引用解析审计 =====
+refs=641 missing=1
+
+  MISSING src/composables/useI18n.js:11  t() toast.movedTo
+
+--- 动态 key 引用（无法静态校验，列出供人工核对）---
+  src/views/RemainingView.vue:470 return idx < 0 ? cn : tt(`weekday.${idx + 1}`)
+  src/views/WatchingView.vue:488 return tt(`weekday.${idx + 1}`)
+
+--- 字典里未被任何地方引用的 key（可能是死键，仅供参考）---
+  count=45

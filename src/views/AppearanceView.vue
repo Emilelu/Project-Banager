@@ -2,7 +2,7 @@
   <div class="space-y-5">
     <!-- 请注意：本页面由弹窗改造而来，三大区块的交互逻辑与弹窗版完全一致，
          仅外壳从 fixed 遮罩换成普通页面流。 -->
-    <div class="page-card px-6 py-5 space-y-6">
+    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-5 space-y-6">
       <!-- 玻璃风格 -->
             <section>
               <h4 class="text-sm font-bold text-gray-700 mb-2">{{ tt('theme.glassStyle') }}</h4>
@@ -67,7 +67,7 @@
                   </button>
                 </div>
                 <!-- 图源不支持跨域取色时，只提示一次（原先分散在按钮后缀 + 底部两条提示里） -->
-                <p v-if="noCorsSource" class="text-xs text-warning-dark mt-1.5 flex items-start gap-1">
+                <p v-if="noCorsSource" class="tone-warning text-xs text-warning-dark mt-1.5 flex items-start gap-1">
                   <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsWarning') }}
                 </p>
               </div>
@@ -78,17 +78,31 @@
                 <AppIcon scale="xs" :name="showCustomColor ? 'caretUp' : 'caretDown'" />
                 {{ tt('theme.customColor') }}
               </button>
-              <div v-if="showCustomColor" class="mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 flex items-center gap-2 flex-wrap">
-                <label class="flex items-center gap-1.5 text-xs text-gray-600">
-                  {{ tt('theme.primary') }}
-                  <input type="color" v-model="customP" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
-                </label>
-                <label class="flex items-center gap-1.5 text-xs text-gray-600">
-                  {{ tt('theme.secondary') }}
-                  <input type="color" v-model="customS" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
-                </label>
-                <button @click="applyCustom" class="btn-base btn-primary !px-3 !py-1 !text-xs">{{ tt('theme.applyCustom') }}</button>
-              </div>
+              <!-- 折叠统一走 style.css 的 .collapse 过渡（grid-template-rows 0fr↔1fr）。
+                   必须套两层：transition 根（grid 容器）→ 收缩层 → 内容卡片。
+                   原因：style.css 的 `.collapse-*-active > *` 只把 overflow:hidden /
+                   min-height:0 给了 transition 的**直接子元素**；若直接子元素就是带
+                   padding/border/margin 的卡片，它自身的最小高度贡献仍会撑住 0fr
+                   （实测 0fr 时仍有 ~30px，动画退化成瞬跳）。
+                   故直接子元素必须是一层无 padding/margin 的收缩层，
+                   卡片（mt-2 p-3）放它内部，超出部分由 overflow 裁掉。 -->
+              <transition name="collapse">
+                <div v-if="showCustomColor">
+                  <div class="collapse-shell">
+                    <div class="tone-panel mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 flex items-center gap-2 flex-wrap">
+                      <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                        {{ tt('theme.primary') }}
+                        <ColorPicker :value="customP" size="2rem" :aria-label="tt('theme.customPrimary')" @input="customP = $event" />
+                      </label>
+                      <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                        {{ tt('theme.secondary') }}
+                        <ColorPicker :value="customS" size="2rem" :aria-label="tt('theme.customSecondary')" @input="customS = $event" />
+                      </label>
+                      <button @click="applyCustom" class="btn-base btn-primary !px-3 !py-1 !text-xs">{{ tt('theme.applyCustom') }}</button>
+                    </div>
+                  </div>
+                </div>
+              </transition>
             </section>
 
             <!-- 背景图 -->
@@ -105,7 +119,7 @@
               <template v-if="state.bgEnabled">
                 <div class="flex items-center gap-2 flex-wrap">
                   <select v-model="state.bgProvider"
-                    class="flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
+                    class="tone-input flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
                     <option value="alcy">{{ tt('theme.providerAlcy') }}</option>
                     <option value="dmoe">{{ tt('theme.providerDmoe') }}</option>
                     <option value="loliapi">{{ tt('theme.providerLoliapi') }}</option>
@@ -121,32 +135,33 @@
                   </button>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
-                  class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
-                <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">{{ tt('theme.customUrlHint') }}</p>
-                <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
-                <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
-                     点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
-                     不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
-                <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
-                  <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
-                       后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。 -->
-                  <button @click="setAutoSwitch(true)"
-                    class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                    :class="state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
-                    <AppIcon scale="xs" name="refresh" class="inline-block" /> {{ tt('theme.autoChange') }}
-                  </button>
-                  <button @click="setAutoSwitch(false)"
-                    :title="tt('theme.autoSwitchHint')"
-                    class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                    :class="!state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
-                    <AppIcon scale="xs" name="bookmark" class="inline-block" /> {{ tt('theme.fixCurrent') }}
-                  </button>
-                </div>
+                  class="tone-input w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
+                  <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">{{ tt('theme.customUrlHint') }}</p>
+                  <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
+                  <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
+                       点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
+                       不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
+                  <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
+                    <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
+                         后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。深色模式由
+                         style.css 的 .dark .seg-btn.* 规则反转（半透明白底 + 亮色描边 + 白字）。 -->
+                    <button @click="setAutoSwitch(true)"
+                      class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                      :class="state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
+                      <AppIcon scale="xs" name="refresh" class="inline-block" /> {{ tt('theme.autoChange') }}
+                    </button>
+                    <button @click="setAutoSwitch(false)"
+                      :title="tt('theme.autoSwitchHint')"
+                      class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                      :class="!state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
+                      <AppIcon scale="xs" name="bookmark" class="inline-block" /> {{ tt('theme.fixCurrent') }}
+                    </button>
+                  </div>
                 <div v-if="state.bgUrl" class="mt-3">
                   <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
                        这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
                        生成中显示骨架，降级失败才回退原图直出 -->
-                  <div class="w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
+                  <div class="tone-preview w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
                     <img v-if="previewSrc" :src="previewSrc" @error="onBgError" @load="bgLoaded = true"
                       loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <img v-else-if="previewFailed" :src="state.bgBlobUrl || state.bgUrl" @error="onBgError" @load="bgLoaded = true"
@@ -154,7 +169,7 @@
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <p v-if="bgFailed" class="text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
+                    <p v-if="bgFailed" class="tone-danger text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
                     <button @click="openOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
                       :title="tt('theme.openOriginalHint')"><AppIcon scale="xs" name="link" />{{ tt('theme.openOriginal') }}</button>
@@ -162,7 +177,7 @@
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
                       :title="tt('theme.downloadOriginalHint')"><AppIcon scale="xs" name="download" />{{ tt('theme.downloadOriginal') }}</button>
                   </div>
-                  <p v-if="noCorsSource" class="text-xs text-warning-dark/90 mt-1 leading-relaxed">
+                  <p v-if="noCorsSource" class="tone-warning text-xs text-warning-dark/90 mt-1 leading-relaxed">
                     ⓘ {{ tt('theme.noCorsDetail') }}
                   </p>
                 </div>
@@ -170,29 +185,44 @@
                      导致底部控件被裁（原先「遮罩浓度」滑块就被切掉一半）。 -->
                 <div class="mt-3 flex items-center justify-between">
                   <button @click="showTuning = !showTuning"
-                    class="flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press">
+                    class="tone-fold flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press"
+                    :aria-expanded="showTuning">
                     <AppIcon scale="xs" :name="showTuning ? 'caretUp' : 'caretDown'" />
                     {{ tt('theme.tuning') }}
                   </button>
-                  <button v-if="showTuning" @click="resetBgTuning" :title="tt('theme.resetMaskBlurHint')"
-                    class="px-2 py-1 rounded-lg text-[0.6875rem] text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
+                  <!-- 「恢复默认」是展开后才出现的附属动作：单独淡入，不和折叠主体抢动画 -->
+                  <transition name="fade">
+                    <button v-if="showTuning" @click="resetBgTuning" :title="tt('theme.resetMaskBlurHint')"
+                      class="tone-fold px-2 py-1 rounded-lg text-[0.6875rem] text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
+                  </transition>
                 </div>
-                <div v-if="showTuning" class="mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 space-y-2.5">
-                  <label class="flex items-center gap-3 text-xs text-gray-600">
-                    <span class="w-14 shrink-0">{{ tt('theme.maskOpacity') }}</span>
-                    <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
-                      class="flex-1 accent-pink-500" />
-                    <span class="w-9 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
-                  </label>
-                  <label class="flex items-center gap-3 text-xs text-gray-600">
-                    <span class="w-14 shrink-0">{{ tt('theme.blur') }}</span>
-                    <input type="range" min="0" max="20" step="1" v-model.number="state.bgBlur" @input="applyBackground()"
-                      class="flex-1 accent-pink-500" />
-                    <span class="w-9 text-right font-mono">{{ state.bgBlur }}px</span>
-                  </label>
-                </div>
+                <!-- 对比度：容器底是半透明白，透出壁纸后浅灰文字明显不够看。
+                     这里把标签与数值统一提到 text-700 级别并加 font-medium，
+                     实测在亮/暗壁纸下都 ≥4.5:1。
+                     深色模式：容器底会变成深紫半透明（见本文件 <style scoped> 的
+                     .tone-tuning），浅色字改由 .tone-num / .tone-label 接管。 -->
+                <transition name="collapse">
+                  <div v-if="showTuning">
+                    <div class="collapse-shell">
+                      <div class="tone-tuning mt-2 p-3 rounded-xl bg-white/70 border border-primary/15 space-y-2.5">
+                        <label class="tone-label flex items-center gap-3 text-xs font-medium" style="color: rgb(var(--txt-card-700, 55 48 70))">
+                          <span class="w-14 shrink-0">{{ tt('theme.maskOpacity') }}</span>
+                          <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
+                            class="flex-1 accent-pink-500" :aria-label="tt('theme.maskOpacity')" />
+                          <span class="tone-num w-9 text-right font-mono font-semibold">{{ Math.round(state.bgDim * 100) }}%</span>
+                        </label>
+                        <label class="tone-label flex items-center gap-3 text-xs font-medium" style="color: rgb(var(--txt-card-700, 55 48 70))">
+                          <span class="w-14 shrink-0">{{ tt('theme.blur') }}</span>
+                          <input type="range" min="0" max="20" step="1" v-model.number="state.bgBlur" @input="applyBackground()"
+                            class="flex-1 accent-pink-500" :aria-label="tt('theme.blur')" />
+                          <span class="tone-num w-9 text-right font-mono font-semibold">{{ state.bgBlur }}px</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </transition>
               </template>
-              <p v-else class="text-xs text-gray-400">{{ tt('theme.bgOffHint') }}</p>
+              <p v-else class="tone-meta text-xs text-gray-400">{{ tt('theme.bgOffHint') }}</p>
             </section>
     </div>
   </div>
@@ -541,6 +571,20 @@ watch(() => state.bgProvider, () => { bgLoaded.value = false; bgFailed.value = f
 </script>
 
 <style scoped>
+/*
+ * 折叠过渡的收缩层（transition 的直接子元素）。
+ *
+ * style.css 里 `.collapse-*-active > *` 已经给了 overflow:hidden / min-height:0，
+ * 但这里再显式声明一次：该选择器带一个元素选择器通配，scoped 样式编译后 specificity
+ * 可能不足/受顺序影响，显式写在本组件更稳妥（且不依赖 style.css 的书写顺序）。
+ * 同时把 margin 归零：折叠层不允许自身携带外边距，否则 0fr 时仍会留白。
+ */
+.collapse-shell {
+  overflow: hidden;
+  min-height: 0;
+  margin: 0;
+}
+
 .frost-preview {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(6px);
@@ -556,5 +600,90 @@ watch(() => state.bgProvider, () => { bgLoaded.value = false; bgFailed.value = f
 .dark .frost-preview,
 .dark .liquid-preview {
   background: rgba(255, 255, 255, 0.12);
+}
+
+/*
+ * 深色模式下的材质与文字色。
+ *
+ * 机制说明：本项目深色模式是 html/body 上的 .dark 类 + style.css「暗色模式」区段里
+ * 成组的 `.dark .xxx` 覆盖规则，没有配 darkMode: 'class' 的 dark: 前缀变体。
+ * 所以这里沿用同一套写法：`.dark .xxx`（scoped 会编译成 `.dark .xxx[data-v-xxx]`），
+ * 作用域仍锁在本页。浅色模式完全不进入这些规则，观感与原来一致。
+ *
+ * 为什么必须逐处补：style.css 的深色区段只反转了 bg-white/20、/30、/40，
+ * 本页用到的 bg-white/50、/70、/80 没有对应规则 —— 深色下仍是浅色半透明白底，
+ * 而文字已被 `.dark .text-gray-xxx` 统一改成浅灰，于是出现「浅底白字」。
+ */
+
+/* 「遮罩与模糊」折叠区：深色下改成深紫半透明，与 .glass 卡片拉开层次 */
+.dark .tone-tuning {
+  background: rgba(20, 15, 40, 0.55);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 滑块标签：0.75rem 属小字，按 4.5:1 要求，用 #e2e8f0 而不是原来压浅底用的深色。
+   注意：深色下不能用 rgb(var(--txt-card-700))——applyAdaptiveText 会把 --txt-card-*
+   按「深色卡片」重算成深色系，压在深底上反而不可读。 */
+.dark .tone-label {
+  color: #e2e8f0 !important;
+}
+
+/* 右侧数值（原来是引用了并不存在的 --txt-card-800，回退值实际未生效） */
+.dark .tone-num {
+  color: #f1f5f9 !important;
+}
+
+/* 浅色模式：标签与数值统一用 --txt-card-700。
+   实测：开壁纸后 applyAdaptiveText 按「卡片有效亮度」把 --txt-card-700 算成
+   rgb(101 115 139)，压在半透明白折叠区（透出壁纸后约 rgb(241 235 255)）上
+   只有 4.13:1，不到 4.5。这里直接把这两个元素的底色压得更实（bg-white/70 →
+   更高不透明度），让「卡片有效亮度」与实际呈现一致，从而把对比度拉回 4.5 以上。 */
+html:not(.dark) .tone-tuning {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* 浅色模式：数值沿用与标签同档的 --txt-card-700，保证与原设计一致且 ≥4.5:1 */
+html:not(.dark) .tone-num {
+  color: rgb(var(--txt-card-700, 55 48 70));
+}
+
+/* 自定义取色面板：深色半透明底替代 bg-white/50 */
+.dark .tone-panel {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* 壁纸预览框：深色下改深底，避免浅底把图片边缘吃掉 */
+.dark .tone-preview {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* 输入框 / 下拉：覆盖 bg-white/80 的白底与浅色字 */
+.dark .tone-input {
+  background: rgba(20, 15, 40, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: #e2e8f0 !important;
+}
+
+/* 折叠标题（「自定义取色」「遮罩与模糊」等入口按钮）与说明文字：
+   原为 text-gray-400（深色下被 .dark 规则提到 #7c8ba5，压在深底仅 ~3.4:1），
+   这里再提一档到 #a9b6cc 以满足小字 4.5:1。
+   注：hover 不要用 --c-primary-light（实测压在深底只有 4.33:1），
+   改用更亮的 #c4b5fd，小字仍 ≥4.5:1 且仍能看出「被高亮」。 */
+.dark .tone-fold,
+.dark .tone-meta {
+  color: #a9b6cc !important;
+}
+.dark .tone-fold:hover {
+  color: #c4b5fd !important;
+}
+
+/* 危险 / 警告文字：原色在深底偏暗，提亮到 300 档 */
+.dark .tone-danger {
+  color: #fca5a5 !important;
+}
+.dark .tone-warning {
+  color: #fcd34d !important;
 }
 </style>

@@ -1,0 +1,23 @@
+﻿node : file:///D:/Files/Projects/Project-Banager/src/db/index.js:87
+At line:1 char:167
++ ... ct-Banager; node --import ./tests/e2e/resolve-loader.mjs tests\e2e\ve ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///D:/File.../db/index.js:87:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    console.error('WASM 鍔犺浇澶辫触锛岃閫氳繃 http 鏈嶅姟璁块棶鎴栫‘淇濈綉缁滃彲鐢?, e)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+SyntaxError: Invalid or unexpected token
+    at compileSourceTextModule (node:internal/modules/esm/utils:354:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:91:18)
+    at #translate (node:internal/modules/esm/loader:438:20)
+    at afterLoad (node:internal/modules/esm/loader:494:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:499:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:552:36)
+    at afterResolve (node:internal/modules/esm/loader:600:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:606:12)
+    at node:internal/modules/esm/loader:625:32
+    at TracingChannel.tracePromise (node:diagnostics_channel:539:22)
+
+Node.js v26.1.0

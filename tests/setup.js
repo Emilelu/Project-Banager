@@ -20,7 +20,8 @@ import { config } from '@vue/test-utils'
 import AppIcon from '../src/components/AppIcon.vue'
 import TagSelector from '../src/components/TagSelector.vue'
 import TagFilter from '../src/components/TagFilter.vue'
-config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter }
+import ColorPicker from '../src/components/ColorPicker.vue'
+config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter, ColorPicker }
 
 // jsdom 缺失的浏览器 API 兜底
 if (typeof window !== 'undefined') {

@@ -12,27 +12,32 @@
       <div class="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-white/5"></div>
       <div class="absolute bottom-20 -right-8 w-24 h-24 rounded-full bg-secondary/10"></div>
 
-      <!-- Logo区域：收起时只显示 logo（居中） -->
+      <!-- Logo区域：logo 本身就是折叠/展开按钮。
+           悬浮时 logo 淡出、面板图标淡入（同一位置、同一尺寸，无位移跳动），
+           这样既省掉了独立按钮占用的垂直空间，交互入口也更容易发现。 -->
       <div class="relative z-10 border-b border-white/10"
         :class="sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-4'">
         <div class="flex items-center gap-3" :class="sidebarCollapsed ? 'justify-center' : ''">
-          <img :src="logoUrl" alt="PBM Logo" class="w-8 h-8 rounded-lg shrink-0" width="32" height="32" />
+          <button type="button" @click="toggleSidebar"
+            class="relative w-8 h-8 rounded-lg shrink-0 overflow-hidden group cursor-pointer
+                   focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            :class="'logo-toggle'"
+            :aria-label="sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse')"
+            :aria-expanded="!sidebarCollapsed"
+            @mouseenter="showSidebarTip($event, sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse'))"
+            @mouseleave="hideSidebarTip" @focus="showSidebarTip($event, sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse'))"
+            @blur="hideSidebarTip">
+            <img :src="logoUrl" alt="PBM Logo" width="32" height="32"
+              class="absolute inset-0 w-full h-full rounded-lg object-cover transition-opacity duration-200 group-hover:opacity-0 group-focus-visible:opacity-0" />
+            <span class="absolute inset-0 flex items-center justify-center rounded-lg text-white/70 transition-opacity duration-200 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 bg-white/15">
+              <AppIcon scale="sm" :name="sidebarCollapsed ? 'panelRight' : 'panelLeft'" />
+            </span>
+          </button>
           <div v-if="!sidebarCollapsed" class="min-w-0 flex-1">
             <h1 class="text-white text-base font-bold tracking-wide truncate">{{ tt('app.title') }}</h1>
             <p class="text-white/50 text-xs truncate">{{ tt('app.subtitle') }}</p>
           </div>
         </div>
-        <!-- 折叠按钮单独一行：位置固定，不随 logo 尺寸/文案变化而漂移。
-             用 panelLeft / panelRight 图标，方向语义与「收起 / 展开」一致。 -->
-        <button @click="toggleSidebar"
-          class="mt-2 w-full h-7 rounded-lg flex items-center gap-1.5 text-white/50 hover:text-white hover:bg-white/10 transition btn-press"
-          :class="sidebarCollapsed ? 'justify-center' : 'justify-center'"
-          :aria-label="sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse')"
-          :aria-expanded="!sidebarCollapsed"
-          :title="sidebarCollapsed ? tt('sidebar.expand') : tt('sidebar.collapse')">
-          <AppIcon scale="sm" :name="sidebarCollapsed ? 'panelRight' : 'panelLeft'" />
-          <span v-if="!sidebarCollapsed" class="text-xs truncate">{{ tt('sidebar.collapse') }}</span>
-        </button>
       </div>
 
       <!-- 导航菜单（分区渲染） -->
@@ -53,10 +58,12 @@
                 : 'text-white/60 hover:bg-white/10 hover:text-white',
               sidebarCollapsed ? 'justify-center px-2 py-3.5' : 'px-4 py-3.5'
             ]"
-            :title="sidebarCollapsed ? tt(item.labelKey) : undefined">
+            @mouseenter="sidebarCollapsed && showSidebarTip($event, tt(item.labelKey))"
+            @mouseleave="hideSidebarTip" @focus="sidebarCollapsed && showSidebarTip($event, tt(item.labelKey))"
+            @blur="hideSidebarTip">
           <!-- 导航图标与文字**都要跟随整条导航项一起缩放**（见 .nav-item）。
                踩坑：早先给图标单独加 group-hover:scale-110，文字只跟 1.02 的整体缩放，
-               两者倍率不同 → 悬浮时"图标放大了、文字没跟上"，看起来没一起动。
+               两者倍率不同 → 悬浮时「图标放大了、文字没跟上」，看起来没一起动。
                现在去掉图标的独立 scale，统一由 .nav-item 整体 transform 驱动。 -->
             <AppIcon scale="md" :class="sidebarCollapsed ? '' : 'mr-3'" :name="item.icon" />
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt(item.labelKey) }}</span>
@@ -70,74 +77,96 @@
 
       <!-- 底部数据操作：收起时改为竖排图标按钮，与导航图标列对齐 -->
       <div class="relative z-10 border-t border-white/10 space-y-2"
-        :class="sidebarCollapsed ? 'px-2 py-2' : 'px-4 py-3'">
-        <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'flex gap-2'">
-          <!-- 导出备份：上次备份时间改为悬浮气泡，不再常驻占位 -->
-          <div class="relative flex-1 group"
-            @mouseenter="showBackupTip = true" @mouseleave="showBackupTip = false">
-            <button @click="exportDb" class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-              :aria-label="tt('sidebar.exportBackup')"
-              :aria-describedby="'backup-tip'"
-              @focus="showBackupTip = true" @blur="showBackupTip = false">
-              <AppIcon scale="sm" name="download" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportBackupShort') }}</span>
+        :class="sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-3'">
+        <!-- 第三分区标题「数据」：导入 / 导出其实就在这个分区里，
+             但它们已经是底部常驻按钮，不再作为导航项重复出现在 navGroups
+             （旧「导入Excel」导航项已删除，Excel 导入改由这里的导入菜单触发）。
+             标题样式与上面 navGroups 的分区标题保持一致；收起时同样隐藏，
+             改由容器上的 border-t 作分隔。 -->
+        <div v-if="!sidebarCollapsed"
+          class="px-3 text-[0.6875rem] font-semibold uppercase tracking-wider text-white/40">
+          {{ tt('nav.groupData') }}
+        </div>
+        <!-- 导入 / 导出：两枚同级按钮，各自弹出菜单。
+             「能导出什么就能导入什么」—— 导出菜单有 5 种格式，导入菜单同样列 5 种。
+             原先「导出备份」与「导出数据」功能重复（.db 已在导出菜单里），已合并为一。
+             ⚠️ 两枚按钮的文案必须同长度（都只留两字 / 一个词）：
+             grid-cols-2 让两枚按钮天然等宽，文案长度不一就会把长的那枚截断成省略号。
+             测量脚本 tests/e2e/verify-sb-*.mjs 守住「等宽 + 不截断」这条不变量。 -->
+        <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'grid grid-cols-2 gap-2'">
+          <!-- 导入 -->
+          <div class="relative">
+            <button ref="importTriggerRef" @click="toggleImportMenu"
+              class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+              :aria-label="tt('sidebar.import')"
+              :aria-expanded="showImportMenu" aria-haspopup="menu"
+              @mouseenter="sidebarCollapsed && showSidebarTip($event, tt('sidebar.import'))"
+              @mouseleave="hideSidebarTip"
+              @focus="sidebarCollapsed && showSidebarTip($event, tt('sidebar.import'))"
+              @blur="hideSidebarTip">
+              <AppIcon scale="sm" name="folderOpen" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.importShort') }}</span>
+              <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showImportMenu ? 'caretUp' : 'caretDown'" />
             </button>
-            <!-- 气泡用 fixed + 动态坐标：侧栏仅 240px，长文案（尤其中日）绝对居中会横向溢出页面。
-                 必须 Teleport 到 body：祖先若带 backdrop-filter(.glass)，会成为 fixed 的包含块，
-                 导致坐标相对该元素而非视口（实测偏差近 200px）。 -->
             <Teleport to="body">
-              <!-- 气泡改用 app-menu-surface（0.82 白实底 + 强模糊）：
-                   原先用 .glass 时底太透，橙色警示文字压在浅色壁纸上对比度不足。
-                   文字色同时加深（amber-700 / gray-700），保证 ≥4.5:1。 -->
-              <div id="backup-tip" ref="backupTipRef" role="tooltip"
-                class="pointer-events-none fixed z-[120] px-3 py-2 rounded-xl app-menu-surface border border-white/40 text-xs transition-opacity duration-200 max-w-[min(22rem,calc(100vw-1rem))]"
-                :class="showBackupTip ? 'opacity-100' : 'opacity-0'"
-                :style="backupTipStyle">
-                <span :class="backupWarning ? 'text-amber-800 font-semibold' : 'text-gray-700 font-medium'">
-                  {{ tt('sidebar.lastBackup') }}：{{ backupLabel }}
-                </span>
-                <span v-if="backupWarning" class="flex items-center gap-1 text-amber-800 font-semibold mt-0.5"><AppIcon scale="xs" name="warning" />{{ tt('sidebar.backupWarning') }}</span>
-              </div>
+              <div v-if="showImportMenu" class="fixed inset-0 z-[100]" @click="showImportMenu = false"></div>
+              <transition name="pop">
+                <div v-if="showImportMenu" ref="importMenuRef" role="menu"
+                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
+                  style="--pop-origin-y: top; --pop-from-y: -6px" :style="importMenuStyle">
+                  <button v-for="fmt in importFormats" :key="fmt.key" role="menuitem"
+                    @click="importData(fmt.key)"
+                    class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
+                    <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
+                    <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
+                  </button>
+                </div>
+              </transition>
             </Teleport>
           </div>
-          <div class="relative flex-1">
-            <button @click="triggerImportDb" class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-              :aria-label="tt('sidebar.importBackup')" :title="tt('sidebar.importTitle')">
-              <AppIcon scale="sm" name="folderOpen" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.importBackupShort') }}</span>
+
+          <!-- 导出 -->
+          <div class="relative">
+            <button ref="exportTriggerRef" @click="toggleExportMenu"
+              class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
+              :aria-label="tt('sidebar.exportData')"
+              :aria-expanded="showExportMenu" aria-haspopup="menu"
+              @mouseenter="sidebarCollapsed && showSidebarTip($event, tt('sidebar.exportData'))"
+              @mouseleave="hideSidebarTip"
+              @focus="sidebarCollapsed && showSidebarTip($event, tt('sidebar.exportData'))"
+              @blur="hideSidebarTip">
+              <AppIcon scale="sm" name="log" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportDataShort') }}</span>
+              <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showExportMenu ? 'caretUp' : 'caretDown'" />
             </button>
+            <Teleport to="body">
+              <div v-if="showExportMenu" class="fixed inset-0 z-[100]" @click="showExportMenu = false"></div>
+              <transition name="pop">
+                <div v-if="showExportMenu" ref="exportMenuRef" role="menu"
+                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
+                  :style="exportMenuStyle">
+                  <button v-for="fmt in exportFormats" :key="fmt.key" role="menuitem"
+                    @click="exportData(fmt.key)"
+                    class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
+                    <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
+                    <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
+                  </button>
+                </div>
+              </transition>
+            </Teleport>
           </div>
         </div>
-        <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak" class="hidden" @change="onBackupFileChosen" />
-
-        <!-- 导出数据（Excel / JSON）：与「导出备份」分开 ——
-             备份是 .db 用于整库迁移恢复，这里是**可读的表格/结构化数据**，
-             便于在 Excel 里查看或给别的工具处理。 -->
-        <div class="relative">
-          <button ref="exportTriggerRef" @click="toggleExportMenu"
-            class="w-full flex items-center justify-center gap-1 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
-            :aria-label="tt('sidebar.exportData')"
-            :aria-expanded="showExportMenu" aria-haspopup="menu">
-            <AppIcon scale="sm" name="log" /><span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.exportDataShort') }}</span>
-            <AppIcon v-if="!sidebarCollapsed" scale="xs" :name="showExportMenu ? 'caretUp' : 'caretDown'" />
-          </button>
-          <Teleport to="body">
-            <div v-if="showExportMenu" class="fixed inset-0 z-[100]" @click="showExportMenu = false"></div>
-            <transition name="pop">
-              <div v-if="showExportMenu" ref="exportMenuRef" role="menu"
-                class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[9rem]"
-                :style="exportMenuStyle">
-                <!-- 五种格式统一由一个按钮的下拉菜单提供：
-                     xlsx/csv 适合 Excel 查看，json 适合程序处理，
-                     md 适合贴到笔记，db 是整库备份（等价于原来的「导出备份」）。 -->
-                <button v-for="fmt in exportFormats" :key="fmt.key" role="menuitem"
-                  @click="exportData(fmt.key)"
-                  class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-700 transition hover:bg-primary/10 whitespace-nowrap">
-                  <AppIcon scale="xs" :name="fmt.icon" class="text-primary shrink-0" />
-                  <span class="flex-1">{{ tt(fmt.labelKey) }}</span>
-                </button>
-              </div>
-            </transition>
-          </Teleport>
-        </div>
+        <!-- 上次备份时间：收进导出按钮的悬浮气泡，不再单独占一行 -->
+        <Teleport to="body">
+          <div id="backup-tip" ref="backupTipRef" role="tooltip"
+            class="pointer-events-none fixed z-[120] px-3 py-2 rounded-xl app-menu-surface border border-white/40 text-xs transition-opacity duration-200 max-w-[min(22rem,calc(100vw-1rem))]"
+            :class="showBackupTip ? 'opacity-100' : 'opacity-0'"
+            :style="backupTipStyle">
+            <span :class="backupWarning ? 'text-amber-800 font-semibold' : 'text-gray-700 font-medium'">
+              {{ tt('sidebar.lastBackup') }}：{{ backupLabel }}
+            </span>
+            <span v-if="backupWarning" class="flex items-center gap-1 text-amber-800 font-semibold mt-0.5"><AppIcon scale="xs" name="warning" />{{ tt('sidebar.backupWarning') }}</span>
+          </div>
+        </Teleport>
+        <input ref="fileInputRef" type="file" accept=".db,.sqlite,.bak,.xlsx,.xls,.csv,.json,.md" class="hidden" @change="onBackupFileChosen" />
         <div v-if="!sidebarCollapsed" class="flex items-center justify-center gap-2 text-white/30 text-xs">
           <AppIcon scale="xs" name="sparkle" />
           <span>{{ appVersion }}</span>
@@ -145,6 +174,18 @@
         </div>
       </div>
     </aside>
+
+    <!-- sidebar tooltip: shown only when sidebar collapsed -->
+    <Teleport to="body">
+      <transition name="fade">
+        <div v-if="sidebarTip.show" role="tooltip"
+          class="pointer-events-none fixed z-[130] px-2.5 py-1.5 rounded-lg app-menu-surface border border-white/40
+                 text-xs font-medium text-gray-700 whitespace-nowrap shadow-lg"
+          :style="{ left: sidebarTip.left + 'px', top: sidebarTip.top + 'px', transform: 'translateY(-50%)' }">
+          {{ sidebarTip.text }}
+        </div>
+      </transition>
+    </Teleport>
 
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col overflow-hidden">
@@ -326,6 +367,50 @@
         </div>
       </transition>
     </Teleport>
+
+    <!-- 结构化导入结果（csv / json / md）：只写业务数据，不覆盖数据库，故无需二次确认 -->
+    <Teleport to="body">
+      <transition name="modal-overlay">
+        <div v-if="showImportResult" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[8px]" @click="showImportResult = false"></div>
+      </transition>
+      <transition name="modal">
+        <div v-if="showImportResult" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div class="relative glass rounded-2xl shadow-2xl w-[min(30rem,calc(100vw-2rem))] max-h-[80vh] flex flex-col border border-white/40 pointer-events-auto"
+            role="dialog" aria-modal="true" aria-labelledby="import-result-title">
+            <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 shrink-0">
+              <AppIcon scale="lg" :name="importResult?.failed ? 'warning' : 'check'" />
+              <h3 id="import-result-title" class="text-lg font-bold gradient-text">{{ tt('importResult.title') }}</h3>
+            </div>
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
+                  <div class="text-lg font-bold text-primary">{{ importResult?.imported ?? 0 }}</div>
+                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.imported') }}</div>
+                </div>
+                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
+                  <div class="text-lg font-bold" :class="importResult?.failed ? 'text-danger' : 'text-gray-400'">{{ importResult?.failed ?? 0 }}</div>
+                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.failed') }}</div>
+                </div>
+                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
+                  <div class="text-lg font-bold text-gray-700">{{ (importResult?.byTable?.watching ?? 0) + (importResult?.byTable?.remaining ?? 0) + (importResult?.byTable?.watched ?? 0) }}</div>
+                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.total') }}</div>
+                </div>
+              </div>
+              <div v-if="importResult?.errors?.length" class="text-xs text-danger space-y-1">
+                <div v-for="(e, i) in importResult.errors.slice(0, 30)" :key="i">· {{ e }}</div>
+                <div v-if="importResult.errors.length > 30" class="text-gray-500">
+                  {{ tt('importResult.moreErrors', { count: importResult.errors.length - 30 }) }}
+                </div>
+              </div>
+            </div>
+            <div class="px-6 py-4 border-t border-white/20 flex justify-end shrink-0">
+              <button @click="showImportResult = false"
+                class="btn-base btn-primary">{{ tt('common.confirm') }}</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -338,6 +423,7 @@ import {
   buildExportWorkbook, buildExportCsv, buildExportJson, buildExportMarkdown,
   downloadBlob, exportTimestamp,
 } from './db/excelExporter'
+import { importStructured } from './db/structuredImporter'
 import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
 import HelpDialog from './components/HelpDialog.vue'
@@ -354,6 +440,42 @@ const appVersion = `v${__APP_VERSION__}`
 const REPO_URL = 'https://github.com/Emilelu/Project-Banager'
 const showBackupTip = ref(false)
 const showTimeTip = ref(false)
+
+// ===== 侧边栏收起态悬浮气泡 =====
+// 收起后导航只剩图标，必须靠气泡告知"这个图标是什么"。
+// 用 Teleport + fixed 定位：侧栏 overflow 隐藏且带 backdrop-filter，
+// 在其内部做绝对定位会被裁掉。
+const sidebarTip = ref({ show: false, text: '', left: 0, top: 0 })
+
+const showSidebarTip = (e, text) => {
+  if (!text) return
+  const el = e?.currentTarget || e?.target
+  const r = el?.getBoundingClientRect()
+  if (!r) return
+  sidebarTip.value = {
+    show: true,
+    text,
+    left: Math.round(r.right + 8),
+    top: Math.round(r.top + r.height / 2),
+  }
+}
+
+const hideSidebarTip = () => {
+  sidebarTip.value = { ...sidebarTip.value, show: false }
+}
+
+/**
+ * 「导出备份」按钮获得焦点（键盘 Tab 或点击）时的气泡处理。
+ * 展开态显示「上次备份时间」提示，收起态显示菜单名称（此时按钮没有可见文字）。
+ * 两者互斥，避免同一位置叠两个气泡。
+ */
+const onExportBackupFocus = (e) => {
+  if (sidebarCollapsed.value) {
+    showSidebarTip(e, tt('sidebar.exportBackup'))
+  } else {
+    showBackupTip.value = true
+  }
+}
 
 // ===== 导出数据（Excel / JSON）=====
 // 与「导出备份」(.db) 区分：备份用于整库迁移恢复，这里是给人看/给别的工具处理的表格
@@ -394,9 +516,46 @@ const measureExportMenu = () => {
   exportMenuPos.value = { left: Math.round(left), top: Math.round(top) }
 }
 
+// ===== 导入菜单 =====
+// 与导出菜单对等：能导出什么就能导入什么。
+const showImportMenu = ref(false)
+const importMenuRef = ref(null)
+const importTriggerRef = ref(null)
+const importMenuPos = ref({ left: 0, top: 0 })
+
+const importMenuStyle = computed(() => ({
+  left: `${importMenuPos.value.left}px`,
+  top: `${importMenuPos.value.top}px`,
+}))
+
+const measureImportMenu = () => {
+  const btn = importTriggerRef.value
+  const menu = importMenuRef.value
+  if (!btn) return
+  const b = btn.getBoundingClientRect()
+  const w = menu?.offsetWidth || 150
+  const h = menu?.offsetHeight || 90
+  const gap = 6
+  const margin = 8
+  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
+  let top = b.top - h - gap
+  if (top < margin) top = b.bottom + gap
+  importMenuPos.value = { left: Math.round(left), top: Math.round(top) }
+}
+
+const toggleImportMenu = async () => {
+  showImportMenu.value = !showImportMenu.value
+  if (showImportMenu.value) {
+    showExportMenu.value = false
+    await nextTick()
+    measureImportMenu()
+  }
+}
+
 const toggleExportMenu = async () => {
   showExportMenu.value = !showExportMenu.value
   if (showExportMenu.value) {
+    showImportMenu.value = false
     await nextTick()
     measureExportMenu()
   }
@@ -423,6 +582,32 @@ const exportFormats = [
   { key: 'md', labelKey: 'sidebar.exportMd', icon: 'note' },
   { key: 'db', labelKey: 'sidebar.exportDb', icon: 'download' },
 ]
+
+/**
+ * 导入格式清单 —— 与导出格式一一对应（能导出什么就能导入什么）。
+ * 目前 xlsx 走既有的 excelImporter；db 走整库恢复；
+ * csv/json/md 走「结构化回灌」（见 db/structuredImporter.js）。
+ */
+const importFormats = [
+  { key: 'xlsx', labelKey: 'sidebar.importXlsx', icon: 'log', accept: '.xlsx,.xls' },
+  { key: 'csv', labelKey: 'sidebar.importCsv', icon: 'log', accept: '.csv' },
+  { key: 'json', labelKey: 'sidebar.importJson', icon: 'note', accept: '.json' },
+  { key: 'md', labelKey: 'sidebar.importMd', icon: 'note', accept: '.md' },
+  { key: 'db', labelKey: 'sidebar.importDb', icon: 'download', accept: '.db,.sqlite,.bak' },
+]
+
+const importData = (kind) => {
+  showImportMenu.value = false
+  const fmt = importFormats.find(f => f.key === kind)
+  if (!fmt) return
+  // 复用同一个隐藏 input，只切换 accept 与模式标记
+  importMode.value = kind
+  if (fileInputRef.value) {
+    fileInputRef.value.accept = fmt.accept
+    fileInputRef.value.value = ''
+    fileInputRef.value.click()
+  }
+}
 
 const exportData = async (kind) => {
   showExportMenu.value = false
@@ -612,6 +797,9 @@ const onResizeLang = () => {
   if (showLangMenu.value) measureLangMenu()
 }
 const fileInputRef = ref(null)
+// 当前导入格式（'db' | 'xlsx' | 'csv' | 'json' | 'md'），由导入菜单设置，
+// 文件选择回调据此决定走整库恢复还是结构化回灌。
+const importMode = ref('db')
 const showHelp = ref(false)
 
 const appearance = useAppearance()
@@ -662,6 +850,9 @@ function triggerImportDb() {
 
 // 选择备份文件后弹确认框（替代原生 confirm）
 const showImportConfirm = ref(false)
+// 结构化导入（csv/json/md）的结果弹窗：逐条汇总成功/失败数，失败原因可展开查看
+const showImportResult = ref(false)
+const importResult = ref(null)
 const pendingImportFile = ref(null)
 
 // 导入确认弹窗：打开聚焦弹窗内首个按钮、Esc 关闭、关闭后焦点还给触发按钮
@@ -672,9 +863,25 @@ useDialogFocus({
   onEscape: () => cancelImport(),
 })
 
+/**
+ * 选定文件后的分派：
+ *   db         → 走整库恢复确认弹窗（覆盖前会导出一份回滚快照）
+ *   xlsx       → 走既有 Excel 导入页（它带完整的预览/冲突处理 UI）
+ *   csv/json/md→ 走结构化回灌
+ * 用户在菜单里选的是格式，这里据此决定后续流程，避免"选 csv 却按 db 处理"。
+ */
 function onBackupFileChosen(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  const mode = importMode.value || 'db'
+
+  if (mode !== 'db') {
+    // 非整库格式：交给对应的导入流程
+    handleStructuredImport(file, mode)
+    if (fileInputRef.value) fileInputRef.value.value = ''
+    return
+  }
+
   pendingImportFile.value = file
   showImportConfirm.value = true
 }
@@ -683,6 +890,22 @@ function cancelImport() {
   showImportConfirm.value = false
   pendingImportFile.value = null
   if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+/**
+ * 结构化回灌（csv / json / md）。
+ * 与整库恢复不同：这些格式只包含业务数据，不覆盖数据库文件本身，
+ * 因此不需要「覆盖确认」弹窗，而是直接逐条写入并汇报结果。
+ */
+async function handleStructuredImport(file, kind) {
+  try {
+    const res = await importStructured(file, kind)
+    importResult.value = res
+    showImportResult.value = true
+  } catch (e) {
+    console.error('[structured import] failed:', e)
+    showToast(tt('toast.importFailed', { message: e?.message || 'unknown' }), 'error')
+  }
 }
 
 // 从备份文件恢复数据库
@@ -739,20 +962,27 @@ const themeLabel = computed(() => {
 })
 
 /**
- * 侧边导航分区：
- *   data      — 追番 / 等番 / 已看 / 导入（日常主流程）
- *   appearance— 主题背景 / 标签管理（低频设置项）
+ * 侧边导航分区（可滚动区只放「番单」与「设置」两组）：
+ *   lists     — 正在追番 / 等待更新 / 已看历史（日常主流程，最高频）
+ *   appearance— 主题与背景 / 标签管理（低频设置项）
+ *
+ * 第三组「数据」（导入 / 导出）**故意不在 navGroups 里**：
+ * 那两个入口是固定在侧栏底部的常驻按钮（见模板底部数据区），
+ * 若再作为导航项列一次就是同一功能两个入口。
+ * 因此旧的「导入Excel」导航项（/import）已从这里移除 —— 路由与 ImportView.vue
+ * 仍然保留（老书签 / 直链仍可打开），只是不再从侧栏进入；
+ * Excel 导入统一走底部「导入」菜单 → Excel 表格 (.xlsx)。
+ *
  * 分区让「每天用的」和「偶尔调的」在视觉上分层，不再是一长条平铺菜单。
  */
 const navGroups = [
   {
-    key: 'data',
-    labelKey: 'nav.groupData',
+    key: 'lists',
+    labelKey: 'nav.groupLists',
     items: [
       { path: '/watching', labelKey: 'nav.watching', icon: 'tv' },
       { path: '/remaining', labelKey: 'nav.remaining', icon: 'clock' },
       { path: '/watched', labelKey: 'nav.watched', icon: 'book' },
-      { path: '/import', labelKey: 'nav.import', icon: 'upload' },
     ],
   },
   {
@@ -767,6 +997,16 @@ const navGroups = [
 
 // 扁平化后用于「当前页标题/图标」查找
 const navItems = navGroups.flatMap(g => g.items)
+
+/**
+ * 仍保留路由、但不再出现在侧栏的页面（仅用于顶栏标题/图标解析）。
+ * /import：Excel 导入已并入侧栏底部「导入」菜单，侧栏不再有导航项，
+ * 但直接访问 #/import（老书签）时仍要显示正确的标题与图标，不能掉成 app.title。
+ */
+const orphanNavItems = [
+  { path: '/import', labelKey: 'nav.import', icon: 'upload' },
+]
+const allNavItems = [...navItems, ...orphanNavItems]
 
 // ===== 侧边栏折叠 =====
 // 持久化到 localStorage：用户收起后重开页面仍是收起状态，不必每次再点。
@@ -784,12 +1024,12 @@ const toggleSidebar = () => {
 }
 
 const currentTitle = computed(() => {
-  const item = navItems.find(n => n.path === route.path)
+  const item = allNavItems.find(n => n.path === route.path)
   return item ? tt(item.labelKey) : tt('app.title')
 })
 
 const currentIcon = computed(() => {
-  const item = navItems.find(n => n.path === route.path)
+  const item = allNavItems.find(n => n.path === route.path)
   return item ? item.icon : 'tv'
 })
 

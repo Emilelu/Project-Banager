@@ -126,6 +126,27 @@ const buttonByExact = (scope, text) =>
 
 const buttonByContains = buttonByText
 
+/**
+ * 通过「导出」菜单触发 .db 导出。
+ * 侧边栏把「导出备份」与「导出数据」合并成一个下拉菜单后，
+ * 不能再直接找「导出备份」按钮 —— 需要先开菜单、再点「数据库备份 (.db)」项。
+ * 菜单 Teleport 到 body，因此从 document 里找而不是 wrapper。
+ */
+const triggerExportDbViaMenu = async (wrapperRef) => {
+  // 用 includes 而非严格相等：导出按钮除文案外还带一个 caret 图标，
+  // 且文案会随 i18n 调整（曾从「导出数据」缩为「导出」），严格相等太脆。
+  const exportBtn = wrapperRef.findAll('button').find(b => /导出/.test(b.text()))
+  if (!exportBtn) throw new Error('找不到「导出」按钮')
+  await exportBtn.trigger('click')
+  await flushPromises()
+  // 菜单项在 body 上
+  const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
+    .find(el => el.textContent.includes('.db'))
+  if (!item) throw new Error('找不到「数据库备份 (.db)」菜单项')
+  item.click()
+  await flushPromises()
+}
+
 const dialogButton = (text) => {
   const dlg = document.querySelector('.app-dialog')
   if (!dlg) return null
@@ -927,7 +948,7 @@ describe('App · 备份导出与恢复', () => {
 
   it('导出备份：生成 Blob、按时间戳命名并记录上次备份时间', async () => {
     await mountApp()
-    await buttonByContains(wrapper, '导出备份').trigger('click')
+    await triggerExportDbViaMenu(wrapper)
     await flushPromises()
 
     expect(dbMock.export).toHaveBeenCalled()
@@ -945,8 +966,7 @@ describe('App · 备份导出与恢复', () => {
   it('导出备份后延迟释放 blob URL，避免下载被中断', async () => {
     vi.useFakeTimers()
     await mountApp()
-    await buttonByContains(wrapper, '导出备份').trigger('click')
-    await flushPromises()
+    await triggerExportDbViaMenu(wrapper)
     vi.advanceTimersByTime(1600)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
     vi.useRealTimers()
@@ -957,8 +977,7 @@ describe('App · 备份导出与恢复', () => {
       throw new Error('disk full')
     })
     await mountApp()
-    await buttonByContains(wrapper, '导出备份').trigger('click')
-    await flushPromises()
+    await triggerExportDbViaMenu(wrapper)
 
     expect(toasts.some((t) => t.type === 'error' && /导出失败/.test(t.message))).toBe(true)
     expect(localStorage.getItem('banager_last_backup')).toBeNull()

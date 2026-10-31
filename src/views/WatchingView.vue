@@ -21,15 +21,20 @@
              全部元素共处一组后，任一元素出入场时其余元素都会平滑归位（.sel-anim-move）。 -->
         <!-- 注意：tag 容器不能是 display:contents —— 那样元素不参与布局，
              Vue 的 -move 位移计算失去参照，归位动画不会播放。用正常 flex 盒子。 -->
-        <transition-group name="sel-anim" tag="div" class="flex items-center gap-2 flex-wrap">
+        <transition-group name="sel-anim" tag="div" class="sel-anim-wrap flex items-center gap-2 flex-wrap">
         <button key="add" @click="openAddDialog" class="btn-base btn-primary">
           <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
         </button>
 
-        <button v-for="btn in selectedActions" :key="btn.key" v-if="!!selected" @click="btn.onClick"
-          class="btn-base" :class="btn.cls">
-          <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
-        </button>
+        <!-- v-for 放 template、v-if 放 button：
+             v-if 与 v-for 同元素时 v-if 优先，会跳过整个循环，
+             transition-group 无法配对进出场 → 取消选中时按钮瞬间消失、其余按钮瞬间跳位。 -->
+        <template v-for="btn in selectedActions" :key="btn.key">
+          <button v-if="!!selected" @click="btn.onClick"
+            class="btn-base" :class="btn.cls">
+            <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
+          </button>
+        </template>
 
         <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
         <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
@@ -1087,3 +1092,37 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
 })
 </script>
+
+<style scoped>
+/* 工具栏 transition-group 的「归位」动画（FLIP）能否播放，取决于两件事：
+   1. 离场元素必须立刻脱离文档流（position: absolute）；
+   2. 其余元素的位置变化必须发生在 ·-move· 类生效的那一帧。
+
+   只做 1 的解释：Vue 的 TransitionGroup 在 patch 结束后的 onUpdated 里，
+   先记录每个现存子元素的新位置，再用「旧位置 - 新位置」给它们打上临时
+   translate，最后加 sel-anim-move 类让 transform 过渡回 0（含 0.22s）。
+   但 .sel-anim-leave-active 只过渡 opacity/transform/max-height/margin/padding，
+   并没有让离场按钮退出布局：6 个专属按钮在离场期间仍各自占据 74~98px 宽的位置，
+   于是「批量选择」等按钮的旧位置与新位置完全相同 → Vue 判定 dx=0，
+   不加 -move 类、也不写 translate → 视觉上就是瞬间跳位。
+
+   这里给离场元素 position: absolute 让它脱离文档流（配合下面的
+   sel-anim-wrap 作为定位参照，宽度不变就不会跳到别的行），
+   其余按钮才能真正产生位移并被 -move 平滑带动。 */
+.sel-anim-leave-active {
+  position: absolute;
+  pointer-events: none;
+  /* 离场按钮已脱离文档流，但 Vue 的 FLIP 会把「上一次渲染过的子元素」
+     一并打上 translate —— 包括正在离场的这几个。若不锁住 transform，
+     它们会跟着其余按钮一起向左滑走，半透明地压在新位置的按钮上。
+     锁成 none 后它们原地淡出，视觉上是「原地消失 + 其余按钮滑入。 */
+  transform: none !important;
+}
+
+/* 离场元素 absolute 后的定位参照：固定宽度、不参与换行计算。
+   注意不要写成 display: contents —— 那样子元素不参与布局，
+   Vue 的 -move 位移测量会失去参照，归位动画同样不会播放。 */
+.sel-anim-wrap {
+  position: relative;
+}
+</style>

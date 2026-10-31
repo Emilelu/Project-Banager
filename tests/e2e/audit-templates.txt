@@ -1,0 +1,29 @@
+vue files=14 textNodes=370 cjkTextNodes=0 attrs=2601 cjkAttrs=0
+
+===== src/App.vue =====
+
+===== src/components/AppIcon.vue =====
+
+===== src/components/ColorPicker.vue =====
+
+===== src/components/HelpDialog.vue =====
+
+===== src/components/TagFilter.vue =====
+
+===== src/components/TagSelector.vue =====
+
+===== src/components/ToastHost.vue =====
+
+===== src/components/WatchingCard.vue =====
+
+===== src/views/AppearanceView.vue =====
+
+===== src/views/ImportView.vue =====
+
+===== src/views/RemainingView.vue =====
+
+===== src/views/TagsView.vue =====
+
+===== src/views/WatchedView.vue =====
+
+===== src/views/WatchingView.vue =====

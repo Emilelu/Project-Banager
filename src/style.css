@@ -267,11 +267,16 @@ tr[draggable='true'] {
 }
 .seg-btn.seg-idle {
   background: rgba(255, 255, 255, 0.5);
-  border-color: rgba(var(--c-primary), 0.18);
+  /* 注意：不能用 rgba(var(--c-primary), 0.18) —— --c-primary 是「R G B」三元组，
+     套进 rgba() 会拼成 rgba(197 152 89, 0.18)，是**非法语法**，
+     整条声明被浏览器丢弃，边框色于是回退到 Tailwind preflight 的 currentColor，
+     表现为「边框是文字色（深灰蓝）」而不是主题色的淡描边。
+     正确写法是 rgb(var(--c-primary) / 0.18)。 */
+  border-color: rgb(var(--c-primary) / 0.18);
   color: rgb(var(--txt-card-500, 55 65 81));
 }
 .seg-btn.seg-idle:hover {
-  border-color: rgba(var(--c-primary), 0.4);
+  border-color: rgb(var(--c-primary) / 0.4);
   background: rgba(255, 255, 255, 0.75);
 }
 /* 深色模式反转：选中用半透明白底 + 亮色描边 */
@@ -297,7 +302,8 @@ tr[draggable='true'] {
 .kbd-token {
   color: rgb(var(--txt-card-700, 55 48 70));
   background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(var(--c-primary), 0.28);
+  /* 同上：必须用 rgb(var(--c-primary) / a)，rgba(var(--c-primary), a) 是非法语法 */
+  border-color: rgb(var(--c-primary) / 0.28);
   font-weight: 600;
 }
 
@@ -486,6 +492,21 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   white-space: nowrap;
   cursor: pointer;
   border: 1px solid transparent;
+  /* ===== 「按钮左右各有两条异色竖边」的真正根因 =====
+     两个 background 属性默认值**不一致**：
+       background-clip   默认 border-box   （渐变铺到边框外缘）
+       background-origin 默认 padding-box  （渐变按内边距盒定位）
+     于是 1px 边框区里画的是「被 tile 平铺进去的那一窄条渐变」：
+       左边缘 → tile 的**末端**色（--c-primary-dark 侧）
+       右边缘 → tile 的**起点**色（--c-primary 侧）
+     整块按钮因此左右各出现一条与主体反色的竖边。实测像素（浅色主题）：
+       左缘 rgb(159,56,81) / 内部 rgb(191,74,103)
+       右缘 rgb(191,74,103) / 内部 rgb(159,56,81)
+     只补 border-color 治不了本：边框色是实色、会**压在渐变之上**，
+     左缘恰好等于渐变起点看不出来，右缘却变成一条亮线（.btn-toned 右缘实测 Δ≈146）。
+     正解就是让 origin 与 clip 对齐到同一个盒子：渐变从边框外缘连续铺到另一侧外缘，
+     边框保持透明（只占位，不参与绘制），按钮几何尺寸完全不变。 */
+  background-origin: border-box;
   transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease,
     background-image 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   will-change: transform;
@@ -514,7 +535,9 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   }
 }
 
-/* 主要操作：主色渐变（--c-primary → --c-primary-dark） */
+/* 主要操作：主色渐变（--c-primary → --c-primary-dark）
+   不再用 border-color 去「补」边缘：实色边框会盖住渐变，右缘反而多一条亮线。
+   边框保持 transparent，靠 .btn-base 的 background-origin:border-box 让渐变连续铺满。 */
 .btn-primary {
   background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-primary-dark)));
   color: #fff;
@@ -531,6 +554,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    gradient 内一律用不带 alpha 的实色端点。 */
 .btn-toned {
   background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
+  /* 同上：边框保持透明，交给 .btn-base 的 background-origin:border-box 解决边缘反色 */
   color: #fff;
   box-shadow: 0 3px 12px rgb(var(--c-primary) / 0.22);
 }
@@ -662,11 +686,48 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ==================== 折叠/展开统一过渡 ==================== */
+/*
+ * 用于所有「点一下展开、再点一下收起」的区块（如主题页的「自定义颜色」「遮罩与模糊」）。
+ *
+ * 为什么不用 Transition 的高度过渡：auto → 0 无法插值。
+ * 这里用 grid-template-rows 0fr → 1fr 的技巧：
+ *   容器高度由子项内容决定，能自然地在 0 与内容高度之间插值，
+ *   无需写死 max-height（写死会有「内容比上限高就被裁」的隐患）。
+ * 用法：
+ *   <transition name="collapse">
+ *     <div v-if="open" class="collapse-inner">...内容...</div>
+ *   </transition>
+ *   —— 若内容本身是卡片（自带 padding/边框），把 collapse-inner 套在外面即可。
+ */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: opacity 0.25s ease, grid-template-rows 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.25s ease;
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* 内层必须允许收缩，否则 0fr 时子项仍撑满高度 */
+.collapse-enter-active > *,
+.collapse-leave-active > * {
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* 尊重减少动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   .sel-anim-enter-active,
   .sel-anim-leave-active,
-  .sel-anim-move {
+  .sel-anim-move,
+  .collapse-enter-active,
+  .collapse-leave-active {
     transition: none;
   }
 }
@@ -851,6 +912,28 @@ html[lang='zh-CN'] .font-mono {
 
 .dark .bg-white\/40 {
   background: rgba(255, 255, 255, 0.07) !important;
+}
+
+/*
+ * 深色模式缺口补齐：原先只反转了 /20 /30 /40，
+ * 而 /50 /70 /80 是「半透明白卡片」类控件的常用底色（标签行、输入框、折叠面板），
+ * 漏反转会导致「浅白底 + 深色模式下的浅灰文字」——对比度极低，文字几乎看不清。
+ * 补成深紫半透明，与其它深色材质同一色系。
+ */
+.dark .bg-white\/50 {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dark .bg-white\/70 {
+  background: rgba(20, 15, 40, 0.55) !important;
+}
+
+.dark .bg-white\/80 {
+  background: rgba(20, 15, 40, 0.55) !important;
+}
+
+.dark .bg-white\/90 {
+  background: rgba(20, 15, 40, 0.72) !important;
 }
 
 .dark .bg-primary\/10 {
@@ -1547,26 +1630,6 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/*
- * 页面级卡片：比 .glass 更实一些。
- * 原因：弹窗有半透明遮罩压暗背景，0.7 的玻璃底足够看清内容；
- * 但独立页面直接铺在壁纸上，同样的透明度会让文字与壁纸混在一起。
- * 这里把 alpha 提到 0.88，并保留同样的 blur 与描边，视觉语言仍然一致。
- */
-.page-card {
-  background: rgba(255, 255, 255, calc(0.88 * var(--glass-fade, 1)));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  border-radius: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-body[data-glass='liquid'] .page-card {
-  background: rgba(255, 255, 255, calc(0.9 * var(--glass-fade, 1)));
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  border-color: rgba(255, 255, 255, 0.7);
-}
 
 
 /* ==================== 液态玻璃风格 ==================== */
@@ -1753,6 +1816,96 @@ td .truncate {
   display: inline-block;
   min-width: 0;
   max-width: 100%;
+}
+
+/* ==================== 追番卡片进度条（仅新增，不改动以上任何规则） ==================== */
+/*
+ * 轨道与填充全部吃主题变量：用户改主色 / 壁纸取色时进度条同步变色。
+ * 浅色模式用 dark 变体（该变量已朝浅底可读收敛），深色模式用 light 变体；
+ * 与全站「浅底用 dark、深底用 light」的派生色取向一致。
+ *
+ * .card-progress-slot 恒定占位（有进度 / 无进度都一样高），因此
+ * 总集数从「3/12」变成「?」时下方时间/备注行不会上下跳动。
+ */
+.card-progress-slot {
+  margin-top: 0.1875rem; /* 3px：与集数行留一点呼吸，又不吃掉卡片高度 */
+  height: 0.25rem; /* 4px 轨道：细但看得见 */
+  line-height: 0;
+}
+
+/* 轨道：主题色 16% 淡底 + 1px 同色内描边，浅色玻璃上也分得清轨道与卡片底 */
+.card-progress {
+  height: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgb(var(--c-primary) / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(var(--c-primary) / 0.1);
+}
+
+/* 填充：主色 → 主色深阶的横向渐变，与全站渐变按钮同一套色阶取向 */
+.card-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-primary-dark)));
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 100% 收尾：换成 success 绿，与卡片上「100%」文字的 text-success 一致 */
+.card-progress-fill.is-complete {
+  background-image: linear-gradient(to right, rgb(var(--c-success)), rgb(var(--c-success-dark)));
+}
+
+/* 百分比：等宽数字 + 小字紧排，避免 9% → 10% 时右侧按钮左右挪动 */
+.card-progress-pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  /* 浅色玻璃上原色 --c-primary 对比度不足（同站 text-primary 的既有问题），
+     文字沿用收敛后的 dark 变体；填充条才用原色表达"主题色进度" */
+  color: rgb(var(--c-primary-dark));
+}
+
+/* 100% 的文字与填充同样收尾成绿；浅底上用 success-dark 保证可读 */
+.card-progress-pct.is-complete {
+  color: rgb(var(--c-success-dark));
+}
+
+/* 集数行：`3 / 12` 永不折行，卡片在窄列里也不会把斜杠拆到下一行 */
+.card-ep-line {
+  white-space: nowrap;
+}
+
+/* ---- 深色模式：深紫卡片底上，轨道用半透明白提亮，填充改用 light 变体保证亮度 ---- */
+.dark .card-progress {
+  background-color: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.dark .card-progress-fill {
+  background-image: linear-gradient(to right, rgb(var(--c-primary-light)), rgb(var(--c-primary)));
+}
+
+/* 绿在深底上取原色即可（--c-success 本身足够亮），不用 dark 变体 */
+.dark .card-progress-fill.is-complete {
+  background-image: linear-gradient(to right, rgb(var(--c-success)), rgb(var(--c-success-dark)));
+}
+
+/* 深色模式百分比文字：--c-primary 压在深底偏暗，改用 light 变体 */
+.dark .card-progress-pct {
+  color: rgb(var(--c-primary-light));
+}
+
+/* 完成态保持 success 绿（特异性高于上一条，优先级足够） */
+.dark .card-progress-pct.is-complete {
+  color: rgb(var(--c-success));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-progress-fill {
+    transition: none;
+  }
 }
 
 /* 星星装饰 */

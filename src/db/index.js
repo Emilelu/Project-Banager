@@ -10,6 +10,50 @@ const DB_NAME = 'BangumiManagerDB'
 const DB_STORE = 'database'
 const DB_KEY = 'bangumi_db'
 
+// ========== 错误与字段规范化（边界安全） ==========
+//
+// 为什么需要 errorMessage()：
+//   sql.js 的部分错误是**裸字符串**而不是 Error —— 例如绑定 undefined 参数时抛
+//   "Wrong API use : tried to bind a value of an unknown type (undefined)."。
+//   原代码写 `err.message.includes('UNIQUE constraint failed')`，此时 err.message 是
+//   undefined → 再读 .includes 就抛 TypeError，把一次「可恢复的参数错误」升级成
+//   未捕获异常，调用方（导入器 / 视图）整轮失败。所有 catch 分支统一走这个 helper。
+
+/** 把任意异常/字符串转成可读消息，永不返回 undefined */
+function errorMessage(err) {
+  if (!err) return '未知错误'
+  if (typeof err === 'string') return err
+  if (typeof err.message === 'string' && err.message) return err.message
+  try { return String(err) } catch { return '未知错误' }
+}
+
+/** UNIQUE 冲突判定：不依赖 err.message 一定存在 */
+function isUniqueViolation(err) {
+  return /UNIQUE constraint failed/i.test(errorMessage(err))
+}
+
+/**
+ * 名称规范化。
+ * 只接受字符串/数字，且 trim 后必须非空：
+ *   · addWatching({}) 原实现会把 undefined 传给 sql.js → 抛裸字符串 → 上面那个崩溃；
+ *   · name = '' 或纯空白会写进库，随后卡片渲染出一张几乎没有标题的卡片，
+ *     用户既看不出是哪条、也无法在列表里定位删除。
+ */
+function normalizeName(name) {
+  if (typeof name !== 'string' && typeof name !== 'number') return ''
+  return String(name).trim()
+}
+
+/**
+ * sort_order 规范化：NaN / Infinity / 非数字一律归 0。
+ * sql.js 会把 NaN 写成 NULL（实测 getAllWatching 返回 null），
+ * 排序时 NULL 与数字混排会让列表顺序莫名跳动。
+ */
+function normalizeSortOrder(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 let dbInstance = null
 let dbPromise = null
 let _SQL = null  // 缓存 initSqlJs 返回的 SQL 构造器

@@ -33,28 +33,31 @@
           <!-- 按标签筛选（多选 OR），与搜索框并列 -->
           <TagFilter v-model="tagFilter" />
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <button @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('remaining.addRemaining') }}</button>
-          <button @click="openBatchAddDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="note" />{{ tt('remaining.batchAdd') }}</button>
+        <transition-group name="sel-anim" tag="div" class="sel-anim-wrap flex items-center gap-2 flex-wrap">
+          <button key="add" @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('remaining.addRemaining') }}</button>
+          <button key="batch-add" @click="openBatchAddDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="note" />{{ tt('remaining.batchAdd') }}</button>
 
-          <!-- 选中项专属操作：统一由 transition-group 平滑出现/收起 -->
-          <transition-group name="sel-anim" tag="div" class="flex items-center gap-2 flex-wrap">
-            <button v-for="b in selectedActions" :key="b.key" v-if="!!selected" @click="b.onClick"
+          <!-- 选中项专属操作：与其余按钮同属一个 transition-group。
+               若把它们单独放进一个内层组，组宽度骤变时组外的分隔线与按钮
+               属于「外层布局」变化，不会被 -move 类带动 → 瞬间跳位。 -->
+          <!-- v-for 放 template、v-if 放 button，让 transition-group 能配对进出场 -->
+          <template v-for="b in selectedActions" :key="b.key">
+            <button v-if="!!selected" @click="b.onClick"
               class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
-          </transition-group>
+          </template>
 
-          <div class="border-l border-white/30 h-6 mx-1"></div>
-          <button @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
+          <div key="sep-1" class="border-l border-white/30 h-6 mx-1"></div>
+          <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
             <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
           </button>
-          <button v-if="batchMode" :disabled="checkedIds.length === 0" @click="batchDelete" class="btn-base btn-danger">
+          <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length === 0" @click="batchDelete" class="btn-base btn-danger">
             <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
           </button>
-          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">
+          <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
             <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
           </button>
-          <button @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
-        </div>
+          <button key="clear" @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
+        </transition-group>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
         <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
@@ -1146,3 +1149,20 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
 })
 </script>
+
+<style scoped>
+/* 见 WatchingView.vue 同名注释：
+   .sel-anim-leave-active 必须脱离文档流，否则离场按钮仍占宽度，
+   后续按钮的旧位置 == 新位置 → dx=0 → 不触发 sel-anim-move，归位瞬间跳变。 */
+.sel-anim-leave-active {
+  position: absolute;
+  pointer-events: none;
+  /* 锁住 transform，避免离场按钮被 FLIP 一起带着滑走（详见 WatchingView.vue 注释） */
+  transform: none !important;
+}
+
+/* -move 的位移测量需要「正常参与布局的容器」作为参照，故用 relative 定位。 */
+.sel-anim-wrap {
+  position: relative;
+}
+</style>

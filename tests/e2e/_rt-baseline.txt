@@ -1,0 +1,238 @@
+﻿node : (node:37264) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` 
+instead.
+At line:1 char:167
++ ... ct-Banager; node --import ./tests/e2e/resolve-loader.mjs tests\e2e\ve ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:37264) [D...oks()` instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+=== json（内存字符串） ===
+  [watching] 样本 9 条 / 导入 9 条 / 匹配 9 条 / 丢失 0 / 多出 0
+     name             100.0% (9/9)
+     day_of_week      100.0% (9/9)
+     time_slot        100.0% (9/9)
+     current_episode  100.0% (9/9)
+     total_episodes   100.0% (9/9)
+     url              100.0% (9/9)
+     url_params       100.0% (9/9)
+     notes            100.0% (9/9)
+     tags             100.0% (9/9)
+     sort_order       100.0% (9/9)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 5 条 / 丢失 0 / 多出 0
+     name             100.0% (5/5)
+     expected_date    100.0% (5/5)
+     url              100.0% (5/5)
+     url_params       100.0% (5/5)
+     notes            100.0% (5/5)
+     tags             100.0% (5/5)
+     sort_order       100.0% (5/5)
+  [watched] 样本 11 条 / 导入 11 条 / 匹配 11 条 / 丢失 0 / 多出 0
+     name             100.0% (11/11)
+     watch_date       100.0% (11/11)
+     url              100.0% (11/11)
+     url_params       100.0% (11/11)
+     notes            100.0% (11/11)
+     tags             100.0% (11/11)
+     sort_order       100.0% (11/11)
+  差异清单：无（全部一致）
+
+=== json（真实文件） ===
+  [watching] 样本 9 条 / 导入 9 条 / 匹配 9 条 / 丢失 0 / 多出 0
+     name             100.0% (9/9)
+     day_of_week      100.0% (9/9)
+     time_slot        100.0% (9/9)
+     current_episode  100.0% (9/9)
+     total_episodes   100.0% (9/9)
+     url              100.0% (9/9)
+     url_params       100.0% (9/9)
+     notes            100.0% (9/9)
+     tags             100.0% (9/9)
+     sort_order       100.0% (9/9)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 5 条 / 丢失 0 / 多出 0
+     name             100.0% (5/5)
+     expected_date    100.0% (5/5)
+     url              100.0% (5/5)
+     url_params       100.0% (5/5)
+     notes            100.0% (5/5)
+     tags             100.0% (5/5)
+     sort_order       100.0% (5/5)
+  [watched] 样本 11 条 / 导入 11 条 / 匹配 11 条 / 丢失 0 / 多出 0
+     name             100.0% (11/11)
+     watch_date       100.0% (11/11)
+     url              100.0% (11/11)
+     url_params       100.0% (11/11)
+     notes            100.0% (11/11)
+     tags             100.0% (11/11)
+     sort_order       100.0% (11/11)
+  差异清单：无（全部一致）
+
+=== csv（内存字符串） ===
+  [watching] 样本 9 条 / 导入 7 条 / 匹配 0 条 / 丢失 9 / 多出 7
+     name               n/a (0/0)
+     day_of_week        n/a (0/0)
+     time_slot          n/a (0/0)
+     current_episode    n/a (0/0)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 5 条 / 丢失 0 / 多出 0
+     name             100.0% (5/5)
+     expected_date    100.0% (5/5)
+     tags             100.0% (5/5)
+  [watched] 样本 11 条 / 导入 10 条 / 匹配 7 条 / 丢失 4 / 多出 3
+     name             100.0% (7/7)
+     watch_date       100.0% (7/7)
+  差异清单（23 条，最多显示 40 条）：
+   - [watching] "欢迎来到实力至上主义的教室4" 字段 (整条记录丢失): 期望 {"id":37,"name":"欢迎来到实力至上主义的教室4","day_of_week":"周一","time_slot":"20:30","current_episode":"11","total_episodes":"12","url":"https://e/x?p={集数}","url_params":"p={集数}","notes":"备注一","tags":"热血,原创","sort_order":1} / 实际 <无>
+   - [watching] "带逗号, 的番名" 字段 (整条记录丢失): 期望 {"id":38,"name":"带逗号, 的番名","day_of_week":"周三","time_slot":"22:30","current_episode":"7","total_episodes":"24","url":"https://e/y","url_params":"","notes":"逗号","tags":"日常","sort_order":2} / 实际 <无>
+   - [watching] "He said \"hi\" 番" 字段 (整条记录丢失): 期望 {"id":39,"name":"He said \"hi\" 番","day_of_week":"周二","time_slot":"18:00","current_episode":"01","total_episodes":"","url":"","url_params":"","notes":"引号","tags":"","sort_order":3} / 实际 <无>
+   - [watching] "New\nLine 番" 字段 (整条记录丢失): 期望 {"id":40,"name":"New\nLine 番","day_of_week":"周五","time_slot":"20:00","current_episode":"5","total_episodes":"12","url":"","url_params":"","notes":"换行","tags":"治愈","sort_order":4} / 实际 <无>
+   - [watching] "零集番" 字段 (整条记录丢失): 期望 {"id":41,"name":"零集番","day_of_week":"周日","time_slot":"00:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":5} / 实际 <无>
+   - [watching] "86" 字段 (整条记录丢失): 期望 {"id":42,"name":"86","day_of_week":"周一","time_slot":"20:30","current_episode":"3","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":6} / 实际 <无>
+   - [watching] "夏目友人帳 · 肆" 字段 (整条记录丢失): 期望 {"id":43,"name":"夏目友人帳 · 肆","day_of_week":"周四","time_slot":"01:00","current_episode":"2","total_episodes":"","url":"","url_params":"","notes":"","tags":"治愈","sort_order":7} / 实际 <无>
+   - [watching] "未排期番" 字段 (整条记录丢失): 期望 {"id":44,"name":"未排期番","day_of_week":"","time_slot":"","current_episode":"4","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":8} / 实际 <无>
+   - [watching] "带分号; 番" 字段 (整条记录丢失): 期望 {"id":45,"name":"带分号; 番","day_of_week":"周六","time_slot":"23:00","current_episode":"6","total_episodes":"13","url":"","url_params":"","notes":"","tags":"科幻","sort_order":9} / 实际 <无>
+   - [watching] "零集番 0" 字段 (多出记录): 期望 <无> / 实际 {"id":46,"name":"零集番 0","day_of_week":"周日","time_slot":"00:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "夏目友人帳 · 肆 2" 字段 (多出记录): 期望 <无> / 实际 {"id":47,"name":"夏目友人帳 · 肆 2","day_of_week":"周四","time_slot":"01:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "He said \"hi\" 番 01" 字段 (多出记录): 期望 <无> / 实际 {"id":48,"name":"He said \"hi\" 番 01","day_of_week":"周二","time_slot":"18:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "New" 字段 (多出记录): 期望 <无> / 实际 {"id":49,"name":"New","day_of_week":"周五","time_slot":"20:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "86 3" 字段 (多出记录): 期望 <无> / 实际 {"id":50,"name":"86 3","day_of_week":"周一","time_slot":"20:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "带逗号, 的番名 7" 字段 (多出记录): 期望 <无> / 实际 {"id":51,"name":"带逗号, 的番名 7","day_of_week":"周三","time_slot":"22:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "带分号; 番 6" 字段 (多出记录): 期望 <无> / 实际 {"id":52,"name":"带分号; 番 6","day_of_week":"周六","time_slot":"23:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "作品A" 字段 (整条记录丢失): 期望 {"id":45,"name":"作品A","watch_date":"2025/07/15","url":"https://e/d1","url_params":"p={集数}","notes":"已看备注A","tags":"热血","sort_order":1} / 实际 <无>
+   - [watched] "无日期作品" 字段 (整条记录丢失): 期望 {"id":48,"name":"无日期作品","watch_date":"","url":"","url_params":"","notes":"无日期","tags":"","sort_order":4} / 实际 <无>
+   - [watched] "A, B 作品" 字段 (整条记录丢失): 期望 {"id":51,"name":"A, B 作品","watch_date":"2026","url":"","url_params":"","notes":"","tags":"原创","sort_order":7} / 实际 <无>
+   - [watched] "X\nY 作品" 字段 (整条记录丢失): 期望 {"id":53,"name":"X\nY 作品","watch_date":"2024/03/01","url":"","url_params":"","notes":"","tags":"","sort_order":9} / 实际 <无>
+   - [watched] "X" 字段 (多出记录): 期望 <无> / 实际 {"id":57,"name":"X","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "Y 作品 (2024/03/01),作品A (2025/07/15),A" 字段 (多出记录): 期望 <无> / 实际 {"id":58,"name":"Y 作品 (2024/03/01),作品A (2025/07/15),A","watch_date":"2014","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "B 作品,无日期作品" 字段 (多出记录): 期望 <无> / 实际 {"id":59,"name":"B 作品,无日期作品","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+
+=== csv（真实文件） ===
+  [watching] 样本 9 条 / 导入 7 条 / 匹配 0 条 / 丢失 9 / 多出 7
+     name               n/a (0/0)
+     day_of_week        n/a (0/0)
+     time_slot          n/a (0/0)
+     current_episode    n/a (0/0)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 5 条 / 丢失 0 / 多出 0
+     name             100.0% (5/5)
+     expected_date    100.0% (5/5)
+     tags             100.0% (5/5)
+  [watched] 样本 11 条 / 导入 10 条 / 匹配 7 条 / 丢失 4 / 多出 3
+     name             100.0% (7/7)
+     watch_date       100.0% (7/7)
+  差异清单（23 条，最多显示 40 条）：
+   - [watching] "欢迎来到实力至上主义的教室4" 字段 (整条记录丢失): 期望 {"id":53,"name":"欢迎来到实力至上主义的教室4","day_of_week":"周一","time_slot":"20:30","current_episode":"11","total_episodes":"12","url":"https://e/x?p={集数}","url_params":"p={集数}","notes":"备注一","tags":"热血,原创","sort_order":1} / 实际 <无>
+   - [watching] "带逗号, 的番名" 字段 (整条记录丢失): 期望 {"id":54,"name":"带逗号, 的番名","day_of_week":"周三","time_slot":"22:30","current_episode":"7","total_episodes":"24","url":"https://e/y","url_params":"","notes":"逗号","tags":"日常","sort_order":2} / 实际 <无>
+   - [watching] "He said \"hi\" 番" 字段 (整条记录丢失): 期望 {"id":55,"name":"He said \"hi\" 番","day_of_week":"周二","time_slot":"18:00","current_episode":"01","total_episodes":"","url":"","url_params":"","notes":"引号","tags":"","sort_order":3} / 实际 <无>
+   - [watching] "New\nLine 番" 字段 (整条记录丢失): 期望 {"id":56,"name":"New\nLine 番","day_of_week":"周五","time_slot":"20:00","current_episode":"5","total_episodes":"12","url":"","url_params":"","notes":"换行","tags":"治愈","sort_order":4} / 实际 <无>
+   - [watching] "零集番" 字段 (整条记录丢失): 期望 {"id":57,"name":"零集番","day_of_week":"周日","time_slot":"00:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":5} / 实际 <无>
+   - [watching] "86" 字段 (整条记录丢失): 期望 {"id":58,"name":"86","day_of_week":"周一","time_slot":"20:30","current_episode":"3","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":6} / 实际 <无>
+   - [watching] "夏目友人帳 · 肆" 字段 (整条记录丢失): 期望 {"id":59,"name":"夏目友人帳 · 肆","day_of_week":"周四","time_slot":"01:00","current_episode":"2","total_episodes":"","url":"","url_params":"","notes":"","tags":"治愈","sort_order":7} / 实际 <无>
+   - [watching] "未排期番" 字段 (整条记录丢失): 期望 {"id":60,"name":"未排期番","day_of_week":"","time_slot":"","current_episode":"4","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":8} / 实际 <无>
+   - [watching] "带分号; 番" 字段 (整条记录丢失): 期望 {"id":61,"name":"带分号; 番","day_of_week":"周六","time_slot":"23:00","current_episode":"6","total_episodes":"13","url":"","url_params":"","notes":"","tags":"科幻","sort_order":9} / 实际 <无>
+   - [watching] "零集番 0" 字段 (多出记录): 期望 <无> / 实际 {"id":62,"name":"零集番 0","day_of_week":"周日","time_slot":"00:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "夏目友人帳 · 肆 2" 字段 (多出记录): 期望 <无> / 实际 {"id":63,"name":"夏目友人帳 · 肆 2","day_of_week":"周四","time_slot":"01:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "He said \"hi\" 番 01" 字段 (多出记录): 期望 <无> / 实际 {"id":64,"name":"He said \"hi\" 番 01","day_of_week":"周二","time_slot":"18:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "New" 字段 (多出记录): 期望 <无> / 实际 {"id":65,"name":"New","day_of_week":"周五","time_slot":"20:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "86 3" 字段 (多出记录): 期望 <无> / 实际 {"id":66,"name":"86 3","day_of_week":"周一","time_slot":"20:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "带逗号, 的番名 7" 字段 (多出记录): 期望 <无> / 实际 {"id":67,"name":"带逗号, 的番名 7","day_of_week":"周三","time_slot":"22:30","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watching] "带分号; 番 6" 字段 (多出记录): 期望 <无> / 实际 {"id":68,"name":"带分号; 番 6","day_of_week":"周六","time_slot":"23:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "作品A" 字段 (整条记录丢失): 期望 {"id":66,"name":"作品A","watch_date":"2025/07/15","url":"https://e/d1","url_params":"p={集数}","notes":"已看备注A","tags":"热血","sort_order":1} / 实际 <无>
+   - [watched] "无日期作品" 字段 (整条记录丢失): 期望 {"id":69,"name":"无日期作品","watch_date":"","url":"","url_params":"","notes":"无日期","tags":"","sort_order":4} / 实际 <无>
+   - [watched] "A, B 作品" 字段 (整条记录丢失): 期望 {"id":72,"name":"A, B 作品","watch_date":"2026","url":"","url_params":"","notes":"","tags":"原创","sort_order":7} / 实际 <无>
+   - [watched] "X\nY 作品" 字段 (整条记录丢失): 期望 {"id":74,"name":"X\nY 作品","watch_date":"2024/03/01","url":"","url_params":"","notes":"","tags":"","sort_order":9} / 实际 <无>
+   - [watched] "X" 字段 (多出记录): 期望 <无> / 实际 {"id":78,"name":"X","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "Y 作品 (2024/03/01),作品A (2025/07/15),A" 字段 (多出记录): 期望 <无> / 实际 {"id":79,"name":"Y 作品 (2024/03/01),作品A (2025/07/15),A","watch_date":"2014","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "B 作品,无日期作品" 字段 (多出记录): 期望 <无> / 实际 {"id":80,"name":"B 作品,无日期作品","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+
+=== md（内存字符串） ===
+  [watching] 样本 9 条 / 导入 9 条 / 匹配 8 条 / 丢失 1 / 多出 1
+     name             100.0% (8/8)
+     day_of_week      100.0% (8/8)
+     time_slot        100.0% (8/8)
+     current_episode  87.5% (7/8)
+     tags             50.0% (4/8)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 3 条 / 丢失 2 / 多出 2
+     name             100.0% (3/3)
+     expected_date    100.0% (3/3)
+     tags             0.0% (0/3)
+  [watched] 样本 11 条 / 导入 11 条 / 匹配 8 条 / 丢失 3 / 多出 3
+     name             100.0% (8/8)
+     watch_date       100.0% (8/8)
+     tags             62.5% (5/8)
+  差异清单（23 条，最多显示 40 条）：
+   - [watching] "欢迎来到实力至上主义的教室4" 字段 tags: 期望 "热血,原创" / 实际 ""
+   - [watching] "带逗号, 的番名" 字段 tags: 期望 "日常" / 实际 ""
+   - [watching] "夏目友人帳 · 肆" 字段 tags: 期望 "治愈" / 实际 ""
+   - [watching] "未排期番" 字段 current_episode: 期望 "4" / 实际 "0"
+   - [watching] "带分号; 番" 字段 tags: 期望 "科幻" / 实际 ""
+   - [watching] "New\nLine 番" 字段 (整条记录丢失): 期望 {"id":72,"name":"New\nLine 番","day_of_week":"周五","time_slot":"20:00","current_episode":"5","total_episodes":"12","url":"","url_params":"","notes":"换行","tags":"治愈","sort_order":4} / 实际 <无>
+   - [watching] "New" 字段 (多出记录): 期望 <无> / 实际 {"id":83,"name":"New","day_of_week":"周五","time_slot":"20:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [remaining] "VIVANT 2" 字段 tags: 期望 "悬疑" / 实际 ""
+   - [remaining] "日期未知 등番" 字段 tags: 期望 "日常" / 实际 ""
+   - [remaining] "逗号\"引号 等番" 字段 tags: 期望 "热血,原创" / 实际 ""
+   - [remaining] "年份等番" 字段 (整条记录丢失): 期望 {"id":42,"name":"年份等番","expected_date":"2026","url":"","url_params":"","notes":"","tags":"","sort_order":2} / 实际 <无>
+   - [remaining] "时刻等番" 字段 (整条记录丢失): 期望 {"id":43,"name":"时刻等番","expected_date":"2026/07/15 14:30","url":"","url_params":"","notes":"","tags":"","sort_order":3} / 实际 <无>
+   - [remaining] "2026 · 年份等番" 字段 (多出记录): 期望 <无> / 实际 {"id":47,"name":"2026 · 年份等番","expected_date":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [remaining] "2026/07/15 14:30 · 时刻等番" 字段 (多出记录): 期望 <无> / 实际 {"id":49,"name":"2026/07/15 14:30 · 时刻等番","expected_date":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "作品A" 字段 tags: 期望 "热血" / 实际 ""
+   - [watched] "作品B (剧场版)" 字段 tags: 期望 "剧场版" / 实际 ""
+   - [watched] "A, B 作品" 字段 tags: 期望 "原创" / 实际 ""
+   - [watched] "范围作品" 字段 (整条记录丢失): 期望 {"id":91,"name":"范围作品","watch_date":"2014~2017","url":"","url_params":"","notes":"","tags":"","sort_order":5} / 实际 <无>
+   - [watched] "带时间作品" 字段 (整条记录丢失): 期望 {"id":92,"name":"带时间作品","watch_date":"2025/07/15 14:30","url":"","url_params":"","notes":"","tags":"","sort_order":6} / 实际 <无>
+   - [watched] "X\nY 作品" 字段 (整条记录丢失): 期望 {"id":95,"name":"X\nY 作品","watch_date":"2024/03/01","url":"","url_params":"","notes":"","tags":"","sort_order":9} / 实际 <无>
+   - [watched] "带时间作品 · 2025/07/15 14:30" 字段 (多出记录): 期望 <无> / 实际 {"id":102,"name":"带时间作品 · 2025/07/15 14:30","watch_date":"2025","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "X" 字段 (多出记录): 期望 <无> / 实际 {"id":106,"name":"X","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "范围作品 · 2014~2017" 字段 (多出记录): 期望 <无> / 实际 {"id":107,"name":"范围作品 · 2014~2017","watch_date":"2014","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+
+=== md（真实文件） ===
+  [watching] 样本 9 条 / 导入 9 条 / 匹配 8 条 / 丢失 1 / 多出 1
+     name             100.0% (8/8)
+     day_of_week      100.0% (8/8)
+     time_slot        100.0% (8/8)
+     current_episode  87.5% (7/8)
+     tags             50.0% (4/8)
+  [remaining] 样本 5 条 / 导入 5 条 / 匹配 3 条 / 丢失 2 / 多出 2
+     name             100.0% (3/3)
+     expected_date    100.0% (3/3)
+     tags             0.0% (0/3)
+  [watched] 样本 11 条 / 导入 11 条 / 匹配 8 条 / 丢失 3 / 多出 3
+     name             100.0% (8/8)
+     watch_date       100.0% (8/8)
+     tags             62.5% (5/8)
+  差异清单（23 条，最多显示 40 条）：
+   - [watching] "欢迎来到实力至上主义的教室4" 字段 tags: 期望 "热血,原创" / 实际 ""
+   - [watching] "带逗号, 的番名" 字段 tags: 期望 "日常" / 实际 ""
+   - [watching] "夏目友人帳 · 肆" 字段 tags: 期望 "治愈" / 实际 ""
+   - [watching] "未排期番" 字段 current_episode: 期望 "4" / 实际 "0"
+   - [watching] "带分号; 番" 字段 tags: 期望 "科幻" / 实际 ""
+   - [watching] "New\nLine 番" 字段 (整条记录丢失): 期望 {"id":90,"name":"New\nLine 番","day_of_week":"周五","time_slot":"20:00","current_episode":"5","total_episodes":"12","url":"","url_params":"","notes":"换行","tags":"治愈","sort_order":4} / 实际 <无>
+   - [watching] "New" 字段 (多出记录): 期望 <无> / 实际 {"id":101,"name":"New","day_of_week":"周五","time_slot":"20:00","current_episode":"0","total_episodes":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [remaining] "VIVANT 2" 字段 tags: 期望 "悬疑" / 实际 ""
+   - [remaining] "日期未知 등番" 字段 tags: 期望 "日常" / 实际 ""
+   - [remaining] "逗号\"引号 等番" 字段 tags: 期望 "热血,原创" / 实际 ""
+   - [remaining] "年份等番" 字段 (整条记录丢失): 期望 {"id":52,"name":"年份等番","expected_date":"2026","url":"","url_params":"","notes":"","tags":"","sort_order":2} / 实际 <无>
+   - [remaining] "时刻等番" 字段 (整条记录丢失): 期望 {"id":53,"name":"时刻等番","expected_date":"2026/07/15 14:30","url":"","url_params":"","notes":"","tags":"","sort_order":3} / 实际 <无>
+   - [remaining] "2026 · 年份等番" 字段 (多出记录): 期望 <无> / 实际 {"id":57,"name":"2026 · 年份等番","expected_date":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [remaining] "2026/07/15 14:30 · 时刻等番" 字段 (多出记录): 期望 <无> / 实际 {"id":59,"name":"2026/07/15 14:30 · 时刻等番","expected_date":"","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "作品A" 字段 tags: 期望 "热血" / 实际 ""
+   - [watched] "作品B (剧场版)" 字段 tags: 期望 "剧场版" / 实际 ""
+   - [watched] "A, B 作品" 字段 tags: 期望 "原创" / 实际 ""
+   - [watched] "范围作品" 字段 (整条记录丢失): 期望 {"id":113,"name":"范围作品","watch_date":"2014~2017","url":"","url_params":"","notes":"","tags":"","sort_order":5} / 实际 <无>
+   - [watched] "带时间作品" 字段 (整条记录丢失): 期望 {"id":114,"name":"带时间作品","watch_date":"2025/07/15 14:30","url":"","url_params":"","notes":"","tags":"","sort_order":6} / 实际 <无>
+   - [watched] "X\nY 作品" 字段 (整条记录丢失): 期望 {"id":117,"name":"X\nY 作品","watch_date":"2024/03/01","url":"","url_params":"","notes":"","tags":"","sort_order":9} / 实际 <无>
+   - [watched] "带时间作品 · 2025/07/15 14:30" 字段 (多出记录): 期望 <无> / 实际 {"id":124,"name":"带时间作品 · 2025/07/15 14:30","watch_date":"2025","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "X" 字段 (多出记录): 期望 <无> / 实际 {"id":128,"name":"X","watch_date":"2024","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+   - [watched] "范围作品 · 2014~2017" 字段 (多出记录): 期望 <无> / 实际 {"id":129,"name":"范围作品 · 2014~2017","watch_date":"2014","url":"","url_params":"","notes":"","tags":"","sort_order":0}
+
+--- 导入结果统计（imported / failed / errors）---
+json（内存字符串）: imported=25 failed=0 byTable={"watching":9,"remaining":5,"watched":11} errors=[]
+json（真实文件）: imported=25 failed=0 byTable={"watching":9,"remaining":5,"watched":11} errors=[]
+csv（内存字符串）: imported=22 failed=0 byTable={"watching":7,"remaining":5,"watched":10} errors=[]
+csv（真实文件）: imported=22 failed=0 byTable={"watching":7,"remaining":5,"watched":10} errors=[]
+md（内存字符串）: imported=25 failed=0 byTable={"watching":9,"remaining":5,"watched":11} errors=[]
+md（真实文件）: imported=25 failed=0 byTable={"watching":9,"remaining":5,"watched":11} errors=[]
+
+--- 汇总（所有格式 × 内存/文件）---
+watching: name 100.0% | day_of_week 100.0% | time_slot 100.0% | current_episode 94.1% | total_episodes 100.0% | url 100.0% | url_params 100.0% | notes 100.0% | tags 76.5% | sort_order 100.0%
+remaining: name 100.0% | expected_date 100.0% | url 100.0% | url_params 100.0% | notes 100.0% | tags 76.9% | sort_order 100.0%
+watched: name 100.0% | watch_date 100.0% | url 100.0% | url_params 100.0% | notes 100.0% | tags 84.2% | sort_order 100.0%

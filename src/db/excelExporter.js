@@ -54,7 +54,10 @@ function buildWatchingSheet(rows) {
   for (let i = 0; i < 8; i++) aoa.push(new Array(8).fill(''))
     aoa.push(['      星期 时间      ', ...WEEKDAY_EN])
 
-  // 2) 按时间槽分组：{ "HH:mm" -> { '周一': item } }
+  // 2) 按时间槽分组：{ "HH:mm" -> { '周一': [item, ...] } }
+  //    同一「时间+星期」可能有多部番（如两部都排在周一 20:30）。
+  //    旧实现只保留最后一个，会把前面几部整条丢掉（导出→导入就少记录），
+  //    因此这里允许一个格子溢出到同时间槽的下一行（时间列重复填同一时刻）。
   const bySlot = new Map()
   for (const r of rows) {
     const slot = String(r.time_slot || '').trim()
@@ -62,7 +65,9 @@ function buildWatchingSheet(rows) {
     const dayCN = r.day_of_week || ''
     if (!WEEKDAY_CN.includes(dayCN)) continue
     if (!bySlot.has(slot)) bySlot.set(slot, {})
-    bySlot.get(slot)[dayCN] = r
+    const bucket = bySlot.get(slot)
+    if (!bucket[dayCN]) bucket[dayCN] = []
+    bucket[dayCN].push(r)
   }
 
   // 时间槽按时刻升序
@@ -77,13 +82,17 @@ function buildWatchingSheet(rows) {
 
   for (const slot of slots) {
     const frac = timeToFraction(slot)
+    const timeCell = frac === null ? slot : frac
     const dayMap = bySlot.get(slot)
-    const row = [frac === null ? slot : frac]
-    for (const dayCN of WEEKDAY_CN) {
-      const item = dayMap[dayCN]
-      row.push(item ? `${item.name} ${item.current_episode ?? ''}`.trim() : '')
+    const maxCount = Math.max(1, ...WEEKDAY_CN.map(dayCN => (dayMap[dayCN] || []).length))
+    for (let i = 0; i < maxCount; i++) {
+      const row = [timeCell]
+      for (const dayCN of WEEKDAY_CN) {
+        const item = (dayMap[dayCN] || [])[i]
+        row.push(item ? `${item.name} ${item.current_episode ?? ''}`.trim() : '')
+      }
+      aoa.push(row)
     }
-    aoa.push(row)
   }
 
   // 3) 补齐到模板的 25 行，保证视觉上与模板一致（空行不影响导入）
@@ -252,8 +261,11 @@ export function buildExportMarkdown(data, t = null) {
     if (unscheduled.length) {
       L.push('### 未排期')
       for (const r of unscheduled) {
+        // 与按星期分组的写法保持一致：有集数就带「 · 第 N 集」。
+        // 否则「未排期」条目会丢掉集数（导入器按同一语法解析，往返才对得上）。
+        const ep = r.current_episode ? ` · 第 ${r.current_episode} 集` : ''
         const tg = r.tags ? ` ${String(r.tags).split(',').filter(Boolean).map(x => '`' + x.trim() + '`').join(' ')}` : ''
-        L.push(`- ${r.name}${tg}`)
+        L.push(`- ${r.name}${ep}${tg}`)
       }
       L.push('')
     }

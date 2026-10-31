@@ -72,9 +72,9 @@ const shortcutList = computed(() => [
   { keys: 'Tab', desc: tt('help.kb.tab') },
   { keys: 'Enter / Space', desc: tt('help.kb.enter') },
   { keys: 'Ctrl + Enter', desc: tt('help.kb.ctrlEnter') },
-  { keys: '双击单元格', desc: tt('help.kb.dblclick') },
-  { keys: '鼠标中键', desc: tt('help.kb.middle') },
-  { keys: '右键', desc: tt('help.kb.rightclick') },
+  { keys: tt('help.kb.dblclickKey'), desc: tt('help.kb.dblclick') },
+  { keys: tt('help.kb.middleKey'), desc: tt('help.kb.middle') },
+  { keys: tt('help.kb.rightclickKey'), desc: tt('help.kb.rightclick') },
 ])
 
 // 操作小贴士：把原先散落在页面里的说明集中到这里
