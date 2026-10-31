@@ -58,6 +58,8 @@
   --txt-card-300: 107 114 128;
   --txt-card-400: 75 85 99;
   --txt-card-500: 55 65 81;
+  /* 更深的正文色档：用于压在浅色玻璃上的次级文字，保证 4.5:1 以上 */
+  --txt-card-700: 55 48 70;
 }
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
@@ -141,12 +143,577 @@ html {
   font-size: clamp(14px, 0.8333vw, 28px);
 }
 
-/* 全局字体 */
+/* 全局字体
+ * CJK 字形差异：中日共用汉字（直、骨、今、步、海…）在中文与日文字体里笔画形态不同。
+ * 只用系统默认会按浏览器 locale 挑字体，切到日文时中文界面字体渲染日式字形、或反之，观感怪异。
+ * 因此显式声明「按语言前缀」的字体栈，由 <html lang> 触发：
+ *   -lang:ja → 优先日文字体（Yu Gothic / Hiragino / Noto Sans JP）
+ *   -lang:zh → 优先中文字体（PingFang SC / Microsoft YaHei / Noto Sans SC）
+ * 西文始终优先用原系统 UI 字体，保持原有观感。
+ */
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Segoe UI', system-ui, -apple-system,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC',
+    sans-serif;
   background: linear-gradient(135deg, #f5f3ff 0%, #fce7f3 50%, #ecfeff 100%);
   min-height: 100vh;
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* ==================== 全局禁止文字被框选 ==================== */
+/*
+ * 问题：任意位置按住 Shift 拖动（或三击、Ctrl+A）时，浏览器会显示文字选区高亮，
+ * 在毛玻璃卡片/表格上表现为一块块蓝紫色矩形，非常破坏观感，也像是"出 bug 了"。
+ * 这是浏览器默认的文本可选行为，纯 CSS 可解决。
+ *
+ * 策略：默认全局不可选中（user-select: none），
+ * 仅在**真正需要复制**的地方显式放开：输入框、文本域、.selectable-text 区域。
+ * 这样既消除了误选高亮，又保留了必要场景的复制能力。
+ */
+:root {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+/* 输入类控件必须保留可选中/可编辑（否则无法选中输入内容） */
+input,
+textarea,
+select,
+option,
+[contenteditable='true'],
+[contenteditable=''],
+input *,
+textarea * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+/* 「当前选中：XXX」等需要复制读取的区域 */
+.selectable-text,
+.selectable-text * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* 拖动排序时表格文字不应被选区盖住，保持不可选 */
+tr[draggable='true'] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 兜底：即使某些元素仍被子元素显式设成可选，也不要用系统默认的蓝色选区绘制，
+   改用主题色低透明度，避免在毛玻璃上出现刺眼的蓝块。
+   （只影响"可选中区域"的选区外观，不影响不可选区域的禁用）。 */
+::selection {
+  background: rgb(var(--c-primary) / 0.28);
+  color: inherit;
+}
+.dark ::selection {
+  background: rgb(var(--c-primary-light) / 0.36);
+}
+
+/* ==================== 分段控件（选中/未选中二元选项） ==================== */
+/* 用途：主题弹窗里的「跟随壁纸取色 / 每次刷新随机」「自动换图 / 固定当前壁纸」等互斥选项。
+   原先选中态是「同色系淡底 + 同色系深字」（bg-primary/10 + text-primary-dark），
+   当主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。
+   改为：选中 = 白底 + 主题色描边 + 深色文字；未选中 = 灰底 + 灰字。
+   形状、字号、内边距由使用处传入，这里只管配色。 */
+.seg-btn.seg-active {
+  background: #fff;
+  border-color: rgb(var(--c-primary));
+  color: rgb(var(--txt-card-700, 55 48 70));
+  box-shadow: 0 1px 3px rgb(var(--c-primary) / 0.18);
+  font-weight: 600;
+}
+.seg-btn.seg-idle {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(var(--c-primary), 0.18);
+  color: rgb(var(--txt-card-500, 55 65 81));
+}
+.seg-btn.seg-idle:hover {
+  border-color: rgba(var(--c-primary), 0.4);
+  background: rgba(255, 255, 255, 0.75);
+}
+/* 深色模式反转：选中用半透明白底 + 亮色描边 */
+.dark .seg-btn.seg-active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgb(var(--c-primary-light));
+  color: #fff;
+}
+.dark .seg-btn.seg-idle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+}
+.dark .seg-btn.seg-idle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ==================== 键盘按键标签（kbd） ==================== */
+/* 帮助弹窗里的 Esc / Tab / Enter 等按键提示。
+   踩坑：原先 <kbd> 没写 color，继承父级 text-gray-600，又被深色模式的
+   「浅色文字」规则覆盖成浅灰 —— 压在 bg-white/70 的浅底上对比度极低
+   （截图里几乎只剩轮廓）。这里固定两端色值，确保任何模式下都清晰。 */
+.kbd-token {
+  color: rgb(var(--txt-card-700, 55 48 70));
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(var(--c-primary), 0.28);
+  font-weight: 600;
+}
+
+.dark .kbd-token {
+  color: #E5E7EB;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* ==================== 侧边栏导航项动效 ==================== */
+/* 与顶栏按钮同一套微动效：悬浮轻微放大 + 按下回弹。
+   原先只有内部图标会缩放，整条导航项不动，与顶栏按钮手感不一致。
+   间距：py-3 → py-3.5，让相邻导航项的呼吸感更接近顶栏图标按钮的密度。 */
+.nav-item {
+  transition: transform 0.18s ease, background-color 0.2s ease, box-shadow 0.2s ease,
+    color 0.2s ease;
+  will-change: transform;
+  /* 行高提高一档：py-4 + min-height，让菜单项更有呼吸感（原先 42px 偏紧） */
+  min-height: 3rem;
+}
+/* 整条导航项（含图标与文字）一起缩放，倍率统一 —— 不再让图标单独放大 */
+.nav-item:hover {
+  transform: scale(1.03);
+}
+.nav-item:active {
+  transform: scale(0.97);
+}
+/* 当前选中项保持稳定的"浮起"观感，不再随悬浮继续放大（避免与路由切换的位移动画打架） */
+/* 当前选中项保持稳定的"浮起"观感；与 hover 用同一倍率，避免切页时缩放跳动 */
+.nav-item.nav-active {
+  transform: scale(1.03);
+}
+.nav-item.nav-active:hover {
+  transform: scale(1.03);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-item,
+  .nav-item:hover,
+  .nav-item:active,
+  .nav-item.nav-active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ==================== 分页当前页按钮 ==================== */
+/* 原写法是 bg-primary + text-white：主色若被壁纸取色成亮色（如浅橙），
+   白字对比度只有 2.88:1。这里改用「深主色底 + 白字」，
+   --c-primary-dark 已朝浅色背景可读方向收敛，保证 ≥4.5:1。 */
+.btn-page-active {
+  background-color: rgb(var(--c-primary-dark));
+  color: #fff;
+}
+
+/* ==================== 主题色文字可读性兜底 ==================== */
+/*
+ * 问题：`text-primary` 直接吃 --c-primary（原始主色）。当壁纸取色抽到亮黄、亮青等
+ * 高明度色时，这层色压在浅色玻璃上对比度只有 3.2:1 左右（实测），小字根本看不清
+ * —— 截图里「等番: 7部」「bgm.tv」「当前选中」都栽在这上面。
+ *
+ * 解法：浅色背景下把主题色文字统一改指 --c-primary-dark（该变量本身就朝"浅色背景
+ * 可读"方向收敛过），深色背景下改指 --c-primary-light（朝深色背景收敛）。
+ * 只覆盖"文字颜色"用途，不影响渐变按钮/图标填充等需要原色的地方。
+ */
+html:not(.dark) body.adaptive .text-primary,
+html:not(.dark) body.adaptive th.text-primary,
+html:not(.dark) body.adaptive .text-primary:not(.btn-icon-tint) {
+  color: rgb(var(--c-primary-dark)) !important;
+}
+
+/* 次级色文字同理 */
+html:not(.dark) body.adaptive .text-secondary {
+  color: rgb(var(--c-secondary-dark)) !important;
+}
+
+/* 深色模式：亮变体 */
+.dark body.adaptive .text-primary {
+  color: rgb(var(--c-primary-light)) !important;
+}
+.dark body.adaptive .text-secondary {
+  color: rgb(var(--c-secondary-light)) !important;
+}
+
+/* 主题色描边同理：浅色背景下细描边用原色会发虚，改用收敛后的深色 */
+html:not(.dark) body.adaptive .border-primary\/20,
+html:not(.dark) body.adaptive .border-primary\/30 {
+  border-color: rgb(var(--c-primary-dark) / 0.28) !important;
+}
+
+/* ==================== 纯白文字压在浅色玻璃上的兜底 ==================== */
+/* 少数位置（如渐变按钮已褪色的禁用态、浅色玻璃上的白色文字）实测对比度不足 1.2:1。
+   这里给「浅色背景 + 白字」的常见组合兜底成深色文字。
+   注意排除真正的彩色按钮（btn-primary/btn-danger/btn-toned 已保证白字压在饱和色上）。 */
+html:not(.dark) body.adaptive .btn-neutral,
+html:not(.dark) body.adaptive .app-btn-ghost {
+  color: rgb(var(--txt-card-700, 55 48 70));
+}
+
+/* ==================== 星期表头配色（深色模式适配） ==================== */
+/* 浅色模式下各星期用对应意象色（见 WatchingView 的 DAY_THEMES），文字取深色保证对比度。
+   深色模式下深色文字不可读，这里统一提亮为对应的亮色变体，底色略降透明度避免过艳。 */
+.dark .day-head-0 { color: #C4B5FD !important; }
+.dark .day-head-1 { color: #FDBA74 !important; }
+.dark .day-head-2 { color: #7DD3FC !important; }
+.dark .day-head-3 { color: #6EE7B7 !important; }
+.dark .day-head-4 { color: #FCD34D !important; }
+.dark .day-head-5 { color: #D6D3D1 !important; }
+.dark .day-head-6 { color: #FCA5A5 !important; }
+
+/* 暗色下底色稍微再亮一点点，让分区可辨 */
+.dark .day-head { background-color: rgba(255, 255, 255, 0.04); }
+
+/* ==================== 弹出层菜单（下拉/右键）毛玻璃底 ==================== */
+/* 缘由：下拉菜单常浮在表格/卡片之上。若只用 .glass，液态玻璃风格的背景是
+   半透明渐变（0.62→0.30），叠在白底表格上会显得"几乎透明"，文字对比度不足。
+   这里在 .glass 之上再压一层足够不透明的白底 + 更强的模糊/饱和，保证：
+     - 有毛玻璃观感（不是纯色死板）
+     - 任意壁纸 / 任意表格底色下菜单文字都清晰可读
+   深色模式单独反转，避免亮白块刺眼。 */
+.app-menu-surface {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(1.7);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  /* 独立合成层：避免父级 backdrop root 干扰（祖先若带 opacity/filter 会失效） */
+  isolation: isolate;
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.dark .app-menu-surface {
+  background: rgba(26, 20, 48, 0.88);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 深色底上的正文/警示文字：浅色模式用的 amber-800、gray-700 在深底上不可读，需反转 */
+.dark .app-menu-surface .text-amber-800 {
+  color: #FCD34D !important;   /* amber-300，深底上对比度充足 */
+}
+.dark .app-menu-surface .text-gray-700,
+.dark .app-menu-surface .text-gray-600 {
+  color: #E5E7EB !important;   /* gray-200 */
+}
+
+/* 轻量次级按钮（翻页栏等处的描边小按钮）：统一描边/底色，避免各处手写不一致 */
+.app-btn-ghost {
+  border: 1px solid rgb(var(--c-primary) / 0.2);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgb(var(--c-primary));
+}
+.app-btn-ghost:hover {
+  background: rgb(var(--c-primary) / 0.1);
+}
+.dark .app-btn-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgb(var(--c-primary-light));
+}
+
+/* ==================== 主题色驱动的按钮体系 ==================== */
+/*
+ * 问题：三个页面的工具栏按钮原先手写了 7 套不同渐变（success/warning/secondary/
+ * danger/accent/gray/primary…），既与顶栏图标风格不协调，也与用户切换的主题色无关
+ * —— 用户把主色改成别的颜色，按钮却还是一堆写死的紫/粉/橙。
+ *
+ * 解法：把按钮按「语义」收口成 4 类，颜色全部由 CSS 变量（即当前主题色）驱动：
+ *   .btn-primary  主要操作（新增/保存）      → 主色渐变
+ *   .btn-toned    中性偏主色的次操作（编辑/移动）→ 主色+副色渐变
+ *   .btn-neutral  低强调操作（批量/清空）     → 中性玻璃底
+ *   .btn-danger   破坏性操作（删除）          → 危险色
+ * 图标一律 currentColor，因此自动跟随按钮文字色 —— 图标与按钮配色天然统一。
+ */
+
+/* 所有按钮的统一基座：几何/字号/圆角/过渡全部一致，杜绝各处手写漂移。
+   同时自带悬浮放大 / 按下回弹动效（与 .btn-press 一致），
+   这样即使模板忘了写 btn-press，按钮也不会「点了没反应」。 */
+.btn-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease,
+    background-image 0.2s ease, opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  will-change: transform;
+}
+.btn-base:hover {
+  transform: scale(1.045);
+}
+.btn-base:active {
+  transform: scale(0.96);
+}
+.btn-base:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-base:disabled:hover,
+.btn-base:disabled:active {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-base,
+  .btn-base:hover,
+  .btn-base:active {
+    transition: none;
+    transform: none;
+    will-change: auto;
+  }
+}
+
+/* 主要操作：主色渐变（--c-primary → --c-primary-dark） */
+.btn-primary {
+  background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-primary-dark)));
+  color: #fff;
+  box-shadow: 0 4px 14px rgb(var(--c-primary) / 0.28);
+}
+.btn-primary:hover {
+  box-shadow: 0 6px 20px rgb(var(--c-primary) / 0.42);
+}
+
+/* 次级主色：主色 → 副色 渐变，仍属于主题色系。
+   注意：**不要在 background-image 里用 `rgb(var(--x) / a)`** ——
+   部分浏览器对 gradient 内的斜杠 alpha 支持不稳定，会导致按钮背景整个消失
+   （截图里「编辑 / 移至等番 / 移至已看」三个按钮背景缺失就是这么来的）。
+   gradient 内一律用不带 alpha 的实色端点。 */
+.btn-toned {
+  background-image: linear-gradient(to right, rgb(var(--c-primary)), rgb(var(--c-secondary-dark)));
+  color: #fff;
+  box-shadow: 0 3px 12px rgb(var(--c-primary) / 0.22);
+}
+.btn-toned:hover {
+  box-shadow: 0 6px 18px rgb(var(--c-primary) / 0.34);
+}
+
+/* 中性操作：玻璃灰底 + 主色描边，不抢主操作视觉 */
+.btn-neutral {
+  background: rgba(255, 255, 255, 0.55);
+  color: rgb(var(--txt-card-700, 55 48 70));
+  border: 1px solid rgb(var(--c-primary) / 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.btn-neutral:hover {
+  background: rgb(var(--c-primary) / 0.12);
+  border-color: rgb(var(--c-primary) / 0.3);
+}
+.dark .btn-neutral {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d9d4e7;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.dark .btn-neutral:hover {
+  background: rgb(var(--c-primary-light) / 0.16);
+}
+
+/* 破坏性操作：危险色 */
+.btn-danger {
+  background-image: linear-gradient(to right, rgb(var(--c-danger)), rgb(var(--c-danger-dark)));
+  color: #fff;
+  box-shadow: 0 4px 14px rgb(var(--c-danger) / 0.28);
+}
+.btn-danger:hover {
+  box-shadow: 0 6px 20px rgb(var(--c-danger) / 0.42);
+}
+
+/* 迷你按钮（卡片上的集数 +/-、表单里的步进）：与主按钮同色系但更紧凑，
+   形状统一 rounded-lg、尺寸统一 w-6 h-6，避免「+ 是绿色方块、- 是橙色圆角」的割裂感 */
+.btn-mini {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  color: #fff;
+}
+/* 集数加减迷你按钮：白字必须压在**饱和实色**上才够对比度。
+   原先 + 用 0.85 alpha、- 用 0.45 alpha，实测只有 4.44:1 与 2.18:1（远低于 4.5）。
+   改用实色：
+     +  → primary-dark（最深，白字充足）
+     -  → primary（稍浅，与 + 形成主次，但仍保证白字 ≥4.5） */
+.btn-mini-plus {
+  background: rgb(var(--c-primary-dark));
+}
+.btn-mini-plus:hover {
+  background: rgb(var(--c-primary-darker, var(--c-primary-dark)));
+  filter: brightness(1.08);
+}
+.btn-mini-minus {
+  background: rgb(var(--c-primary));
+}
+.btn-mini-minus:hover {
+  filter: brightness(1.1);
+}
+
+/* 表单里的步进按钮（弹窗内 ± 集数）：描边式，与输入框同一套几何 */
+.btn-step {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--c-primary) / 0.28);
+  background: rgba(255, 255, 255, 0.85);
+  color: rgb(var(--c-primary));
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+.btn-step:hover {
+  background: rgb(var(--c-primary) / 0.12);
+  border-color: rgb(var(--c-primary) / 0.45);
+}
+.dark .btn-step {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgb(var(--c-primary-light));
+}
+.dark .btn-step:hover {
+  background: rgb(var(--c-primary-light) / 0.18);
+}
+
+/* ==================== 选中态过渡（工具栏按钮 / 选中提示） ==================== */
+/* 选中番剧后工具栏按钮与「当前选中」行会突然出现，视觉突兀。
+   这里用「淡入 + 轻微上移 + 宽度收起」的组合过渡，让出现/消失自然：
+   - .sel-fade-enter：从透明 + 下移 4px + 缩放 0.96 淡入
+   - 离开时反向淡出（不占位，故用 max-height 收拢，避免工具栏高度跳变） */
+.sel-anim-enter-active,
+.sel-anim-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.22s ease,
+    margin 0.22s ease, padding 0.22s ease;
+  overflow: hidden;
+}
+.sel-anim-enter-from,
+.sel-anim-leave-to {
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  max-height: 0;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.sel-anim-enter-to,
+.sel-anim-leave-from {
+  opacity: 1;
+  transform: none;
+  max-height: 4rem;
+}
+
+/* 尊重减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .sel-anim-enter-active,
+  .sel-anim-leave-active {
+    transition: none;
+  }
+}
+
+/* ==================== 多语言字体适配 ==================== */
+/*
+ * 核心原则：**中日文必须共用同一字体家族（Noto Sans）**，只切换区域字形变体。
+ *
+ * 反面教训：早先用「日文界面=Yu Gothic / 中文界面=Microsoft YaHei」两套完全不同的家族，
+ * 即使给彼此做了兜底，混排时仍是「两个设计语言拼在一起」——字重、字面高度、
+ * 笔画粗细都不一致，肉眼一眼违和。这也是 W3C i18n 与多数 CJK 产品的共识：
+ * 字形（glyph）该按语言选，但**家族（typeface）要统一**。
+ *
+ * 采用方案（业界通用的 Noto Sans CJK 思路）：
+ *  - 家族统一：Noto Sans（Source Han Sans 是其同源实现，字形度量一致）
+ *  - 日文界面优先 `Noto Sans JP`（共用汉字取日式字形），`Noto Sans SC` 兜简体字
+ *  - 中文界面优先 `Noto Sans SC`，`Noto Sans JP` 兜日文专有字（働/辻/込）
+ *  - 两套都是同一设计的区域变体，字重/字面/度量完全对齐，混排无撕裂感
+ *  - **显式锁定 font-weight，不让回退字体改变粗细**
+ */
+
+/* 统一字体家族变量：一处改动，全站生效 */
+:root {
+  --font-latin: 'Segoe UI', system-ui, -apple-system, 'Noto Sans', sans-serif;
+  --font-cjk-common: 'Noto Sans', 'Noto Sans CJK SC', 'Source Han Sans', sans-serif;
+}
+
+html[lang='ja'] body,
+html[lang='ja'] input,
+html[lang='ja'] textarea,
+html[lang='ja'] select,
+html[lang='ja'] button {
+  font-family:
+    /* 拉丁：保持原系统 UI 观感 */
+    'Segoe UI', system-ui, -apple-system,
+    /* 日文区域变体：共用汉字得日式字形 */
+    'Noto Sans JP', 'Noto Sans CJK JP', 'Source Han Sans JP',
+    /* 简体兜底：同一家族的中文变体，字重/度量一致，不会撕裂 */
+    'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC',
+    /* 系统日文字体（未装 Noto 时的次选，仍是 Gothic 类） */
+    'Yu Gothic UI', 'Yu Gothic', 'Hiragino Sans', 'Meiryo',
+    /* 最终兜底：绝不能落到 SimSun */
+    sans-serif;
+  font-synthesis: none;
+}
+
+html[lang='zh-CN'] body,
+html[lang='zh-CN'] input,
+html[lang='zh-CN'] textarea,
+html[lang='zh-CN'] select,
+html[lang='zh-CN'] button {
+  font-family:
+    'Segoe UI', system-ui, -apple-system,
+    /* 中文区域变体优先 */
+    'Noto Sans SC', 'Noto Sans CJK SC', 'Source Han Sans SC',
+    /* 日文兜底：同一家族 */
+    'Noto Sans JP', 'Noto Sans CJK JP', 'Source Han Sans JP',
+    /* 系统中文字体（未装 Noto 时的次选，黑体类） */
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB',
+    sans-serif;
+  font-synthesis: none;
+}
+
+/* 英文界面：拉丁优先，CJK 走统一的 Noto，避免英文页里中文/日文各用不同家族 */
+html[lang='en'] body,
+html[lang='en'] input,
+html[lang='en'] textarea,
+html[lang='en'] select,
+html[lang='en'] button {
+  font-family:
+    'Segoe UI', system-ui, -apple-system,
+    'Noto Sans', 'Noto Sans CJK SC', 'Source Han Sans',
+    'Noto Sans SC', 'Noto Sans JP',
+    sans-serif;
+  font-synthesis: none;
+}
+
+/* 等宽场景（时间、集数、日志）：同样需要中日互相兜底 */
+html[lang='ja'] .font-mono {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP',
+    'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC',
+    monospace;
+}
+html[lang='zh-CN'] .font-mono {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC',
+    'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP',
+    monospace;
 }
 
 /* ==================== 暗色模式 ==================== */
@@ -733,13 +1300,180 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   box-shadow: 0 8px 25px -5px rgb(var(--c-primary)/0.15), 0 4px 10px -5px rgb(var(--c-secondary)/0.1);
 }
 
-/* 按钮点击效果 */
+/* ==================== 按钮统一动效（悬浮放大 / 按下回弹） ==================== */
+/* 全项目所有可点元素（.btn-press）共享同一套微动效，避免「有些按钮悬浮会放大、
+   有些纹丝不动」的不一致感（顶栏语言按钮曾因此被单独遗漏）。
+   - 悬浮：轻微放大 + 轻微上浮，暗示可点击
+   - 按下：缩小，给出触感反馈
+   - 过渡统一 150ms，快而不过冲
+   - 用 transform 而非改宽高，不触发重排 */
 .btn-press {
-  @apply transition-all duration-150;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease,
+    opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  will-change: transform;
+}
+
+.btn-press:hover {
+  transform: scale(1.045);
 }
 
 .btn-press:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
+  /* 按下时不要再叠加悬浮的位移，保持干脆 */
+}
+
+/* 禁用态不参与动效（灰按钮放大反而误导「可点」） */
+.btn-press:disabled:hover {
+  transform: none;
+}
+.btn-press:disabled:active {
+  transform: none;
+}
+
+/* 尊重「减少动态效果」系统偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .btn-press,
+  .btn-press:hover,
+  .btn-press:active {
+    transition: none;
+    transform: none;
+    will-change: auto;
+  }
+}
+
+/* ==================== 共用按钮外观（三页一致性 + 白字对比度） ==================== */
+/* 起因：三个页面的工具栏 / 弹窗按钮是各自复制粘贴的，几何值漂移（px-5/py-3 混入、
+   transition duration-300 与 150 混用、名称列 px-4 与 px-3 混用）；更要紧的是
+   「白字压在渐变按钮」时，`from-<色>` 那一端往往是**亮端**（primary / secondary /
+   success / warning 的基准色本身），白字实测只有 1.7~3.8:1。此处一次收口两件事：
+     ① 几何：工具栏按钮唯一尺寸（px-4 py-2 text-sm → 31.5px 高）、弹窗动作按钮
+        （px-5 py-2.5 → 35px 高）、小号按钮（px-3 py-1.5 text-xs）。模板只写语义类名，
+        不再散落尺寸工具类，杜绝再漂。
+     ② 颜色：每个渐变**两端都只允许深端**，逐段实测白字对比度 ≥4.5（WCAG AA 正文阈值）。
+
+   对比度标定（原文见 review/visual.md 的实测表；脚本 tests/e2e/_calibrate.mjs）：
+     家族        左端                    右端                    全段最低
+     primary     --c-primary-dark        同色 ×72%               ≥4.60（JS 派生时 ≥5.43）
+     secondary   --c-secondary-dark      同色 ×72%               ≥4.60（JS 派生时 ≥5.43）
+     success     --c-success ×70%        --c-success ×56%        ≥4.82
+     warning     --c-warning ×64%        --c-warning ×52%        ≥4.89
+     danger      --c-danger  ×85%        --c-danger  ×70%        ≥4.99
+     accent      --c-accent  ×65%        --c-accent  ×55%        ≥5.30
+     neutral     固定 #6B7280            固定 #4B5563            ≥4.83
+   「×N%」语义 = color-mix(in srgb, rgb(var(--c-X)) N%, black)，即逐通道乘 N。
+   为什么 primary / secondary 不用基准色本身：applyPalette 把 S 钳在 45~85、L 钳在
+   40~58，该区间里基准色压白字最低只有 1.23:1（黄色相 s=85 l=58）。而 *-dark 是由
+   darkenToContrast(target 4.5, bgY 0.82) 求出来的，等价于相对亮度 ≤0.1433，
+   即压白字 ≥5.43:1 —— 这才是可以安全承载白字的那个变体。
+   每条声明都先给一条「纯端色」兜底，再不支持 color-mix 的浏览器上退化为实色
+   （不会退化成无背景 → 白字看不见）。 */
+@layer components {
+  /* 工具栏按钮：三页唯一几何来源（高度 31.5px / 圆角 10.5px / 14px 字号） */
+  .toolbar-btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-xl text-sm font-medium;
+  }
+
+  /* 弹窗动作按钮（取消 / 保存 / 确认 / 浏览文件）：35px 高 */
+  .action-btn {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-sm font-medium;
+  }
+
+  /* 小号按钮：设置面板与分页控件 */
+  .small-btn {
+    @apply inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-medium;
+  }
+
+  .pill-btn {
+    @apply inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-medium;
+  }
+
+  /* ---- 白字渐变（两端均为深端） ---- */
+  .btn-grad-primary {
+    background-image: linear-gradient(to right, rgb(var(--c-primary-dark)), rgb(var(--c-primary-dark)));
+    background-image: linear-gradient(
+      to right,
+      rgb(var(--c-primary-dark)),
+      color-mix(in srgb, rgb(var(--c-primary-dark)) 72%, black)
+    );
+  }
+
+  .btn-grad-secondary {
+    background-image: linear-gradient(to right, rgb(var(--c-secondary-dark)), rgb(var(--c-secondary-dark)));
+    background-image: linear-gradient(
+      to right,
+      rgb(var(--c-secondary-dark)),
+      color-mix(in srgb, rgb(var(--c-secondary-dark)) 72%, black)
+    );
+  }
+
+  .btn-grad-success {
+    background-image: linear-gradient(to right, rgb(var(--c-success)), rgb(var(--c-success)));
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, rgb(var(--c-success)) 70%, black),
+      color-mix(in srgb, rgb(var(--c-success)) 56%, black)
+    );
+  }
+
+  .btn-grad-warning {
+    background-image: linear-gradient(to right, rgb(var(--c-warning)), rgb(var(--c-warning)));
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, rgb(var(--c-warning)) 64%, black),
+      color-mix(in srgb, rgb(var(--c-warning)) 52%, black)
+    );
+  }
+
+  .btn-grad-danger {
+    background-image: linear-gradient(to right, rgb(var(--c-danger)), rgb(var(--c-danger)));
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, rgb(var(--c-danger)) 85%, black),
+      color-mix(in srgb, rgb(var(--c-danger)) 70%, black)
+    );
+  }
+
+  .btn-grad-accent {
+    background-image: linear-gradient(to right, rgb(var(--c-accent)), rgb(var(--c-accent)));
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, rgb(var(--c-accent)) 65%, black),
+      color-mix(in srgb, rgb(var(--c-accent)) 55%, black)
+    );
+  }
+
+  /* 中性（删除 / 清空 / 未激活的批量选择）：不随配色变，固定两档深灰 */
+  .btn-grad-neutral {
+    background-image: linear-gradient(to right, #6b7280, #4b5563);
+  }
+
+  /* 双色渐变（按更新时间排序）：两端都是 *-dark，白字同样 ≥4.60 */
+  .btn-grad-primary-secondary {
+    background-image: linear-gradient(to right, rgb(var(--c-primary-dark)), rgb(var(--c-secondary-dark)));
+  }
+
+  /* ---- 白字实色小方块（卡片上的 ±集数） ---- */
+  .chip-success {
+    @apply text-white;
+    background-color: rgb(var(--c-success));
+    background-color: color-mix(in srgb, rgb(var(--c-success)) 70%, black);
+  }
+
+  .chip-success:hover {
+    background-color: rgb(var(--c-success));
+    background-color: color-mix(in srgb, rgb(var(--c-success)) 56%, black);
+  }
+
+  .chip-warning {
+    @apply text-white;
+    background-color: rgb(var(--c-warning));
+    background-color: color-mix(in srgb, rgb(var(--c-warning)) 64%, black);
+  }
+
+  .chip-warning:hover {
+    background-color: rgb(var(--c-warning));
+    background-color: color-mix(in srgb, rgb(var(--c-warning)) 52%, black);
+  }
 }
 
 /* 玻璃效果 */

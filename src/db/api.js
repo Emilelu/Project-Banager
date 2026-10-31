@@ -186,10 +186,10 @@ export const batchApi = {
 // ========== 导入 API ==========
 
 export const importApi = {
-  upload: async (formData) => {
+  upload: async (formData, { onProgress } = {}) => {
     const { importExcel } = await import('./excelImporter')
     const file = formData.get('file')
-    const result = await importExcel(file)
+    const result = await importExcel(file, { onProgress })
     return { data: result }
   }
 }

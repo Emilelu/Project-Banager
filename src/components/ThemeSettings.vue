@@ -10,83 +10,111 @@
              此前标题/底部是 sticky、位于滚动容器内，宽度会被滚动条挤掉 6px，
              右侧露出 track 底色 —— 看上去像弹窗上下缺了两块。
              移出滚动容器后二者天然占满全宽，也就不再需要 sticky。 -->
-        <div class="relative glass rounded-2xl shadow-2xl w-[34rem] max-h-[85vh] border border-white/40 pointer-events-auto flex flex-col overflow-hidden">
+        <div ref="panelEl" class="relative glass rounded-2xl shadow-2xl w-[34rem] max-h-[85vh] border border-white/40 pointer-events-auto flex flex-col overflow-hidden"
+          role="dialog" aria-modal="true" aria-labelledby="theme-settings-title">
           <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 glass rounded-t-2xl shrink-0 z-10">
-            <span class="text-xl">🎨</span>
-            <h3 class="text-lg font-bold gradient-text">主题与背景</h3>
+            <AppIcon scale="lg" name="palette" />
+            <h3 id="theme-settings-title" class="text-lg font-bold gradient-text">{{ tt('theme.title') }}</h3>
           </div>
 
           <!-- 唯一滚动容器：滚动条只出现在中间区域，不再与标题/底部栏争宽度 -->
           <div class="flex-1 overflow-y-auto app-dialog px-6 py-5 space-y-6">
             <!-- 玻璃风格 -->
             <section>
-              <h4 class="text-sm font-bold text-gray-700 mb-2">玻璃风格</h4>
+              <h4 class="text-sm font-bold text-gray-700 mb-2">{{ tt('theme.glassStyle') }}</h4>
               <div class="grid grid-cols-2 gap-3">
                 <button @click="setGlass('frost')"
                   class="p-3 rounded-xl border-2 text-left transition-all btn-press"
                   :class="state.glass === 'frost' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
                   <div class="h-10 rounded-lg mb-2 frost-preview"></div>
-                  <div class="text-sm font-bold text-gray-800">🧊 毛玻璃</div>
-                  <div class="text-xs text-gray-400">经典柔和模糊</div>
+                  <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="snowflake" class="text-primary" />{{ tt('theme.frosted') }}</div>
+                  <div class="text-xs text-gray-400">{{ tt('theme.frostedDesc') }}</div>
                 </button>
                 <button @click="setGlass('liquid')"
                   class="p-3 rounded-xl border-2 text-left transition-all btn-press"
                   :class="state.glass === 'liquid' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
                   <div class="h-10 rounded-lg mb-2 liquid-preview"></div>
-                  <div class="text-sm font-bold text-gray-800">💧 液态玻璃</div>
-                  <div class="text-xs text-gray-400">高光折射 · 更通透</div>
+                  <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="droplet" class="text-primary" />{{ tt('theme.liquid') }}</div>
+                  <div class="text-xs text-gray-400">{{ tt('theme.liquidDesc') }}</div>
                 </button>
               </div>
             </section>
 
-            <!-- 配色 -->
+            <!-- 配色：按「选什么颜色 → 颜色从哪来」的决策顺序分层，
+                 自定义取色收进折叠，避免一排颜色选择器把主流程冲散。 -->
             <section>
               <div class="flex items-center justify-between mb-2">
-                <h4 class="text-sm font-bold text-gray-700">配色</h4>
-                <button @click="onRandom" class="px-3 py-1 rounded-lg text-xs font-medium bg-gradient-to-r from-primary to-primary-light text-white hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">🎲 随机配色</button>
+                <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.palette') }}</h4>
+                <div class="flex items-center gap-1.5">
+                  <button @click="onRandom" class="btn-base btn-primary !px-3 !py-1 !text-xs">
+                    <AppIcon scale="xs" name="sparkle" />{{ tt('theme.randomPalette') }}
+                  </button>
+                  <button @click="onReset" :title="tt('theme.resetPalette')"
+                    class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 transition btn-press">
+                    <AppIcon scale="xs" name="undo" />
+                  </button>
+                </div>
               </div>
+
+              <!-- ① 预设配色（最常用，一眼可选） -->
               <div class="flex gap-2.5 flex-wrap">
-                <button v-for="preset in presets" :key="preset.name" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
+                <button v-for="preset in presets" :key="preset.key" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
                   class="w-10 h-10 rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden relative"
                   :class="isActivePreset(preset) ? 'border-gray-700 scale-110' : 'border-transparent hover:scale-105'"
-                  :title="preset.name">
+                  :aria-label="tt(preset.key)" :title="tt(preset.key)">
                   <span class="w-full h-full" :style="{ background: `linear-gradient(135deg, ${hslCss(preset.p)}, ${hslCss(preset.s)})` }"></span>
                 </button>
               </div>
-              <div class="flex items-center gap-2 mt-3 flex-wrap">
-                <label class="flex items-center gap-1.5 text-xs text-gray-500">
-                  主色 <input type="color" v-model="customP" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
-                </label>
-                <label class="flex items-center gap-1.5 text-xs text-gray-500">
-                  副色 <input type="color" v-model="customS" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
-                </label>
-                <button @click="applyCustom" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press">应用自定义</button>
-                <button @click="onReset" class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 transition btn-press">↺ 恢复默认</button>
+
+              <!-- ② 配色来源：跟随壁纸 / 每次随机（互斥二选一，做成清晰的三段式） -->
+              <div class="mt-3">
+                <div class="text-xs text-gray-500 mb-1.5">{{ tt('theme.paletteSource') }}</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
+                    :title="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
+                    class="seg-btn flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition btn-press border disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="isPaletteAuto ? 'seg-active' : 'seg-idle'">
+                    <AppIcon scale="xs" name="palette" />{{ tt('theme.pickFromWallpaper') }}
+                  </button>
+                  <button @click="setPaletteMode('random')"
+                    class="seg-btn flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="state.paletteMode === 'random' ? 'seg-active' : 'seg-idle'">
+                    <AppIcon scale="xs" name="refresh" />{{ tt('theme.randomEachRefresh') }}
+                  </button>
+                </div>
+                <!-- 图源不支持跨域取色时，只提示一次（原先分散在按钮后缀 + 底部两条提示里） -->
+                <p v-if="noCorsSource" class="text-xs text-warning-dark mt-1.5 flex items-start gap-1">
+                  <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsWarning') }}
+                </p>
               </div>
-              <div class="mt-3 flex items-center gap-2 flex-wrap">
-                <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
-                  :title="noCorsSource ? '当前图源无跨域许可，无法读取像素取色；如需取色请改用 Loliapi 或支持 CORS 的自定义图源' : '换壁纸后自动提取主色调'"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-inherit"
-                  :class="state.paletteMode === 'auto' && !noCorsSource ? 'bg-accent/10 border-accent/50 text-accent-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                  🎨 跟随壁纸取色{{ noCorsSource ? '（当前图源不可用）' : '' }}
-                </button>
-                <button @click="setPaletteMode('random')"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                  :class="state.paletteMode === 'random' ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                  🎲 每次刷新随机配色
-                </button>
+
+              <!-- ③ 自定义取色：低频高级项，默认折叠 -->
+              <button @click="showCustomColor = !showCustomColor"
+                class="mt-3 flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press">
+                <AppIcon scale="xs" :name="showCustomColor ? 'caretUp' : 'caretDown'" />
+                {{ tt('theme.customColor') }}
+              </button>
+              <div v-if="showCustomColor" class="mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 flex items-center gap-2 flex-wrap">
+                <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                  {{ tt('theme.primary') }}
+                  <input type="color" v-model="customP" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
+                </label>
+                <label class="flex items-center gap-1.5 text-xs text-gray-600">
+                  {{ tt('theme.secondary') }}
+                  <input type="color" v-model="customS" class="w-8 h-8 rounded-lg cursor-pointer border border-primary/20 bg-transparent p-0.5" />
+                </label>
+                <button @click="applyCustom" class="btn-base btn-primary !px-3 !py-1 !text-xs">{{ tt('theme.applyCustom') }}</button>
               </div>
-              <p class="text-xs text-gray-400 mt-1.5">「跟随壁纸取色」会在换壁纸后自动提取主色调；「每次刷新随机」每次打开随机配色；选用下方预设或自定义则固定。
-                <span v-if="noCorsSource" class="text-warning-dark/90">未配置跨域代理：当前图源像素不可读，取色无法进行 —— 部署 Cloudflare Worker 后即可恢复。</span>
-              </p>
             </section>
 
             <!-- 背景图 -->
             <section>
               <div class="flex items-center justify-between mb-2">
-                <h4 class="text-sm font-bold text-gray-700">随机壁纸背景</h4>
-                <button @click="toggleBg" class="w-11 h-6 rounded-full transition-all relative btn-press"
-                  :class="state.bgEnabled ? 'bg-gradient-to-r from-primary to-primary-light' : 'bg-gray-300'">
+                <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.wallpaper') }}</h4>
+                <button @click="toggleBg" role="switch" :aria-checked="state.bgEnabled ? 'true' : 'false'"
+                  :aria-label="state.bgEnabled ? tt('theme.bgOff') : tt('theme.bgOn')"
+                  class="w-11 h-6 rounded-full transition-all relative btn-press"
+                  :class="state.bgEnabled ? 'bg-gradient-to-r from-primary to-primary-dark' : 'bg-gray-300'">
                   <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" :class="state.bgEnabled ? 'left-[1.375rem]' : 'left-0.5'"></span>
                 </button>
               </div>
@@ -94,34 +122,40 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <select v-model="state.bgProvider"
                     class="flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
-                    <option value="alcy">Alcy（默认｜图质最佳）</option>
-                    <option value="dmoe">dmoe</option>
-                    <option value="loliapi">Loliapi（图库较旧）</option>
-                    <option value="custom">自定义图片地址</option>
+                    <option value="alcy">{{ tt('theme.providerAlcy') }}</option>
+                    <option value="dmoe">{{ tt('theme.providerDmoe') }}</option>
+                    <option value="loliapi">{{ tt('theme.providerLoliapi') }}</option>
+                    <option value="custom">{{ tt('theme.customUrl') }}</option>
                   </select>
+                  <!-- 改用主题色渐变（.btn-toned）：原先写死 secondary 渐变，
+                       主题色偏粉时「白字压浅粉」对比度不足；.btn-toned 的主色→副色深端
+                       已按浅色背景收敛，白字始终可读。 -->
                   <button v-if="state.bgProvider !== 'custom'" @click="onShuffle"
-                    class="px-3 py-2 rounded-xl text-xs font-medium bg-gradient-to-r from-secondary to-secondary-light text-white hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">
-                    🔄 换一张
+                    :aria-label="tt('theme.changeOne')"
+                    class="btn-base btn-toned !px-3 !py-2 !text-xs shrink-0">
+                    <AppIcon scale="xs" name="refresh" /> {{ tt('theme.changeOne') }}
                   </button>
                 </div>
-                <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" placeholder="https://... 直链图片地址"
+                <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
                   class="w-full mt-2 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
-                <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">填写直链后点击「完成」即应用并保存，无需再点「换一张」。</p>
+                <p v-if="state.bgProvider === 'custom'" class="text-xs text-gray-400 mt-1.5">{{ tt('theme.customUrlHint') }}</p>
                 <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
                 <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
                      点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
                      不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
                 <div v-if="state.bgProvider !== 'custom'" class="mt-2 flex items-center gap-2 flex-wrap">
+                  <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
+                       后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。 -->
                   <button @click="setAutoSwitch(true)"
-                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                    :class="state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                    🔄 每次打开自动换一张
+                    class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
+                    <AppIcon scale="xs" name="refresh" class="inline-block" /> {{ tt('theme.autoChange') }}
                   </button>
                   <button @click="setAutoSwitch(false)"
-                    title="固定为当前这张壁纸，刷新不再换图（需跨域代理可用才能解析出稳定图床地址）"
-                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
-                    :class="!state.bgAutoSwitch ? 'bg-primary/10 border-primary/40 text-primary-dark' : 'bg-gray-100 border-transparent text-gray-500'">
-                    📌 固定当前壁纸
+                    :title="tt('theme.autoSwitchHint')"
+                    class="seg-btn flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition btn-press border"
+                    :class="!state.bgAutoSwitch ? 'seg-active' : 'seg-idle'">
+                    <AppIcon scale="xs" name="bookmark" class="inline-block" /> {{ tt('theme.fixCurrent') }}
                   </button>
                 </div>
                 <div v-if="state.bgUrl" class="mt-3">
@@ -130,49 +164,56 @@
                        生成中显示骨架，降级失败才回退原图直出 -->
                   <div class="w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
                     <img v-if="previewSrc" :src="previewSrc" @error="onBgError" @load="bgLoaded = true"
-                      loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
+                      loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <img v-else-if="previewFailed" :src="state.bgBlobUrl || state.bgUrl" @error="onBgError" @load="bgLoaded = true"
-                      loading="lazy" decoding="async" class="w-full h-full object-cover" alt="背景预览" />
+                      loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
                   <div class="flex items-center gap-2 mt-1.5">
-                    <p v-if="bgFailed" class="text-xs text-danger flex-1">⚠️ 图片加载失败，请换一张</p>
+                    <p v-if="bgFailed" class="text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
                     <button @click="openOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      title="在新标签页打开当前壁纸链接">🔗 原链接预览</button>
+                      :title="tt('theme.openOriginalHint')"><AppIcon scale="xs" name="link" />{{ tt('theme.openOriginal') }}</button>
                     <button @click="downloadOriginal"
                       class="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition btn-press shrink-0"
-                      title="下载当前壁纸原图；该图源不允许跨域读取时会自动在新标签页打开原图，供右键另存">⬇ 下载原图</button>
+                      :title="tt('theme.downloadOriginalHint')"><AppIcon scale="xs" name="download" />{{ tt('theme.downloadOriginal') }}</button>
                   </div>
                   <p v-if="noCorsSource" class="text-xs text-warning-dark/90 mt-1 leading-relaxed">
-                    ⓘ 未配置跨域代理：当前图源不返回跨域许可，取色、下载与「预览一致」均不可用 —— 部署 Cloudflare Worker 后即可全部恢复。
+                    ⓘ {{ tt('theme.noCorsDetail') }}
                   </p>
                 </div>
-                <div class="mt-3 space-y-2">
-                  <label class="flex items-center gap-3 text-xs text-gray-500">
-                    <span class="w-16 shrink-0">遮罩浓度</span>
+                <!-- 遮罩/模糊属于低频微调：默认折叠，避免弹窗被撑到必须滚动，
+                     导致底部控件被裁（原先「遮罩浓度」滑块就被切掉一半）。 -->
+                <div class="mt-3 flex items-center justify-between">
+                  <button @click="showTuning = !showTuning"
+                    class="flex items-center gap-1 text-xs text-gray-400 hover:text-primary transition btn-press">
+                    <AppIcon scale="xs" :name="showTuning ? 'caretUp' : 'caretDown'" />
+                    {{ tt('theme.tuning') }}
+                  </button>
+                  <button v-if="showTuning" @click="resetBgTuning" :title="tt('theme.resetMaskBlurHint')"
+                    class="px-2 py-1 rounded-lg text-[0.6875rem] text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
+                </div>
+                <div v-if="showTuning" class="mt-2 p-3 rounded-xl bg-white/50 border border-primary/15 space-y-2.5">
+                  <label class="flex items-center gap-3 text-xs text-gray-600">
+                    <span class="w-14 shrink-0">{{ tt('theme.maskOpacity') }}</span>
                     <input type="range" min="0" max="0.9" step="0.05" v-model.number="state.bgDim" @input="applyBackground()"
                       class="flex-1 accent-pink-500" />
-                    <span class="w-10 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
+                    <span class="w-9 text-right font-mono">{{ Math.round(state.bgDim * 100) }}%</span>
                   </label>
-                  <label class="flex items-center gap-3 text-xs text-gray-500">
-                    <span class="w-16 shrink-0">背景模糊</span>
+                  <label class="flex items-center gap-3 text-xs text-gray-600">
+                    <span class="w-14 shrink-0">{{ tt('theme.blur') }}</span>
                     <input type="range" min="0" max="20" step="1" v-model.number="state.bgBlur" @input="applyBackground()"
                       class="flex-1 accent-pink-500" />
-                    <span class="w-10 text-right font-mono">{{ state.bgBlur }}px</span>
+                    <span class="w-9 text-right font-mono">{{ state.bgBlur }}px</span>
                   </label>
                 </div>
-                <div class="flex items-center justify-end mt-3">
-                  <button @click="resetBgTuning" title="恢复默认（遮罩 25%、模糊 5px）"
-                    class="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-primary hover:bg-primary/5 transition btn-press shrink-0">↺ 恢复默认（遮罩/模糊）</button>
-                </div>
               </template>
-              <p v-else class="text-xs text-gray-400">开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。</p>
+              <p v-else class="text-xs text-gray-400">{{ tt('theme.bgOffHint') }}</p>
             </section>
           </div>
 
           <div class="px-6 py-4 border-t border-white/20 flex justify-end glass rounded-b-2xl shrink-0">
-            <button @click="onFinish" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-light rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">完成</button>
+            <button @click="onFinish" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">{{ tt('theme.done') }}</button>
           </div>
         </div>
       </div>
@@ -182,13 +223,25 @@
 
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette } from '../composables/useAppearance'
+import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
+import { useDialogFocus } from '../composables/useDialogFocus'
+import { useI18n } from '../composables/useI18n'
+
+const { tt } = useI18n()
 
 const props = defineProps({ show: Boolean })
 const emit = defineEmits(['close'])
 
 const { state, setGlass, setPalette, setPaletteMode, setAutoSwitch, randomizePalette, shuffleBackground, applyCustomBackground, toggleBackground, applyBackground } = useAppearance()
+
+// 主题面板是全局弹窗，App.vue 没有页面级 Esc 处理，所以由组合式接管 Esc 关闭
+const panelEl = ref(null)
+useDialogFocus({
+  isOpen: () => props.show,
+  getDialog: () => panelEl.value,
+  onEscape: () => emit('close'),
+})
 
 const bgLoaded = ref(false)
 const bgFailed = ref(false)
@@ -350,16 +403,24 @@ watch(() => props.show, (v) => {
 })
 
 const presets = [
-  { name: '樱紫（默认）', p: [263, 67, 55], s: [329, 81, 60] },
-  { name: '蔚蓝海', p: [215, 85, 55], s: [190, 85, 46] },
-  { name: '樱花粉', p: [340, 80, 60], s: [280, 55, 62] },
-  { name: '薄荷青', p: [172, 70, 42], s: [200, 85, 55] },
-  { name: '暖橙暮', p: [25, 90, 55], s: [345, 80, 58] },
-  { name: '莓果紫', p: [288, 60, 55], s: [320, 75, 55] },
+  { key: 'preset.sakura', p: [263, 67, 55], s: [329, 81, 60] },
+  { key: 'preset.ocean', p: [215, 85, 55], s: [190, 85, 46] },
+  { key: 'preset.pink', p: [340, 80, 60], s: [280, 55, 62] },
+  { key: 'preset.mint', p: [172, 70, 42], s: [200, 85, 55] },
+  { key: 'preset.dusk', p: [25, 90, 55], s: [345, 80, 58] },
+  { key: 'preset.berry', p: [288, 60, 55], s: [320, 75, 55] },
 ]
 
 const isActivePreset = (preset) =>
   state.palette && state.palette.p[0] === preset.p[0] && state.palette.s[0] === preset.s[0]
+
+// 自定义取色：低频高级项，默认折叠起来，避免一排颜色选择器冲散主流程
+const showCustomColor = ref(false)
+// 遮罩浓度 / 背景模糊属于低频微调项，默认折叠以压缩弹窗高度
+const showTuning = ref(false)
+
+// 「跟随壁纸取色」是否处于可用且选中状态（图源不支持跨域取色时视为不可用）
+const isPaletteAuto = computed(() => state.paletteMode === 'auto' && !noCorsSource.value)
 
 // 自定义取色器（默认给当前色 / 默认色）
 const customP = ref('#7C3AED')
@@ -373,19 +434,19 @@ const resetBgTuning = () => {
   state.bgDim = 0.25
   state.bgBlur = 5
   applyBackground()
-  showToast('已恢复默认遮罩与模糊')
+  showToast(tt('toast.maskBlurReset'))
 }
 
 const onRandom = () => {
   setPaletteMode('manual')
   randomizePalette()
-  showToast('已随机配色 🎲')
+  showToast(tt('toast.paletteRandomized'))
 }
 
 // 恢复默认配色：回到默认模式「跟随壁纸取色」（须与 state.paletteMode 的默认值保持一致）
 const onReset = () => {
   setPaletteMode('auto')
-  showToast('已恢复默认配色（跟随壁纸取色）')
+  showToast(tt('toast.paletteReset'))
 }
 
 const toggleBg = async () => {
@@ -398,9 +459,9 @@ const onShuffle = async () => {
   bgFailed.value = false
   try {
     await shuffleBackground()
-    showToast('背景已更换 🖼️')
+    showToast(tt('toast.wallpaperChanged'))
   } catch (e) {
-    showToast(e.message || '获取壁纸失败', 'error')
+    showToast(e.message || tt('toast.fetchWallpaperFailed'), 'error')
   }
 }
 
@@ -411,13 +472,13 @@ const onFinish = async () => {
       // 自定义图源：应用地址（为空则报错并留在面板内让用户补填）
       const url = state.bgCustomUrl.trim()
       if (!url) {
-        showToast('请先填写图片地址', 'error')
+        showToast(tt('toast.pleaseEnterUrl'), 'error')
         return
       }
       if (state.bgUrl !== url) {
         applyCustomBackground()
         bgFailed.value = false
-        showToast('自定义壁纸已应用 🖼️')
+        showToast(tt('toast.customWallpaperApplied'))
       }
     } else if (state.bgProvider !== providerAtOpen.value) {
       // 随机图源：切换了图源，立即取一张
@@ -425,9 +486,9 @@ const onFinish = async () => {
       bgFailed.value = false
       try {
         await shuffleBackground()
-        showToast('壁纸已更新 🖼️')
+        showToast(tt('toast.wallpaperUpdated'))
       } catch (e) {
-        showToast(e.message || '获取壁纸失败', 'error')
+        showToast(e.message || tt('toast.fetchWallpaperFailed'), 'error')
         return
       }
     }
@@ -437,7 +498,7 @@ const onFinish = async () => {
 
 const onBgError = () => {
   bgFailed.value = true
-  showToast('背景图片加载失败，请换一张', 'error')
+  showToast(tt('toast.wallpaperLoadFailed'), 'error')
 }
 
 // 在新标签页打开当前壁纸链接。
@@ -445,8 +506,9 @@ const onBgError = () => {
 // 无缓存（无 CORS 图源）时打开原始链接，此时因服务端是随机端点，可能抽到另一张。
 const openOriginal = () => {
   const url = getWallpaperBlob()?.url || state.bgUrl
-  if (!url) return
-  window.open(url, '_blank', 'noopener')
+  const safe = sanitizeImageUrl(url || '')
+  if (!safe) return
+  window.open(safe, '_blank', 'noopener,noreferrer')
 }
 
 // 下载原图：优先使用主程序缓存的壁纸字节——它与背景、预览是**同一张**，且无需任何代理。
@@ -459,7 +521,7 @@ const MIME_EXT = {
   'image/avif': 'avif',
 }
 const downloadOriginal = async () => {
-  showToast('正在下载原图…')
+  showToast(tt('toast.downloading'))
   let blob = getWallpaperBlob()?.blob || null
   if (!blob) {
     const url = state.bgUrl
@@ -484,12 +546,12 @@ const downloadOriginal = async () => {
     // 跨域图源无法用 JS 取字节：能「渲染」不等于能「读取」（同源策略），
     // 且跨域 <a download> 的 download 属性会被浏览器直接忽略；代理链也已全部失效。
     // 降级为「打开原图」——浏览器能正常显示图片，用户右键另存即可，不再报错了事。
-    const fallback = state.bgUrl
+    const fallback = sanitizeImageUrl(state.bgUrl || '')
     if (fallback) {
-      window.open(fallback, '_blank', 'noopener')
-      showToast('该图源不允许直接下载，已在新标签页打开原图，请右键「图片另存为」', 'warning')
+      window.open(fallback, '_blank', 'noopener,noreferrer')
+      showToast(tt('toast.downloadNotAllowed'), 'warning')
     } else {
-      showToast('当前没有可下载的壁纸', 'error')
+      showToast(tt('toast.noWallpaperToDownload'), 'error')
     }
     return
   }
@@ -504,7 +566,7 @@ const downloadOriginal = async () => {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(objUrl), 60000)
-  showToast('原图下载已开始 🖼️')
+  showToast(tt('toast.downloadStarted'))
 }
 
 // 切换图源后提示重新换图

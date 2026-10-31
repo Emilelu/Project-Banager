@@ -52,7 +52,15 @@
 
 - **列表视图**：表格展示所有等番，支持分页与自定义每页条数
 - **搜索**：按番剧名称实时过滤
+- **默认按预计日期升序**：空日期自动沉底，首次打开即按最快要更新的排在前面
 - **排序记忆**：表头排序偏好持久化，下次打开保持
+- **拖动排序**（`v1.3.3` 新增）：直接拖动表格行即可自定义顺序，落库到 `sort_order`
+  - 拖起即进入「手动排序」模式（表头箭头消失），避免刚排好的顺序被字段排序打乱
+  - 拖动时目标行有 `ring` 高亮、被拖行半透明，松手后提示「排序已保存」
+  - **拖到末行下方会追加到末尾**：拖动时表格底部动态出现一条「末尾放置带」，
+    解决「表格底边贴着最后一行、指针一越过就离开容器导致拖不到末尾」的通病
+  - 「↺ 恢复按日期排序」放在**翻页栏内**（与分页控件同排、样式统一），不占工具栏
+  - 批量选择模式或搜索过滤中自动禁用拖动（避免过滤后的下标与真实顺序错位）
 - **查看新番**：数据源迁移至 [yuc.wiki（長門番堂）](https://yuc.wiki/)——
   - 顶部常驻「📺 本季新番」直达链接（自动计算当前季度，如 `https://yuc.wiki/202607`）
   - 「📅 查看新番」下拉菜单：本年四季 + 次年冬季 + [新番卫星观测站](https://yuc.wiki/new)（未开播作品），**按钮全年常显**
@@ -91,9 +99,63 @@
 - **高分屏适配**：界面随屏幕尺寸合理缩放（根字号 `clamp(14px, 0.8333vw, 28px)`），4K 屏下文字、按钮、弹窗整体放大，不再眯眼看小字
 - **点击空白取消选中**：追番 / 等番 / 已看三个页面，点击番剧卡片或表格行以外的区域（面板空白、页面留白）自动取消选中；点击按钮、输入框等交互元素不影响选中状态
 - **主题切换**：日间 / 暗黑 / 跟随系统
-- **实时时钟 / 页面动画 / 毛玻璃效果**
-- **数据备份**：侧边栏一键导出 `.db` 备份文件、从备份恢复（带确认弹窗）；侧边栏显示「上次备份」时间，超过一周未备份自动高亮提醒
-- **全局 Toast 通知**：堆叠显示、错误类停留更久，路由切换不丢失
+- **中英日三语 i18n**（`v1.3.3` 新增）：
+  - 顶栏语言按钮一键切换「简体中文 → English → 日本語」，`<html lang>` 同步、偏好本地持久化
+  - 三语共 **403 个文案 key 严格对齐**（零缺失、零多余、占位符逐项校验），无第三方依赖
+  - **中日字体统一家族**：遵循 W3C `:lang` 思路，中日都走 **Noto Sans 家族的区域变体**（日文 `Noto Sans JP` / 中文 `Noto Sans SC`），只切字形、不切设计语言
+    - 实测墨迹高度：简体 45px、日文 44px、共用汉字 43px，**差异 ≤1px**；早先用 Yu Gothic + Microsoft YaHei 两套家族时差 4px 以上，混排明显违和
+    - `font-synthesis: none` 锁死字重，避免回退字体改变粗细
+- **帮助弹窗**（顶栏 `?` 图标）：集中收纳**键盘快捷键**（Esc / Tab / Enter / Ctrl+Enter / 双击单元格 / 中键 / 右键）与**操作小贴士**，不再散落页面各处占地方
+- **工具栏布局优化**：依赖「已选中」的操作按钮在未选中时**完全隐藏**（不再是一排灰按钮白占宽度），选中后才出现；三语切换不再挤行
+- **「当前选中」文字可直接选中复制**：该区域已加入「点击空白取消选中」白名单，复制番名/日期时不会一松手就消失
+- **全站图标系统统一为内联 SVG**（`v1.3.3`）：
+  - 新增 `AppIcon` 统一组件 + `iconData.js` 图标库（**45+ 图标**），全站唯一图标来源
+  - 规范与顶栏一致：24×24 视框、1.9 描边、圆头圆角端点、`currentColor` 继承文字色
+  - **emoji 图标全部移除**：导航、工具栏按钮、表头、空态、确认弹窗、右键菜单、星期装饰、版本号装饰
+  - 排序箭头 / 下拉箭头 / 恢复符号也从文本符号（`↑ ↓ ▾ ↺`）改为 SVG
+  - 实测 4 个页面共 119 个 SVG，**零 emoji 残留**
+  - 弃用 emoji 的原因：跨平台字形差异大、无法随文字色变化、粗细不统一，与毛玻璃极简风格冲突
+- **语言切换改为图标 + 下拉菜单**（`v1.3.3`）：地球图标点开菜单直接选「中文 / English / 日本語」，当前语言带勾选标记，点外部或 Esc 关闭
+- **壁纸开关 Toast 完整 i18n**（`v1.3.3`）：`useAppearance` 里 7 处硬编码中文提示（开启/关闭/加载失败/取色不支持等）全部接入三语
+- **下拉菜单毛玻璃质感修正**（`v1.3.3`）：新增 `.app-menu-surface`，在液态玻璃半透明背景上补足实底（0.82 白）+ `blur(20px)`，任意壁纸与表格上都清晰可读；点空白处可靠关闭；菜单加宽到 12rem 且 `nowrap`，自定义每页条数的「确定」不再被挤成两行
+- **图标尺寸语义化**（`v1.3.3`）：`AppIcon` 改为 `scale` 五档预设（`xs/sm/md/lg/xl`），消除模板里零散的 `w-3/3.5/4/5/10` 混用；实测同类图标全部收敛到同一像素档
+- **按钮体系统一 & 主题色驱动**（`v1.3.3`）：
+  - 新增 `.btn-base` 基座 + 4 类语义色（`.btn-primary` / `.btn-toned` / `.btn-neutral` / `.btn-danger`），颜色全部由 CSS 变量（当前主题色）驱动 —— 改主色后所有按钮自动跟随
+  - 消除原先手写的 7 套写死渐变（success/warning/accent/gray…）
+  - 全站按钮共享同一悬浮放大（`scale 1.045`）/ 按下回弹（`0.96`）动效，含侧边栏导航与顶栏语言按钮
+  - 集数加减按钮统一为 `.btn-mini-plus/-minus`（主题色系）与 `.btn-step`（表单步进），不再「+ 绿 / - 橙」割裂
+- **选中态过渡**（`v1.3.3`）：工具栏选中项操作按钮与「当前选中」文字改用 `transition-group`，淡入 + 上移 + 高度收拢，不再突兀闪现（顺带修正 `transition-group` 内 `v-show` 不生效的问题）
+- **可读性系统化修复**（`v1.3.3`）：
+  - 新增 `--txt-card-700` 深色档，`--txt-card-*` 四档覆盖「压在浅色玻璃上的次级小字」
+  - 浅色模式下 `text-primary` 统一改指 `--c-primary-dark`（该变量已朝浅色背景收敛），深色模式改指 `--c-primary-light`；修复亮壁纸取色后「等番: N 部」「bgm.tv」对比度仅 3.2:1 的问题
+  - 星期表头 7 种配色文字全部校准到 ≥4.5:1
+  - 分页当前页由 `bg-primary` 改 `.btn-page-active`（深主色底 + 白字），修复亮主色下 2.88:1
+  - 备份气泡改 `app-menu-surface` 实底 + 加深文字（amber-800），深色模式反转
+  - **全站对比度扫描从 18 处不达标降到 1 处（该处为渐变按钮扫描误报，实测正常）**
+  - 集数 `+/-` 迷你按钮改用饱和实色底，对比度从 4.44:1 / 2.18:1 提升到 **7.1:1 / 5.7:1**
+  - 帮助弹窗 `kbd` 按键标签补齐显式色值（原继承导致浅字压浅底几乎不可读）
+- **顶栏 GitHub 入口**（`v1.3.3`）：右上角新增 GitHub 图标按钮，直达项目仓库
+- **动态参数保留可读文字**（`v1.3.3`）：快速填充不再在生成时 `encodeURIComponent`，数据库存「keyword=侦探已死 第2期」这类可读文本；URL 编码推迟到**打开链接时**（`buildItemUrl` 内按 `&`/`=` 拆段、只编码值）
+- **编辑保存失败修复**（`v1.3.3`）：打开编辑弹窗时快照 `editingId`，提交时优先用它而非 `selected.value.id` —— 修复「编辑中选中被清空（点空白/切批量）→ 读 null.id 抛错 → 被 catch 吞成『操作失败』」；catch 不再静默，控制台留堆栈、提示带原因
+- **全局禁止文字框选**（`v1.3.3`）：`user-select: none` 作为全局默认，消除 Shift 拖动 / 三击 / Ctrl+A 在毛玻璃与表格上的选区高亮；仅输入框、文本域、`.selectable-text` 显式放开；`::selection` 改主题色低透明度
+- **侧边栏导航整体缩放**（`v1.3.3`）：去掉图标独立的 `group-hover:scale-110`，图标与文字统一由 `.nav-item` 的 `scale(1.03)` 驱动（原先倍率不一致，显得"文字没跟上"）；行高提到 `min-height: 3rem`
+- **弹窗标题图标统一**（`v1.3.3`）：所有弹窗/区块标题图标固定 `scale="lg"`，移除会让图标继承异常行高的 `<span class="text-xl">` 外壳；帮助弹窗残留 `⌨️` 换成 `AppIcon`
+- **下拉菜单弹出过渡**（`v1.3.3`）：每页条数菜单与季节菜单套上 `pop`/`fade` 过渡（缩放淡入 + 收起淡出）
+- **季节菜单点击无反应修复**（`v1.3.3`）：补回 `season-trigger` 标记类 —— 缺失时 `onDocClick` 把触发按钮判为外部点击，菜单瞬开瞬关
+- **主题与背景弹窗按直觉重排**（`v1.3.3`）：
+  - 三块按「选外观 → 选颜色 → 选壁纸」的决策顺序；每块内部再分「主操作 / 选项 / 高级微调」
+  - 配色拆三层：**预设色环** → **配色来源**（跟随壁纸 / 每次随机，分段控件）→ **自定义颜色**（默认折叠）
+  - 遮罩浓度与背景模糊收进「遮罩与模糊」折叠区，重置按钮随折叠出现
+  - 效果：弹窗高度 **765px → 592px**，内容区 `scrollHeight === clientHeight`（471px），**不再需要滚动、底部控件不再被裁**
+  - 新增 `.seg-btn` 分段控件：选中 = 白底 + 主题色描边 + 深色文字，替换原「同色系淡底 + 同色系深字」选中态 —— 修掉主题色偏红/粉时「红字压红底」辨识度差
+  - 「换一张」由写死 `secondary` 渐变改为主题色驱动 `.btn-toned`，白字对比度稳定
+- **实时时钟**：常驻只显示日期与星期；**悬浮/聚焦时气泡显示时分秒**，减少每秒刷新的视觉噪音
+- **页面动画 / 毛玻璃效果**
+- **数据备份**：侧边栏一键导出 `.db` 备份文件、从备份恢复（带确认弹窗，**恢复前自动导出一份当前库作为回滚点**）
+  - 「上次备份」改为**悬浮到导出按钮时气泡展示**（`v1.3.3`），超过一周未备份附警示；气泡按视口动态定位，长文案（印尼语尤甚）不溢出页面
+- **全局 Toast 通知**：堆叠显示、错误类停留更久、同文案合并、上限 5 条、可手动关闭、`role="status" aria-live="polite"`
+- **无障碍**：13 个弹窗 `role="dialog" aria-modal` + 焦点进入/Tab 陷阱/关闭归还；表头 `aria-sort`、勾选框 `role=checkbox`、图标按钮 `aria-label`
+- **健壮性**：壁纸 URL 仅放行 `http/https/blob`（拒绝 `javascript:`/`data:`）、localStorage 配置 schema 校验、壁纸探测 10s 超时、取色代理链 4s 超时且换图即中止、落盘防抖合并 + `pagehide` 兜底
 - **细节**：弹窗打开自动聚焦第一个输入框；三个页面按钮尺寸统一；追番页空状态提供「添加番剧 / 从 Excel 导入」引导
 
 ---
@@ -111,13 +173,18 @@ pnpm dev        # 开发服务器 http://localhost:5174
 ### 构建与使用
 
 ```bash
-pnpm build      # 产物：dist/index.html（单文件，约 1.5 MB，含内联的 WASM 与全部资源）
+pnpm build      # 产物：dist/index.html（真正单文件，约 1.7 MB，含内联的 WASM / 图标 / 样式）
+pnpm test       # 运行全部单元与组件测试（396 用例 / 11 文件）
+pnpm test:coverage  # 带覆盖率报告
 ```
 
-构建出的 `dist/index.html` 可以：
+构建出的 `dist/index.html` **不依赖任何外部文件**（WASM、logo、favicon、样式、脚本全部内联），可以：
 
-- 直接双击用浏览器打开（`file://` 协议可用，WASM 已内联）
+- 直接双击用浏览器打开（`file://` 协议可用）
 - 放到任意静态服务器 / 网盘 / U 盘随身携带
+
+> 早期版本的 `dist/` 会额外产出 `logo.png`（2.4 MB）与 `favicon.png`，与「单文件」的描述不符；
+> 现已将 logo 压缩为 256px WebP（24.9 KB）并从 `src/assets` 内联，favicon 内联为 data URI。
 
 数据保存在浏览器的 IndexedDB 中，换浏览器或换电脑时用侧边栏的「导出备份 / 导入恢复」迁移。
 
@@ -134,21 +201,30 @@ project-banager/
 ├── tailwind.config.js
 ├── postcss.config.js
 ├── template.xlsx                   # Excel 导入格式样例
-├── dist/                           # 构建产物（单文件 index.html）
-├── public/
-│   ├── favicon.png
-│   └── logo.png
+├── dist/                           # 构建产物（单文件 index.html，无外部资源）
+├── review/                         # 代码审计与修复报告
+├── tests/                          # vitest 单元/组件测试 + Playwright E2E
+├── vitest.config.js
 └── src/
     ├── main.js                     # 应用入口
     ├── App.vue                     # 根组件（侧边栏 + 路由 + 全局通知）
     ├── style.css                   # 全局样式、暗色模式、响应式缩放
+    ├── assets/
+    │   ├── logo.webp               # 侧栏 Logo（256px，构建时内联）
+    │   └── favicon.webp            # 内联为 data URI
     ├── components/
     │   ├── WatchingCard.vue        # 追番卡片（周历列与未排期区共用）
     │   ├── ToastHost.vue           # 全局 Toast 通知
     │   └── ThemeSettings.vue       # 主题与背景设置弹窗
+    ├── locales/                    # 三语语言包
+    │   ├── zh.js / en.js / ja.js   # 381 个 key 严格对齐
+    │   └── index.js                # 集中注册
     ├── composables/
     │   ├── useTheme.js             # 日间 / 暗色 / 跟随系统
     │   ├── useAppearance.js        # 玻璃风格 / 配色 / 壁纸背景引擎
+    │   ├── useI18n.js              # i18n 引擎（回退链 / 插值 / 持久化）
+    │   ├── useDialogFocus.js       # 弹窗焦点陷阱 / 归还
+    │   ├── useImportTask.js        # 导入任务状态（跨路由保持）
     │   ├── useDatePicker.js        # 日期解析 / 校验 / 排序比较
     │   ├── useEpisode.js           # 集数增减（补零 / 小数）与动态链接拼接
     │   └── useToast.js             # 全局 Toast 队列
@@ -170,14 +246,18 @@ project-banager/
 
 ## 🗄️ 数据表结构
 
-数据全部存于浏览器 IndexedDB 内的 SQLite 数据库（`BangumiManagerDB`），各表均含 `sort_order`、`created_at`、`updated_at`：
+数据全部存于浏览器 IndexedDB 内的 SQLite 数据库（`BangumiManagerDB`）。各表结构如下（`sort_order` 用于稳定排序，`created_at` / `updated_at` 用于审计）：
 
 | 表 | 字段 |
 |------|------|
-| **watching**（追番） | id, name, day_of_week, time_slot, current_episode, url, url_params, notes |
-| **remaining**（等番） | id, name, expected_date, url, url_params, notes |
-| **watched**（已看） | id, name, watch_date, url, url_params, notes |
-| **watched_years**（已看年份） | id, year_label |
+| **watching**（追番） | id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order, created_at, updated_at |
+| **remaining**（等番） | id, name, expected_date, url, url_params, notes, sort_order, created_at, updated_at |
+| **watched**（已看） | id, name, watch_date, url, url_params, notes, sort_order, created_at, updated_at |
+| **watched_years**（已看年份） | id, year_label, sort_order, created_at, updated_at |
+
+已为高频查询建立索引：`watching(day_of_week, sort_order)`、`remaining(expected_date)`、`watched(watch_date)` 等，避免按天/按年视图全表扫描。
+
+> 历史版本的 `watched_years` 缺少 `created_at` / `updated_at`，启动时会自动补列并回填（SQLite 的 `ALTER TABLE ADD COLUMN` 不接受 `CURRENT_TIMESTAMP` 默认值，因此采用"可空列 + UPDATE 回填"）。
 
 `url` + `url_params` 组合生成动态链接：`url` 为基础地址，`url_params` 中的 `{集数}` 在打开链接时替换为当前集数（如 `keyword={集数}` → `keyword=914`）。
 

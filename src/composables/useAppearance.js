@@ -5,7 +5,8 @@
  */
 import { reactive, watch } from "vue";
 import { showToast } from "./useToast";
-import { relLum, deriveTextScale, contrast } from "./colorMath.js";
+import { t } from "./useI18n";
+import { relLum, deriveTextScale, contrast, rgbWithLum } from "./colorMath.js";
 
 const STORAGE_KEY = "banager_appearance";
 
@@ -172,23 +173,80 @@ function hslRelLum([h, s, l]) {
 }
 
 /** 朝暗处收敛，直到在 bgY 亮度的背景上达到 target 对比度 */
+/** 朝暗处收敛，直到在 bgY 亮度的背景上达到 target 对比度（供浅色背景使用）
+ *  与 lightenToContrast 对称：二分找达标的最大 L，达不到就降饱和兜底。 */
 function darkenToContrast(hsl, bgY, target = 4.5, minL = 14) {
-  const out = [hsl[0], hsl[1], hsl[2]];
-  for (let i = 0; i < 60 && out[2] > minL; i++) {
-    if (contrast(hslRelLum(out), bgY) >= target) break;
-    out[2] -= 2;
+  const [h, s0, l0] = hsl;
+  const lumAt = (sat, l) => hslRelLum([h, sat, clamp(l, 0, 100)]);
+
+  const solve = (sat) => {
+    // 纯黑是下界：若纯黑都不达标（背景本身很暗），该饱和度无解
+    if (contrast(lumAt(sat, 0), bgY) < target) return null;
+    let lo = 0;
+    let hi = clamp(l0, 0, 100);
+    if (contrast(lumAt(sat, hi), bgY) >= target) return hi;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (contrast(lumAt(sat, mid), bgY) >= target) lo = mid;
+      else hi = mid;
+    }
+    return Math.max(minL, lo);
+  };
+
+  let sat = clamp(s0, 0, 100);
+  let l = solve(sat);
+  while (l == null && sat > 8) {
+    sat -= 6;
+    l = solve(sat);
   }
-  return out;
+  if (l == null) return [h, sat, 0];
+  // 二分得到的是浮点阈值；取整时朝「更安全」的方向对齐，避免因舍入跌破 target
+  let li = Math.round(l);
+  for (let i = 0; i < 6 && contrast(lumAt(sat, li), bgY) < target && li > 0; i++) li -= 1;
+  return [h, sat, Math.max(minL, li)];
 }
 
-/** 朝亮处收敛，直到在 bgY 亮度的背景上达到 target 对比度（供暗色背景使用） */
-function lightenToContrast(hsl, bgY, target = 4.5, maxL = 88) {
-  const out = [hsl[0], hsl[1], hsl[2]];
-  for (let i = 0; i < 60 && out[2] < maxL; i++) {
-    if (contrast(hslRelLum(out), bgY) >= target) break;
-    out[2] += 2;
+/** 朝亮处收敛，直到在 bgY 亮度的背景上达到 target 对比度（供暗色背景使用）
+ *
+ * 原实现用固定 maxL=88 且步进 +2，两个问题：
+ *   1. 循环条件先判断后自增，可能返回 89/90，越出上限；
+ *   2. 高饱和蓝色在 L=88 仍达不到 4.5:1（实测 3.94:1），函数却不报也不降饱和。
+ * 现改为：先在 sRGB 可达的 L 范围内二分出「刚好达标」的最大 L；
+ * 若整条亮度轴都达不到，则逐步降饱和再二分（降饱和能提高相对亮度），
+ * 直到达标或饱和度触底。
+ */
+function lightenToContrast(hsl, bgY, target = 4.5) {
+  const [h, s0, l0] = hsl;
+  const lumAt = (sat, l) => hslRelLum([h, sat, clamp(l, 0, 100)]);
+
+  // 给定饱和度，二分找「对比度达标」所需的最小 L
+  const solve = (sat) => {
+    if (contrast(lumAt(sat, 100), bgY) < target) return null; // 该饱和度下纯白也不达标
+    let lo = clamp(l0, 0, 100);
+    let hi = 100;
+    // 起点已达标就直接用它（不要人为提亮）
+    if (contrast(lumAt(sat, lo), bgY) >= target) return lo;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (contrast(lumAt(sat, mid), bgY) >= target) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  };
+
+  let sat = clamp(s0, 0, 100);
+  let l = solve(sat);
+  while (l == null && sat > 8) {
+    sat -= 6;
+    l = solve(sat);
   }
-  return out;
+  if (l == null) {
+    // 极端情况（例如背景本身极亮）：回退到纯白，保证文字至少可见
+    return [h, sat, 100];
+  }
+  let li = Math.round(l);
+  for (let i = 0; i < 6 && contrast(lumAt(sat, li), bgY) < target && li < 100; i++) li += 1;
+  return [h, sat, Math.min(100, li)];
 }
 
 function hexToHsl(hex) {
@@ -350,7 +408,15 @@ function applyAdaptiveText() {
     const darkScale = deriveTextScale(effY, base, cfg, true);
     const lightScale = deriveTextScale(effY, base, cfg, false);
     const cr = (g) => contrast(relLum(g.split(" ").map(Number)), effY);
-    return cr(darkScale[2]) >= cr(lightScale[2]) ? darkScale : lightScale;
+    const scale = cr(darkScale[2]) >= cr(lightScale[2]) ? darkScale : lightScale;
+    // 第四档：专供压在浅色玻璃上的次级小字（计数 / 链接 / 说明）。
+    // 实测前三档在亮壁纸下仍可能低于 4.5:1，故再推一档：把当前最深档的亮度
+    // 朝"远离背景"方向再压/提一截，用 rgbWithLum 保证方向正确且不过冲。
+    const [r, g, b] = scale[2].split(" ").map(Number);
+    const curY = relLum([r, g, b]);
+    const targetY = effY > 0.5 ? Math.max(0.06, curY - 0.12) : Math.min(0.94, curY + 0.12);
+    const deeper = rgbWithLum([r, g, b], targetY).join(" ");
+    return [scale[0], scale[1], scale[2], deeper];
   };
   const main = pick(effYMain);
   const sb = pick(effYSb);
@@ -371,6 +437,9 @@ function applyAdaptiveText() {
   root.style.setProperty("--txt-card-300", card[0]);
   root.style.setProperty("--txt-card-400", card[1]);
   root.style.setProperty("--txt-card-500", card[2]);
+  // 更深一档：压在浅色玻璃上的次级文字（说明文字、计数、链接等）需要 ≥4.5:1，
+  // 前三档只保证到 500 的灰度，遇到亮壁纸仍可能不足，故补一档 700。
+  root.style.setProperty("--txt-card-700", card[3] ?? card[2]);
 }
 
 // 自适应文字取色的 rAF 合并器：高频路径（遮罩/模糊滑块拖动、开关壁纸、明暗切换等）
@@ -397,20 +466,134 @@ let bgBlobObj = null; // 对应的 Blob 对象，供 createImageBitmap 直接离
 let bgBlobType = ""; // 图片 MIME，供下载时决定文件扩展名
 let bgBlobGen = 0; // 代际：换图时递增，使在途的缓存结果作废
 
+/**
+ * 校验并白名单过滤壁纸图片 URL：
+ * 只接受 http/https 绝对地址、以及同源相对路径 / blob:（预览用）。
+ * 明确拒绝 javascript:、data:、file: 等任何可能被顶层打开的 scheme。
+ * @returns {string} 合法则返回规范化后的 URL，否则返回空串
+ */
+export function sanitizeImageUrl(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  try {
+    const parsed = new URL(s, typeof location !== "undefined" ? location.href : "http://localhost/");
+    if (parsed.username || parsed.password) return "";
+    const proto = parsed.protocol;
+    if (proto === "http:" || proto === "https:" || proto === "blob:") return parsed.href;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+/** 相对/同源路径也允许（例如 ./assets/x.png 这类），但必须不含危险 scheme */
+function isSafeRelativePath(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return false;
+  if (/^(javascript|data|vbscript|file|about):/i.test(s)) return false;
+  return /^(\.\/|\.\.\/|\/)/.test(s) || /^[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp|gif|avif)/i.test(s);
+}
+
+/** 对外统一入口：绝对 URL 走白名单，相对路径单独判断 */
+export function sanitizeBackgroundUrl(raw) {
+  const abs = sanitizeImageUrl(raw);
+  if (abs) return abs;
+  return isSafeRelativePath(raw) ? String(raw).trim() : "";
+}
+
+// ========== 本地配置 schema 校验 ==========
+const APPEARANCE_DEFAULTS = {
+  glass: "liquid",
+  palette: null,
+  paletteMode: "auto",
+  bgEnabled: true,
+  bgProvider: "alcy",
+  bgCustomUrl: "",
+  bgUrl: "",
+  bgDim: 0.25,
+  bgBlur: 5,
+  bgAutoSwitch: true,
+};
+
+function isPlainObject(v) {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function normalizePalette(p) {
+  if (p == null) return null;
+  if (!isPlainObject(p)) return null;
+  const pv = p.p;
+  const sv = p.s;
+  if (!Array.isArray(pv) || pv.length !== 3 || !Array.isArray(sv) || sv.length !== 3) return null;
+  const tuple = (t) => t.every((n) => typeof n === "number" && Number.isFinite(n));
+  if (!tuple(pv) || !tuple(sv)) return null;
+  return { p: pv.map(Number), s: sv.map(Number) };
+}
+
+function normalizeAppearance(raw) {
+  if (!isPlainObject(raw)) return null;
+  const out = { ...APPEARANCE_DEFAULTS };
+  // 只接受已知 key，逐字段按类型/范围校验；未知字段单过滤，不整体丢弃
+  if (typeof raw.glass === "string" && ["frost", "liquid"].includes(raw.glass)) {
+    out.glass = raw.glass;
+  }
+  out.palette = normalizePalette(raw.palette);
+  if (typeof raw.paletteMode === "string" && ["auto", "manual", "random"].includes(raw.paletteMode)) {
+    out.paletteMode = raw.paletteMode;
+  }
+  if (typeof raw.bgEnabled === "boolean") out.bgEnabled = raw.bgEnabled;
+  if (typeof raw.bgProvider === "string" && raw.bgProvider in PROVIDERS) out.bgProvider = raw.bgProvider;
+  if (typeof raw.bgCustomUrl === "string") out.bgCustomUrl = sanitizeBackgroundUrl(raw.bgCustomUrl);
+  if (typeof raw.bgUrl === "string") out.bgUrl = sanitizeBackgroundUrl(raw.bgUrl);
+  if (typeof raw.bgDim === "number" && raw.bgDim >= 0 && raw.bgDim <= 1) out.bgDim = raw.bgDim;
+  if (typeof raw.bgBlur === "number" && raw.bgBlur >= 0 && raw.bgBlur <= 40) out.bgBlur = raw.bgBlur;
+  if (typeof raw.bgAutoSwitch === "boolean") out.bgAutoSwitch = raw.bgAutoSwitch;
+  return out;
+}
+
 function providerHasCors(p) {
   return !!(PROVIDERS[p] && PROVIDERS[p].cors);
 }
 
+// 代理运行时健康度：最近一次经自建代理请求的结果。
+// 之前 providerBlocksPalette 只看「常量是否非空」，导致代理挂了 UI 仍宣称可取色，
+// 这里改为结合真实运行结果判断。
+const proxyHealth = { lastOkAt: 0, lastFailAt: 0, consecutiveFails: 0 };
+
+export function markProxyResult(ok) {
+  if (ok) {
+    proxyHealth.lastOkAt = Date.now();
+    proxyHealth.consecutiveFails = 0;
+  } else {
+    proxyHealth.lastFailAt = Date.now();
+    proxyHealth.consecutiveFails += 1;
+  }
+}
+
+export function getProxyHealth() {
+  return {
+    configured: !!CUSTOM_PROXY,
+    healthy: proxyHealth.consecutiveFails === 0 && proxyHealth.lastOkAt > 0,
+    consecutiveFails: proxyHealth.consecutiveFails,
+    lastOkAt: proxyHealth.lastOkAt,
+    lastFailAt: proxyHealth.lastFailAt,
+  };
+}
+
 /**
- * 该图源是否「明确不支持」跨域取色（无 ACAO 头 → 像素不可读，取色必然失败）。
- * custom 未标记，按「未知」处理 —— 允许用户尝试（可能同源，也可能图床给了 CORS）。
+ * 该图源是否「取色不可用」。
+ * 判定链：图源自带 CORS → 可用；否则看自建代理是否配置且运行时健康。
  */
 export function providerBlocksPalette(p) {
-  // 已配置自建代理时，无 CORS 的图源也能经代理取到像素 → 不再视为「不可取色」，
-  // 「跟随壁纸取色」按钮因此不会禁用（代理是这一切能力的前提）。
-  if (CUSTOM_PROXY) return false;
   const cfg = PROVIDERS[p];
-  return !!cfg && cfg.cors === false;
+  // 图源自己支持 CORS，无需代理
+  if (cfg && cfg.cors === true) return false;
+  // custom：未知，允许用户尝试
+  if (p === "custom") return false;
+  // 无 CORS 的内置图源：必须有代理，且代理不能处于连续失败状态
+  if (!CUSTOM_PROXY) return true;
+  if (proxyHealth.consecutiveFails >= 2) return true;
+  return false;
 }
 
 /** 供弹窗预览 / 下载读取当前壁纸字节；无缓存返回 null（调用方退回旧逻辑） */
@@ -439,15 +622,13 @@ function clearWallpaperBlob() {
 /** 抓取壁纸字节并缓存为 blob URL。仅供带 CORS 的图源调用。 */
 async function cacheWallpaperBlob(url) {
   const gen = bgBlobGen;
-  // 先直连（带 CORS 的图源一步到位）；失败且已配置自建代理时，经代理再取一次。
-  // 这样 alcy / dmoe 这类**无 CORS 图源**也能把字节缓存下来 ——
-  // 「显示 / 取色 / 预览 / 下载」共用同一份字节，预览与背景自然就是同一张。
-  // 跨域图源（tc.alcy.cc 等无 CORS 头）直连必被拦 → 直接走代理，省一次注定失败的请求；
-  // 同源则先直连、失败再经代理兜底。
-  const viaProxy = CUSTOM_PROXY ? CUSTOM_PROXY + encodeURIComponent(url) : "";
-  const sources = (
-    isCrossOrigin(url) ? [viaProxy, url] : [url, viaProxy]
-  ).filter(Boolean);
+  // 隐私约束：只有「内置图源」（alcy/dmoe/loliapi，其 URL 由代码自己生成、不含用户私密信息）
+  // 才允许经自建代理 / 第三方代理外发。
+  // 用户自定义 URL 可能携带 token / 内网地址，默认绝不外发，只做直连尝试。
+  const isBuiltinProvider = !!(PROVIDERS[state.bgProvider] && state.bgProvider !== "custom");
+  const allowProxy = isBuiltinProvider && !!CUSTOM_PROXY;
+  const viaProxy = allowProxy ? CUSTOM_PROXY + encodeURIComponent(url) : "";
+  const sources = (isCrossOrigin(url) ? [viaProxy, url] : [url, viaProxy]).filter(Boolean);
   for (const src of sources) {
     try {
       const res = await fetch(src, { mode: "cors", cache: "no-store" });
@@ -460,12 +641,16 @@ async function cacheWallpaperBlob(url) {
       bgBlobObj = blob;
       bgBlobType = blob.type || "image/webp";
       if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1000);
+      // 经自建代理成功 → 标记代理健康，供 providerBlocksPalette 判断
+      if (src.startsWith(CUSTOM_PROXY || "\u0000")) markProxyResult(true);
       crumb(
         `wallpaper blob cached: ${(blob.size / 1024).toFixed(0)}KB ${bgBlobType}`,
       );
       return true;
     } catch (e) {
-      crumb(`wallpaper blob failed (${src.slice(0, 46)}): ${e?.message || e}`);
+      if (src.startsWith(CUSTOM_PROXY || "\u0000")) markProxyResult(false);
+      // 日志里不打印完整 URL，避免 token 落入 console
+      crumb(`wallpaper blob failed (${src.split("?")[0].slice(0, 46)}): ${e?.message || e}`);
     }
   }
   return false;
@@ -543,30 +728,30 @@ function probeBackground() {
   const url = state.bgBlobUrl || state.bgUrl;
   crumb(`probe start: ${url.slice(0, 60)}`);
   const img = new Image();
-  img.onload = () => {
-    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
-    startupProbeActive = false;
-    crumb("probe ok");
-    state.bgFailed = false;
-    applyBackground();
-    // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
-    analyzeWallpaper(url);
+  let settled = false;
+  // 悬挂保护：TCP 已连但不返回内容时 onerror 永不触发，必须有超时兜底
+  const timer = setTimeout(() => {
+    if (settled || gen !== bgGen) return;
+    settled = true;
+    img.onload = img.onerror = null;
+    img.removeAttribute("src");
+    crumb("probe timeout");
+    handleProbeError();
+  }, 10000);
+  const cleanup = () => {
+    clearTimeout(timer);
   };
-  img.onerror = () => {
-    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
-    crumb("probe error");
+  const handleProbeError = () => {
     bootFocusPending = false;
     const startup = startupProbeActive;
     startupProbeActive = false;
     if (state.bgFailed) return;
-    // 启动「固定模式」探测失败：自动换一张新鲜的壁纸自愈，而不是把背景整个关掉
-    // （避免"壁纸出现一下又消失、回到没开壁纸"的观感；用户主动换图失败仍走 toast+关闭）
     if (startup && !state.bgAutoSwitch && state.bgEnabled) {
       crumb("probe error @startup → self-heal shuffle");
       shuffleBackground().catch(() => {
         state.bgFailed = true;
         applyBackground();
-        showToast("背景图加载失败，已自动关闭背景", "warning");
+        showToast(t("appearance.bgLoadFailedAutoOff"), "warning");
       });
       return;
     }
@@ -578,6 +763,26 @@ function probeBackground() {
         "warning",
       );
     }
+  };
+  img.onload = () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
+    startupProbeActive = false;
+    crumb("probe ok");
+    state.bgFailed = false;
+    applyBackground();
+    // 跟随壁纸取色（paletteMode==='auto' 时生效；失败静默，不影响页面）
+    analyzeWallpaper(url);
+  };
+  img.onerror = () => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    if (gen !== bgGen) return; // 壁纸已换，本次探测作废
+    crumb("probe error");
+    handleProbeError();
   };
   img.src = url;
 }
@@ -623,7 +828,7 @@ async function autoSwitchOnStartup() {
         state.bgFailed = false;
         applyBackground();
         probeBackground();
-        showToast("新壁纸加载失败，已保留原壁纸", "warning");
+        showToast(t("appearance.newWallpaperFailed"), "warning");
       }
     }
   } catch (e) {
@@ -1026,17 +1231,27 @@ async function analyzeWallpaper(url) {
     crumb("wallpaper palette: cross-origin, go proxy directly");
   }
   // 直连失败或跨域 → 依次走代理（仍会写入 state.effYWall 供文字取色）
+  // 每个代理独立 4s 超时，且换图（bgGen 变化）立即中止整轮，避免旧代际把链跑完
   if (!paletteDone) {
     for (const make of CORS_PROXIES) {
+      if (gen !== bgGen) { crumb("wallpaper palette: superseded, abort proxy chain"); return; }
       try {
-        const res = await fetch(make(url));
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        // 直接把 blob 交给取色器（createImageBitmap 离线程解码，不再 objectURL + Image 主线程解码）
-        await attempt(blob);
-        paletteDone = true;
-        crumb("wallpaper palette: proxy ok");
-        break;
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timer = controller
+          ? setTimeout(() => controller.abort(), 4000)
+          : null;
+        try {
+          const res = await fetch(make(url), controller ? { signal: controller.signal } : undefined);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          if (gen !== bgGen) { crumb("wallpaper palette: superseded after fetch"); return; }
+          await attempt(blob);
+          paletteDone = true;
+          crumb("wallpaper palette: proxy ok");
+          break;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
       } catch (e) {
         crumb(`wallpaper palette proxy failed: ${e?.message || e}`);
       }
@@ -1140,17 +1355,17 @@ async function toggleBackground() {
     if (!state.bgUrl) {
       try {
         shuffleBackground();
-        showToast("壁纸背景已开启 🖼️");
+        showToast(t("appearance.bgEnabledToast"));
       } catch (e) {
-        showToast(e.message || "获取壁纸失败", "error");
+        showToast(e.message || t("appearance.bgFetchFailed"), "error");
       }
     } else {
       probeBackground();
-      showToast(state.bgFailed ? "壁纸背景开启失败" : "壁纸背景已开启 🖼️");
+      showToast(state.bgFailed ? t("appearance.bgEnableFailed") : t("appearance.bgEnabledToast"));
     }
   } else {
     applyBackground();
-    showToast("壁纸背景已关闭");
+    showToast(t("appearance.bgDisabledToast"));
   }
 }
 
@@ -1165,7 +1380,7 @@ watch(
       // 改为「固定」而非「随机」：用户此刻看到的配色原样保留，只是不再尝试取色。
       // 若改成随机，切换图源的瞬间主题色也会跟着跳变，像是一次改了俩设置。
       state.paletteMode = "manual";
-      showToast("该图源不支持跨域取色，配色已改为固定（保持当前配色）", "warning");
+      showToast(t("appearance.noCorsPaletteFallback"), "warning");
     }
   },
 );
@@ -1192,19 +1407,34 @@ export async function initAppearance() {
   // 玻璃/配色/自适应文字都是纯计算，同步应用后首帧内容即为正确观感；
   // 背景图与取色随后台异步补上，避免"已有底色但内容迟迟不出现"的白屏窗口。
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved) {
-      // 仅迁移「已废弃」的图源值：wallhaven 早已下线，无有效地址可言。
-      // 其余一律**不做任何改写**——图源是用户的选择，代码不该在启动时替用户改主意
-      // （此前把 alcy 无条件迁到 loliapi 的写法，导致用户切回 alcy 后一刷新就被改走）。
-      if (saved.bgProvider === "wallhaven") {
-        saved.bgProvider = "alcy";
-        if (saved.bgUrl && /wallhaven/i.test(saved.bgUrl)) saved.bgUrl = "";
+    const rawSaved = localStorage.getItem(STORAGE_KEY);
+    if (rawSaved) {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(rawSaved);
+      } catch (e) {
+        console.error("外观配置 JSON 损坏，已重置为默认");
+        localStorage.removeItem(STORAGE_KEY);
       }
-      Object.assign(state, saved);
+      if (parsed) {
+        // 仅迁移「已废弃」的图源值：wallhaven 早已下线，无有效地址可言。
+        if (parsed.bgProvider === "wallhaven") {
+          parsed.bgProvider = "alcy";
+          if (parsed.bgUrl && /wallhaven/i.test(parsed.bgUrl)) parsed.bgUrl = "";
+        }
+        const normalized = normalizeAppearance(parsed);
+        if (normalized) {
+          Object.assign(state, normalized);
+        } else {
+          // 结构非法（例如 palette 是字符串）→ 丢弃并回写默认，避免整段初始化中断
+          console.warn("外观配置结构非法，已回退默认");
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
     }
   } catch (e) {
     console.error("外观配置读取失败，已重置", e);
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }
   state.bgLoading = false;
   state.bgFailed = false;

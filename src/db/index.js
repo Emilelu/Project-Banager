@@ -4,14 +4,16 @@
  */
 
 import initSqlJs from 'sql.js'
-import { smartIncrement, smartDecrement } from '../composables/useEpisode'
+import { smartIncrement, smartDecrement, normalizeEpisodeInput } from '../composables/useEpisode'
 
 const DB_NAME = 'BangumiManagerDB'
 const DB_STORE = 'database'
 const DB_KEY = 'bangumi_db'
 
 let dbInstance = null
+let dbPromise = null
 let _SQL = null  // 缓存 initSqlJs 返回的 SQL 构造器
+let idbConnection = null
 
 // WASM 内联加载器
 // 构建时通过 vite-plugin-wasm-inline 将 WASM 内联为 base64
@@ -59,10 +61,13 @@ class BangumiDatabase {
     _SQL = SQL  // 缓存 SQL 构造器供 importDb 使用
 
     let db
-    // 尝试从 IndexedDB 恢复
-    const savedData = await loadFromIndexedDB()
-    if (savedData) {
-      db = new SQL.Database(new Uint8Array(savedData))
+    // 区分「从未使用」和「读取失败」：失败时不建空库，避免随后 save() 覆盖旧快照
+    const loaded = await loadFromIndexedDB()
+    if (loaded.error) {
+      throw new Error('读取本地数据库失败，已停止启动以免用空库覆盖原有数据：' + loaded.error.message)
+    }
+    if (loaded.data) {
+      db = new SQL.Database(new Uint8Array(loaded.data))
     } else {
       db = new SQL.Database()
     }
@@ -73,10 +78,61 @@ class BangumiDatabase {
   }
 
   // ========== IndexedDB 持久化 ==========
+  //
+  // 性能要点：`db.export()` 会把整库序列化一遍，代价与库大小成正比。
+  // 原来每一次 _run 都同步 export 一次，导入 N 条就是 N 次全库序列化（O(n²)）。
+  // 现在改为「防抖合并」：写操作只标记脏，落盘延后到 microtask/空闲时机执行，
+  // 同一轮内的多次写入共享一次 export + 一次 IndexedDB 事务。
+  // 需要强一致的调用方（备份导出、导入恢复、批量结束）显式 await flush()。
 
   save() {
+    this._dirty = true
+    if (this._batchDepth) return Promise.resolve()
+    // 延迟落盘：同一轮事件循环内的多次写入合并成一次 export + 一次 IndexedDB 事务。
+    // 页面隐藏/卸载时用 flushNow() 兜底，避免最后一笔改动丢失。
+    return this.flush()
+  }
+
+  // 立即落盘（合并所有未落盘的改动），返回 Promise
+  flush() {
+    // 已有一个 flush 在飞：等它结束后如果再脏就继续写，保证调用方 flush() 返回时
+    // 「此刻为止的所有改动」都已落盘（而不是被合并丢掉）
+    if (this._flushPromise) {
+      return this._flushPromise.then(() => {
+        if (!this._dirty) return undefined
+        return this.flush()
+      })
+    }
+    if (!this._dirty) return Promise.resolve()
+    this._dirty = false
     const data = this.db.export()
-    saveToIndexedDB(data)
+    this._flushPromise = saveToIndexedDB(data)
+      .catch((err) => {
+        // 落盘失败：重新标脏，下次写入或显式 flush 时会再试
+        this._dirty = true
+        throw err
+      })
+      .finally(() => {
+        this._flushPromise = null
+      })
+    return this._flushPromise
+  }
+
+  // 卸载/隐藏前的同步兜底：不等待，但一定把脏数据发出去
+  flushNow() {
+    if (!this._dirty || this._batchDepth) return
+    this._dirty = false
+    try { saveToIndexedDB(this.db.export()) } catch { /* ignore */ }
+  }
+
+  // 显式落盘：调用方需要确认持久化结果时使用（失败会 reject）
+  saveStrict() {
+    this._dirty = true
+    if (this._flushPromise) {
+      return this._flushPromise.then(() => saveToIndexedDB(this.db.export(), { strict: true }))
+    }
+    this._dirty = false
+    return saveToIndexedDB(this.db.export(), { strict: true })
   }
 
   // ========== 数据库导入/导出 ==========
@@ -86,15 +142,25 @@ class BangumiDatabase {
    * @param {Uint8Array} data - SQLite 数据库二进制数据
    */
   importDb(data) {
-    // 关闭旧数据库
-    try { this.db.close() } catch (e) { /* ignore */ }
-
-    // 用导入的数据创建新的数据库实例
-    // sql.js 的 Database 构造函数挂在 SQL 对象上，不能通过 this.db.constructor 获取
-    this.db = new _SQL.Database(data)
-
-    // 确保表结构存在
-    this.initTables()
+    // 先在临时实例上完成构造和建表，全部成功后再替换。
+    // 失败时旧库保持可用，避免坏文件把当前会话打成 "database is closed"。
+    if (!_SQL) throw new Error('数据库引擎尚未初始化')
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
+    const header = new TextDecoder().decode(bytes.slice(0, 16))
+    if (header !== 'SQLite format 3\u0000') {
+      throw new Error('不是有效的 SQLite 备份文件')
+    }
+    const candidate = new _SQL.Database(bytes)
+    const old = this.db
+    this.db = candidate
+    try {
+      this.initTables()
+    } catch (e) {
+      this.db = old
+      try { candidate.close() } catch { /* ignore */ }
+      throw e
+    }
+    try { old.close() } catch { /* ignore */ }
   }
 
   /**
@@ -110,16 +176,19 @@ class BangumiDatabase {
   _fixDateFormats() {
     try {
       const watchedRows = this._all("SELECT id, watch_date FROM watched WHERE watch_date LIKE '%-%'")
-      for (const row of watchedRows) {
-        const fixed = row.watch_date.replace(/-/g, '/')
-        this._run('UPDATE watched SET watch_date = ? WHERE id = ?', [fixed, row.id])
-      }
       const remainingRows = this._all("SELECT id, expected_date FROM remaining WHERE expected_date LIKE '%-%'")
-      for (const row of remainingRows) {
-        const fixed = row.expected_date.replace(/-/g, '/')
-        this._run('UPDATE remaining SET expected_date = ? WHERE id = ?', [fixed, row.id])
+      if (!watchedRows.length && !remainingRows.length) return
+      // 批处理：一次事务、一次落盘，而不是逐条 save（原来每条都触发全库 export）
+      this.beginBatch()
+      for (const row of watchedRows) {
+        this._run('UPDATE watched SET watch_date = ? WHERE id = ?', [row.watch_date.replace(/-/g, '/'), row.id])
       }
+      for (const row of remainingRows) {
+        this._run('UPDATE remaining SET expected_date = ? WHERE id = ?', [row.expected_date.replace(/-/g, '/'), row.id])
+      }
+      this.commitBatch()
     } catch (e) {
+      this.rollbackBatch()
       console.error('日期格式修复失败:', e.message)
     }
   }
@@ -181,36 +250,76 @@ class BangumiDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         year_label TEXT NOT NULL UNIQUE,
         sort_order REAL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
 
     // 迁移
-    this._migrateAddColumn('watching', 'sort_order', 'REAL DEFAULT 0')
-    this._migrateAddColumn('remaining', 'sort_order', 'REAL DEFAULT 0')
-    this._migrateAddColumn('watched', 'sort_order', 'REAL DEFAULT 0')
-    this._migrateAddColumn('watched', 'watch_date', 'TEXT')
-    this._migrateAddColumn('watching', 'url', 'TEXT')
-    this._migrateAddColumn('remaining', 'url', 'TEXT')
-    this._migrateAddColumn('watched', 'url', 'TEXT')
-    this._migrateAddColumn('watching', 'url_params', 'TEXT')
-    this._migrateAddColumn('remaining', 'url_params', 'TEXT')
-    this._migrateAddColumn('watched', 'url_params', 'TEXT')
+    let structuralChange = false
+    structuralChange = this._migrateAddColumn('watching', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+    structuralChange = this._migrateAddColumn('remaining', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'watch_date', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('watching', 'url', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('remaining', 'url', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'url', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('watching', 'url_params', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('remaining', 'url_params', 'TEXT') || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'url_params', 'TEXT') || structuralChange
+    // 历史库的 watched_years 没有 updated_at（早期 README 也如此声明）；补列让「各表均含」名副其实。
+    // 注意：SQLite 的 ALTER TABLE ADD COLUMN 不接受 CURRENT_TIMESTAMP 作为默认值
+    // （非常量表达式），所以这里用可空列，随后回填。
+    structuralChange = this._migrateAddColumn('watched_years', 'created_at', 'TIMESTAMP') || structuralChange
+    structuralChange = this._migrateAddColumn('watched_years', 'updated_at', 'TIMESTAMP') || structuralChange
+    structuralChange = this._migrateAddColumn('watched_years', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+    if (structuralChange) {
+      try {
+        this.db.run("UPDATE watched_years SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP), updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)")
+      } catch { /* ignore */ }
+    }
 
-    this._migrateWatchingEpisodeToText()
+    if (this._migrateWatchingEpisodeToText()) structuralChange = true
+
+    // 索引：让按天/按年/按排序的查询走索引而不是全表扫描
+    this._ensureIndexes()
 
     try {
       this.db.run(`UPDATE watched SET watch_date = watch_year WHERE watch_date IS NULL OR watch_date = ''`)
+      if (this.db.getRowsModified() > 0) structuralChange = true
     } catch(e) {}
 
-    this.save()
+    // 只有结构/数据真的变了才落盘：避免每次启动都白写一遍全库
+    if (structuralChange) this.save()
+  }
+
+  _ensureIndexes() {
+    const indexes = [
+      ['idx_watching_day', 'watching', 'day_of_week, sort_order'],
+      ['idx_watching_sort', 'watching', 'sort_order, id'],
+      ['idx_remaining_sort', 'remaining', 'sort_order, id'],
+      ['idx_remaining_date', 'remaining', 'expected_date'],
+      ['idx_watched_sort', 'watched', 'sort_order, id'],
+      ['idx_watched_date', 'watched', 'watch_date'],
+      ['idx_years_sort', 'watched_years', 'sort_order, id']
+    ]
+    for (const [name, table, cols] of indexes) {
+      try {
+        this.db.run(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${cols})`)
+      } catch (e) { /* 表或列不存在时忽略 */ }
+    }
   }
 
   _migrateWatchingEpisodeToText() {
+    const info = this._all(`PRAGMA table_info(watching)`)
+    if (info.length === 0) return false
+    const episodeCol = info.find(col => col.name === 'current_episode')
+    if (episodeCol && String(episodeCol.type).toUpperCase() === 'TEXT') return false
+
+    const names = new Set(info.map(col => col.name))
+    const col = (name, fallback) => names.has(name) ? name : fallback
+    this.db.run('BEGIN')
     try {
-      const info = this._all(`PRAGMA table_info(watching)`)
-      const episodeCol = info.find(col => col.name === 'current_episode')
-      if (episodeCol && episodeCol.type === 'TEXT') return
       this.db.run(`ALTER TABLE watching RENAME TO watching_old`)
       this.db.run(`
         CREATE TABLE watching (
@@ -220,6 +329,7 @@ class BangumiDatabase {
           time_slot TEXT,
           current_episode TEXT DEFAULT '0',
           url TEXT,
+          url_params TEXT,
           notes TEXT,
           sort_order REAL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -227,13 +337,39 @@ class BangumiDatabase {
         )
       `)
       this.db.run(`
-        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, url, notes, sort_order, created_at, updated_at)
-        SELECT id, name, day_of_week, time_slot, CAST(current_episode AS TEXT), url, notes, sort_order, created_at, updated_at
+        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order, created_at, updated_at)
+        SELECT id, name,
+          ${col('day_of_week', "''")},
+          ${col('time_slot', "''")},
+          CAST(${col('current_episode', "'0'")} AS TEXT),
+          ${col('url', 'NULL')},
+          ${col('url_params', 'NULL')},
+          ${col('notes', 'NULL')},
+          ${col('sort_order', '0')},
+          ${col('created_at', 'CURRENT_TIMESTAMP')},
+          ${col('updated_at', 'CURRENT_TIMESTAMP')}
         FROM watching_old
       `)
+      const oldCount = this._get('SELECT COUNT(*) AS count FROM watching_old')
+      const newCount = this._get('SELECT COUNT(*) AS count FROM watching')
+      if ((oldCount?.count || 0) !== (newCount?.count || 0)) {
+        throw new Error('watching 迁移行数不一致')
+      }
       this.db.run(`DROP TABLE watching_old`)
-    } catch(e) {
-      try { this.db.run(`DROP TABLE IF EXISTS watching_old`) } catch(e2) {}
+      this.db.run('COMMIT')
+      return true
+    } catch (e) {
+      try { this.db.run('ROLLBACK') } catch { /* ignore */ }
+      // 事务回滚后旧表应已恢复为 watching；若中途留下 watching_old，把它改回去，避免数据只留在备份表里
+      try {
+        const leftover = this._all(`SELECT name FROM sqlite_master WHERE type='table' AND name='watching_old'`)
+        const current = this._all(`SELECT name FROM sqlite_master WHERE type='table' AND name='watching'`)
+        if (leftover.length && !current.length) {
+          this.db.run('ALTER TABLE watching_old RENAME TO watching')
+        }
+      } catch { /* ignore */ }
+      console.error('watching 集数列迁移失败，已保留原表:', e.message)
+      return false
     }
   }
 
@@ -243,8 +379,10 @@ class BangumiDatabase {
       const exists = info.some(col => col.name === column)
       if (!exists) {
         this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`)
+        return true
       }
-    } catch(e) {}
+      return false
+    } catch(e) { return false }
   }
 
   _all(sql, params = []) {
@@ -271,7 +409,44 @@ class BangumiDatabase {
 
   _run(sql, params = []) {
     this.db.run(sql, params)
-    this.save()
+    const changed = this.db.getRowsModified()
+    if (!this._batchDepth) this.save()
+    return changed
+  }
+
+  // 取最近一次 INSERT 生成的自增 id（紧跟在 _run 的 INSERT 之后调用）
+  // 取最近一次 INSERT 生成的自增 id。
+  // 注意：必须紧贴 INSERT 之后调用，且中间不能再执行任何会重置该值的语句。
+  // sql.js 下 last_insert_rowid() 是连接级状态，prepare+step 读取是可靠的。
+  _lastInsertId() {
+    try {
+      const row = this._get('SELECT last_insert_rowid() AS id')
+      const id = row ? Number(row.id) : null
+      return Number.isFinite(id) && id > 0 ? id : null
+    } catch {
+      return null
+    }
+  }
+
+  beginBatch() {
+    if (!this._batchDepth) this.db.run('BEGIN')
+    this._batchDepth = (this._batchDepth || 0) + 1
+  }
+
+  commitBatch() {
+    if (!this._batchDepth) return
+    this._batchDepth -= 1
+    if (this._batchDepth === 0) {
+      this.db.run('COMMIT')
+      // 批量结束统一落盘一次（内部走 flush 合并）
+      this.save()
+    }
+  }
+
+  rollbackBatch() {
+    if (!this._batchDepth) return
+    this._batchDepth = 0
+    try { this.db.run('ROLLBACK') } catch { /* ignore */ }
   }
 
   // ========== 追番表操作 ==========
@@ -282,7 +457,9 @@ class BangumiDatabase {
         'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order]
       )
-      return { success: true }
+      // name 上有 UNIQUE 约束，按名称回查 id 比依赖 rowid 时序更可靠
+      const row = this._get('SELECT id FROM watching WHERE name = ?', [name])
+      return { success: true, id: row ? Number(row.id) : null }
     } catch (err) {
       if (err.message.includes('UNIQUE constraint failed')) {
         return { success: false, error: '该番剧已存在' }
@@ -299,7 +476,7 @@ class BangumiDatabase {
 
   getWatchingByDay(day) {
     return this._all(
-      'SELECT id, name, day_of_week, time_slot, current_episode, notes, sort_order FROM watching WHERE day_of_week = ? ORDER BY sort_order, time_slot',
+      'SELECT id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order FROM watching WHERE day_of_week = ? ORDER BY sort_order, time_slot',
       [day]
     )
   }
@@ -310,8 +487,7 @@ class BangumiDatabase {
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
         if (key === 'current_episode') {
-          const numVal = parseFloat(fields[key])
-          updateFields[key] = isNaN(numVal) ? '0' : String(fields[key])
+          updateFields[key] = normalizeEpisodeInput(fields[key])
         } else {
           updateFields[key] = fields[key]
         }
@@ -381,7 +557,8 @@ class BangumiDatabase {
         'INSERT INTO remaining (name, expected_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
         [name, normalizedDate, url, url_params, notes, sort_order]
       )
-      return { success: true }
+      const row = this._get('SELECT id FROM remaining WHERE name = ?', [name])
+      return { success: true, id: row ? Number(row.id) : null }
     } catch (err) {
       if (err.message.includes('UNIQUE constraint failed')) {
         return { success: false, error: '该等番已存在' }
@@ -438,13 +615,19 @@ class BangumiDatabase {
   addWatched({ name, watch_date, url = '', url_params = '', notes = '', sort_order = 0 }) {
     try {
       const normalizedDate = this._normalizeDate(watch_date)
+      this.beginBatch()
       this._run(
         'INSERT INTO watched (name, watch_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
         [name, normalizedDate, url, url_params, notes, sort_order]
       )
       this._ensureYearLabel(normalizedDate)
-      return { success: true }
+      // watched 表 name 无 UNIQUE，用最新一行的 id（新插入必然 sort_order/id 最大）
+      const newRow = this._get('SELECT id FROM watched ORDER BY id DESC LIMIT 1')
+      const newId = newRow ? Number(newRow.id) : null
+      this.commitBatch()
+      return { success: true, id: newId }
     } catch (err) {
+      this.rollbackBatch()
       return { success: false, error: err.message }
     }
   }
@@ -456,15 +639,34 @@ class BangumiDatabase {
   }
 
   getWatchedByYear(year) {
+    const label = String(year)
+    const range = label.match(/^(\d{4})\s*~\s*(\d{4})$/)
+    if (range) {
+      const start = parseInt(range[1], 10)
+      const end = parseInt(range[2], 10)
+      return this._all(
+        'SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched ORDER BY sort_order, id'
+      ).filter(row => {
+        const d = String(row.watch_date || '')
+        if (d === label) return true
+        const m = d.match(/^(\d{4})/)
+        if (!m) return false
+        const y = parseInt(m[1], 10)
+        return y >= start && y <= end
+      })
+    }
     return this._all(
-      "SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched WHERE watch_date = ? OR watch_date LIKE ? ORDER BY sort_order, id",
-      [year, year + '/%']
+      "SELECT id, name, watch_date, url, url_params, notes, sort_order FROM watched WHERE watch_date = ? OR watch_date LIKE ? ESCAPE '\\' ORDER BY sort_order, id",
+      [label, this._likePrefix(label)]
     )
   }
 
   getWatchedCountByYear(year) {
-    const row = this._get("SELECT COUNT(*) as count FROM watched WHERE watch_date = ? OR watch_date LIKE ?", [year, year + '/%'])
-    return row ? row.count : 0
+    return this.getWatchedByYear(year).length
+  }
+
+  _likePrefix(year) {
+    return String(year).replace(/[\\%_]/g, ch => '\\' + ch) + '/%'
   }
 
   getTotalWatchedCount() {
@@ -490,12 +692,16 @@ class BangumiDatabase {
     const setClause = Object.keys(updateFields).map(k => `${k} = ?`).join(', ')
     const values = [...Object.values(updateFields), id]
     try {
+      this.beginBatch()
       this._run(
         `UPDATE watched SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         values
       )
+      if (updateFields.watch_date !== undefined) this._ensureYearLabel(updateFields.watch_date)
+      this.commitBatch()
       return { success: true }
     } catch (err) {
+      this.rollbackBatch()
       return { success: false, error: err.message }
     }
   }
@@ -528,7 +734,7 @@ class BangumiDatabase {
 
   getAllWatchedYears() {
     return this._all(
-      'SELECT id, year_label, sort_order FROM watched_years ORDER BY sort_order, id'
+      'SELECT id, year_label, sort_order, created_at, updated_at FROM watched_years ORDER BY sort_order, id'
     )
   }
 
@@ -546,9 +752,27 @@ class BangumiDatabase {
     const setClause = Object.keys(updateFields).map(k => `${k} = ?`).join(', ')
     const values = [...Object.values(updateFields), id]
     try {
-      this._run(`UPDATE watched_years SET ${setClause} WHERE id = ?`, values)
+      const current = this._get('SELECT year_label FROM watched_years WHERE id = ?', [id])
+      this.beginBatch()
+      this._run(
+        `UPDATE watched_years SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        values
+      )
+      if (current && updateFields.year_label && updateFields.year_label !== current.year_label) {
+        const rows = this._all('SELECT id, watch_date FROM watched')
+        for (const row of rows) {
+          if (row.watch_date === current.year_label || String(row.watch_date || '').startsWith(current.year_label + '/')) {
+            const nextDate = row.watch_date === current.year_label
+              ? updateFields.year_label
+              : updateFields.year_label + String(row.watch_date).slice(current.year_label.length)
+            this._run('UPDATE watched SET watch_date = ? WHERE id = ?', [nextDate, row.id])
+          }
+        }
+      }
+      this.commitBatch()
       return { success: true }
     } catch (err) {
+      this.rollbackBatch()
       return { success: false, error: err.message }
     }
   }
@@ -565,30 +789,25 @@ class BangumiDatabase {
   // ========== 批量操作 ==========
 
   batchDeleteWatching(ids) {
-    try {
-      const placeholders = ids.map(() => '?').join(',')
-      this._run(`DELETE FROM watching WHERE id IN (${placeholders})`, ids)
-      return { success: true, deleted: ids.length }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
+    return this._batchDelete('watching', ids)
   }
 
   batchDeleteRemaining(ids) {
-    try {
-      const placeholders = ids.map(() => '?').join(',')
-      this._run(`DELETE FROM remaining WHERE id IN (${placeholders})`, ids)
-      return { success: true, deleted: ids.length }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
+    return this._batchDelete('remaining', ids)
   }
 
   batchDeleteWatched(ids) {
+    return this._batchDelete('watched', ids)
+  }
+
+  _batchDelete(table, ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return { success: true, deleted: 0 }
+    const allowed = ['watching', 'remaining', 'watched']
+    if (!allowed.includes(table)) return { success: false, error: '不支持的表' }
     try {
       const placeholders = ids.map(() => '?').join(',')
-      this._run(`DELETE FROM watched WHERE id IN (${placeholders})`, ids)
-      return { success: true, deleted: ids.length }
+      const deleted = this._run(`DELETE FROM ${table} WHERE id IN (${placeholders})`, ids)
+      return { success: true, deleted }
     } catch (err) {
       return { success: false, error: err.message }
     }
@@ -632,12 +851,15 @@ class BangumiDatabase {
 
   clearAll() {
     try {
+      this.beginBatch()
       this._run('DELETE FROM watching')
       this._run('DELETE FROM remaining')
       this._run('DELETE FROM watched')
       this._run('DELETE FROM watched_years')
+      this.commitBatch()
       return { success: true }
     } catch (err) {
+      this.rollbackBatch()
       return { success: false, error: err.message }
     }
   }
@@ -647,16 +869,21 @@ class BangumiDatabase {
   moveWatchingToRemaining(watchingId) {
     try {
       const row = this._get('SELECT name, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
-      if (row) {
-        const addResult = this.addRemaining({ name: row.name, expected_date: '', url: row.url || '', url_params: row.url_params || '', notes: row.notes, sort_order: row.sort_order })
-        if (addResult.success) {
-          this.deleteWatching(watchingId)
-          return { success: true }
-        }
-        return addResult
-      }
-      return { success: false, error: '未找到记录' }
+      if (!row) return { success: false, error: '未找到记录' }
+      this.beginBatch()
+      this._run(
+        'INSERT INTO remaining (name, expected_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [row.name, '', row.url || '', row.url_params || '', row.notes, row.sort_order]
+      )
+      const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
+      if (!removed) throw new Error('源记录删除失败')
+      this.commitBatch()
+      return { success: true }
     } catch (err) {
+      this.rollbackBatch()
+      if (String(err.message).includes('UNIQUE constraint failed')) {
+        return { success: false, error: '该等番已存在' }
+      }
       return { success: false, error: err.message }
     }
   }
@@ -665,19 +892,20 @@ class BangumiDatabase {
     try {
       const normalizedDate = this._normalizeDate(watchDate)
       const row = this._get('SELECT name, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
-      if (row) {
-        // 从追番移入已看时**清空链接**：追番页的链接是「追更地址」，已看的记录不再需要它，
-        // 留着反而是噪音（用户要求）。url_params 与 url 配套，一并清空。
-        const addResult = this.addWatched({ name: row.name, watch_date: normalizedDate, url: '', url_params: '', notes: row.notes, sort_order: row.sort_order })
-        if (addResult.success) {
-          this._ensureYearLabel(normalizedDate)
-          this.deleteWatching(watchingId)
-          return { success: true }
-        }
-        return addResult
-      }
-      return { success: false, error: '未找到记录' }
+      if (!row) return { success: false, error: '未找到记录' }
+      // 从追番移入已看时清空链接：追番页的链接是追更地址，已看记录不再需要它。
+      this.beginBatch()
+      this._run(
+        'INSERT INTO watched (name, watch_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [row.name, normalizedDate, '', '', row.notes, row.sort_order]
+      )
+      this._ensureYearLabel(normalizedDate)
+      const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
+      if (!removed) throw new Error('源记录删除失败')
+      this.commitBatch()
+      return { success: true }
     } catch (err) {
+      this.rollbackBatch()
       return { success: false, error: err.message }
     }
   }
@@ -685,9 +913,9 @@ class BangumiDatabase {
   _ensureYearLabel(watchDate) {
     if (!watchDate) return
     const v = String(watchDate).trim()
-    const rangeMatch = v.match(/^(\d{4})\s*~/)
+    const rangeMatch = v.match(/^(\d{4})\s*~\s*(\d{4})$/)
     if (rangeMatch) {
-      this._addYearIfNotExists(rangeMatch[1])
+      this._addYearIfNotExists(`${rangeMatch[1]}~${rangeMatch[2]}`)
       return
     }
     const yearMatch = v.match(/^(\d{4})/)
@@ -706,25 +934,21 @@ class BangumiDatabase {
   moveRemainingToWatching(remainingId, { day_of_week = '', time_slot = '' } = {}) {
     try {
       const row = this._get('SELECT name, url, url_params, notes, sort_order FROM remaining WHERE id = ?', [remainingId])
-      if (row) {
-        const addResult = this.addWatching({
-          name: row.name,
-          day_of_week,
-          time_slot,
-          current_episode: '0',
-          url: row.url || '',
-          url_params: row.url_params || '',
-          notes: row.notes,
-          sort_order: row.sort_order
-        })
-        if (addResult.success) {
-          this.deleteRemaining(remainingId)
-          return { success: true }
-        }
-        return addResult
-      }
-      return { success: false, error: '未找到记录' }
+      if (!row) return { success: false, error: '未找到记录' }
+      this.beginBatch()
+      this._run(
+        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.name, day_of_week, time_slot, '0', row.url || '', row.url_params || '', row.notes, row.sort_order]
+      )
+      const removed = this._run('DELETE FROM remaining WHERE id = ?', [remainingId])
+      if (!removed) throw new Error('源记录删除失败')
+      this.commitBatch()
+      return { success: true }
     } catch (err) {
+      this.rollbackBatch()
+      if (String(err.message).includes('UNIQUE constraint failed')) {
+        return { success: false, error: '该番剧已存在' }
+      }
       return { success: false, error: err.message }
     }
   }
@@ -733,6 +957,7 @@ class BangumiDatabase {
 // ========== IndexedDB 操作 ==========
 
 function openIDB() {
+  if (idbConnection) return Promise.resolve(idbConnection)
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1)
     request.onupgradeneeded = (e) => {
@@ -741,7 +966,11 @@ function openIDB() {
         idb.createObjectStore(DB_STORE)
       }
     }
-    request.onsuccess = (e) => resolve(e.target.result)
+    request.onsuccess = (e) => {
+      idbConnection = e.target.result
+      idbConnection.onclose = () => { idbConnection = null }
+      resolve(idbConnection)
+    }
     request.onerror = (e) => reject(e.target.error)
   })
 }
@@ -749,23 +978,24 @@ function openIDB() {
 async function loadFromIndexedDB() {
   try {
     const idb = await openIDB()
-    return new Promise((resolve, reject) => {
+    const data = await new Promise((resolve, reject) => {
       const tx = idb.transaction(DB_STORE, 'readonly')
       const store = tx.objectStore(DB_STORE)
       const request = store.get(DB_KEY)
       request.onsuccess = () => resolve(request.result || null)
       request.onerror = () => reject(request.error)
     })
+    return { data, error: null }
   } catch (e) {
     console.warn('从 IndexedDB 加载数据失败:', e)
-    return null
+    return { data: null, error: e }
   }
 }
 
-async function saveToIndexedDB(data) {
+async function saveToIndexedDB(data, { strict = false } = {}) {
   try {
     const idb = await openIDB()
-    return new Promise((resolve, reject) => {
+    return await new Promise((resolve, reject) => {
       const tx = idb.transaction(DB_STORE, 'readwrite')
       const store = tx.objectStore(DB_STORE)
       store.put(data, DB_KEY)
@@ -774,6 +1004,7 @@ async function saveToIndexedDB(data) {
     })
   } catch (e) {
     console.warn('保存到 IndexedDB 失败:', e)
+    if (strict || dbInstance?.strictPersistence) throw e
   }
 }
 
@@ -781,11 +1012,20 @@ async function saveToIndexedDB(data) {
  * 获取数据库实例（单例）
  * 供 api.js 和 excelImporter.js 使用
  */
+export function __resetIdbConnection() {
+  try { idbConnection?.close() } catch { /* ignore */ }
+  idbConnection = null
+}
+
 export async function getDb() {
-  if (!dbInstance) {
-    dbInstance = await BangumiDatabase.create()
+  if (dbInstance) return dbInstance
+  if (!dbPromise) {
+    dbPromise = BangumiDatabase.create().catch((err) => {
+      dbPromise = null
+      throw err
+    })
   }
-  return dbInstance
+  return dbPromise
 }
 
 // 同时导出 BangumiDatabase.create 供初始化使用

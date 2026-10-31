@@ -24,8 +24,11 @@ export function normalizeDate(value) {
 
 // 校验日期格式是否合规
 export function validateDate(value) {
-  if (!value || !value.trim()) return { valid: false, error: '请输入日期' }
-  const v = value.trim()
+  if (value == null || (typeof value !== 'string' && typeof value !== 'number')) {
+    return { valid: false, error: '请输入日期' }
+  }
+  const v = String(value).trim()
+  if (!v) return { valid: false, error: '请输入日期' }
 
   if (/^\d{4}\s*~\s*\d{4}$/.test(v)) {
     const [start, end] = v.split('~').map(s => parseInt(s.trim()))
@@ -123,9 +126,27 @@ export function formatToDateInput(formattedValue) {
 
 // 日期字符串比较：取数字位直接比较，兼容 2025、2025/07、2025/07/15 14:30、2014~2017 混排
 // 日期存储时已零填充，数字串的字典序即时间序；短前缀（纯年份）排在同年前面
+function dateParts(value) {
+  const v = String(value || '').trim()
+  if (!v) return null
+  const range = v.match(/^(\d{4})\s*~\s*(\d{4})$/)
+  if (range) return [Number(range[1]), 0, 0, 0, 0]
+  const match = v.match(/^(\d{4})(?:\/(\d{1,2})(?:\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?)?)?$/)
+  if (!match) return [Number.MAX_SAFE_INTEGER, 0, 0, 0, 0]
+  return [1, 2, 3, 4, 5].map(i => match[i] == null ? 0 : Number(match[i]))
+}
+
 export function compareDateKey(a, b) {
-  const da = String(a || '').replace(/\D/g, '')
-  const db = String(b || '').replace(/\D/g, '')
-  if (da === db) return 0
-  return da < db ? -1 : 1
+  const emptyA = !String(a || '').trim()
+  const emptyB = !String(b || '').trim()
+  if (emptyA || emptyB) {
+    if (emptyA === emptyB) return 0
+    return emptyA ? 1 : -1
+  }
+  const pa = dateParts(a)
+  const pb = dateParts(b)
+  for (let i = 0; i < pa.length; i++) {
+    if (pa[i] !== pb[i]) return pa[i] < pb[i] ? -1 : 1
+  }
+  return 0
 }

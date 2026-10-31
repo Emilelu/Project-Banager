@@ -1,5 +1,5 @@
 
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 
 const theme = ref('auto') // 'light' | 'dark' | 'auto'
 const isDark = ref(false)
@@ -33,15 +33,24 @@ export function initTheme() {
 }
 
 export function useTheme() {
+  let mq = null
+  let handler = null
+
   onMounted(() => {
     // 兜底：确保与当前设置一致（重复应用无害）
     applyDark(resolveTheme())
 
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = () => {
+    mq = window.matchMedia('(prefers-color-scheme: dark)')
+    handler = () => {
       if (theme.value === 'auto') applyDark(resolveTheme())
     }
     mq.addEventListener('change', handler)
+  })
+
+  onUnmounted(() => {
+    if (mq && handler) mq.removeEventListener('change', handler)
+    mq = null
+    handler = null
   })
 
   watch(theme, (val) => {

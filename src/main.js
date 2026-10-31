@@ -1,9 +1,12 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import AppIcon from './components/AppIcon.vue'
 import router from './router'
 import './style.css'
 import { initAppearance } from './composables/useAppearance'
 import { initTheme } from './composables/useTheme'
+import { initLocale } from './composables/useI18n'
+import { registerAllMessages } from './locales'
 
 // 动态 Dark Reader 锁（兜底）：index.html 已有静态 <meta name="darkreader-lock">，
 // 但 DR 的 content script 在 document_start 注入，可能早于静态 meta 解析。
@@ -27,6 +30,17 @@ window.addEventListener('unhandledrejection', (e) =>
 console.log('[boot] main.js start')
 
 async function boot() {
+  // 语言必须在挂载前就绪：`<html lang>` 与首帧文案都依赖它。
+  // 顺序：先注三语包（zh/en/ja），再读 localStorage / navigator 决定当前语言，
+  // 这样首帧渲染时 t() 已经有完整文案，不会闪一下 key 名或中文。
+  try {
+    registerAllMessages()
+    initLocale()
+    console.log('[boot] initLocale done:', document.documentElement.lang)
+  } catch (e) {
+    console.error('[boot] 语言初始化失败，已回退中文', e)
+  }
+
   // 主题（暗/浅）挂载前同步应用：首帧直接用正确配色渲染，避免挂载后再"突然变色"
   try {
     initTheme()
@@ -39,6 +53,8 @@ async function boot() {
   // 先渲染出内容，背景图与取色就绪后再叠加，避免"主体已有底色但内容迟迟不出现"的白屏窗口。
   console.log('[boot] mounting app...')
   const app = createApp(App)
+  // 统一图标组件全局注册：全站图标唯一来源，风格与顶栏一致（24 视框 / 1.9 描边 / round 端点）
+  app.component('AppIcon', AppIcon)
   app.use(router)
   app.mount('#app')
   console.log('[boot] mounted')

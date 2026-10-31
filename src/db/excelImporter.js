@@ -12,6 +12,24 @@ let errorCount = 0
 let errors = []
 let sortCounter = 0
 
+// 让出主线程：大文件解析与逐行写入会长时间占用 UI 线程，
+// 每个批次之间 await 一次，浏览器有机会处理输入与重绘，页面不会"假死"。
+const yieldToUI = () => new Promise((resolve) => {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => resolve())
+  } else {
+    setTimeout(resolve, 0)
+  }
+})
+
+// 进度回调：由 ImportView 注入，用于显示"已处理 N 行"
+let progressHook = null
+function reportProgress(done, total) {
+  if (typeof progressHook === 'function') {
+    try { progressHook(done, total) } catch { /* 不影响导入 */ }
+  }
+}
+
 function nextSortOrder() {
   return ++sortCounter
 }
@@ -82,18 +100,22 @@ function parseWatchedName(rawName) {
  */
 function parseYear(rawYear) {
   if (typeof rawYear === 'number') {
-    return String(rawYear)
+    if (rawYear >= 1900 && rawYear <= 2100 && Number.isInteger(rawYear)) return String(rawYear)
+    return null
   }
-  const str = String(rawYear).trim()
-  const rangeMatch = str.match(/(\d{4})\s*[~\-]\s*(\d{4})/)
+  const str = String(rawYear ?? '').trim()
+  const rangeMatch = str.match(/^(\d{4})\s*[~\-]\s*(\d{4})$/)
   if (rangeMatch) {
-    return rangeMatch[1] + '~' + rangeMatch[2]
+    const start = parseInt(rangeMatch[1], 10)
+    const end = parseInt(rangeMatch[2], 10)
+    if (start >= 1900 && end <= 2100 && start <= end) return rangeMatch[1] + '~' + rangeMatch[2]
+    return null
   }
-  const yearMatch = str.match(/(\d{4})/)
-  if (yearMatch) {
-    return yearMatch[1]
+  if (/^\d{4}$/.test(str)) {
+    const year = parseInt(str, 10)
+    if (year >= 1900 && year <= 2100) return str
   }
-  return str
+  return null
 }
 
 /**
@@ -105,9 +127,7 @@ function importWatching(db, workbook) {
       name.includes('追番') || name.includes('Watching')
     )
 
-    if (!sheetName) {
-      sheetName = workbook.SheetNames[0]
-    }
+    if (!sheetName) return
 
     const sheet = workbook.Sheets[sheetName]
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 })
@@ -160,9 +180,15 @@ function importWatching(db, workbook) {
         }
       }
 
-      for (let col = 1; col < rowData.length; col++) {
+      for (const colText of Object.keys(colDayMap)) {
+        const col = Number(colText)
         const cellValue = rowData[col]
-        if (!cellValue || typeof cellValue !== 'string') continue
+        if (cellValue == null || cellValue === '') continue
+        if (typeof cellValue === 'number') {
+          if (!(cellValue >= 1 && Number.isInteger(cellValue))) continue
+        } else if (typeof cellValue !== 'string') {
+          continue
+        }
 
         const trimmed = String(cellValue).trim()
         if (!trimmed) continue
@@ -216,7 +242,7 @@ function importWatching(db, workbook) {
 function importRemaining(db, workbook) {
   try {
     const sheetName = workbook.SheetNames.find(name =>
-      name.includes('等番') || name.includes('Remaining')
+      name.includes('等番') || name.includes('等待') || name.includes('Remaining') || name.includes('Waiting')
     )
 
     if (!sheetName) return
@@ -233,13 +259,13 @@ function importRemaining(db, workbook) {
 
       let expectedDate = ''
       if (row[1]) {
-        if (typeof row[1] === 'number') {
+        if (typeof row[1] === 'number' && row[1] >= 1900 && row[1] <= 2100 && Number.isInteger(row[1])) {
+          expectedDate = String(row[1])
+        } else if (typeof row[1] === 'number') {
           const date = XLSX.SSF.parse_date_code(row[1])
           if (date) {
             expectedDate = date.y + '/' + String(date.m).padStart(2, '0')
-            if (date.d && date.d > 1) {
-              expectedDate += '/' + String(date.d).padStart(2, '0')
-            }
+            if (date.d != null) expectedDate += '/' + String(date.d).padStart(2, '0')
           }
         } else {
           expectedDate = String(row[1]).trim()
@@ -270,7 +296,7 @@ function importRemaining(db, workbook) {
 /**
  * 导入已看数据
  */
-function importWatched(db, workbook) {
+async function importWatched(db, workbook) {
   try {
     const sheetName = workbook.SheetNames.find(name =>
       name.includes('已看') || name.includes('回忆') || name.includes('Watched') || name.includes('历史') || name.includes('完成')
@@ -283,7 +309,12 @@ function importWatched(db, workbook) {
 
     if (data.length === 0) return
 
-    const headerRow = data[0]
+    let headerIndex = 0
+    for (let i = 0; i < Math.min(data.length, 5); i++) {
+      const row = data[i] || []
+      if (row.some(cell => parseYear(cell))) { headerIndex = i; break }
+    }
+    const headerRow = data[headerIndex] || []
     const colYearMap = {}
     const yearOrder = []
 
@@ -293,11 +324,17 @@ function importWatched(db, workbook) {
         const year = parseYear(cellVal)
         if (year) {
           colYearMap[col] = year
-          if (!yearOrder.includes(year)) {
-            yearOrder.push(year)
-          }
+          if (!yearOrder.includes(year)) yearOrder.push(year)
         }
       }
+    }
+
+    const merges = sheet['!merges'] || []
+    for (const merge of merges) {
+      if (merge.s.r !== headerIndex) continue
+      const year = colYearMap[merge.s.c]
+      if (!year) continue
+      for (let col = merge.s.c; col <= merge.e.c; col++) colYearMap[col] = year
     }
 
     // 将年份存入 watched_years 表
@@ -310,12 +347,18 @@ function importWatched(db, workbook) {
       }
     }
 
-    // 遍历每列每行
-    for (let col = 0; col < headerRow.length; col++) {
-      const year = colYearMap[col]
-      if (!year) continue
-
-      for (let row = 1; row < data.length; row++) {
+    // 按行优先导入，保持 Excel 里的视觉顺序
+    // 每处理 YIELD_EVERY 行让出一次主线程，避免大表导入时页面假死
+    const YIELD_EVERY = 50
+    const yearCols = Object.keys(colYearMap).map(Number).sort((a, b) => a - b)
+    const totalRows = Math.max(1, data.length - headerIndex - 1)
+    for (let row = headerIndex + 1; row < data.length; row++) {
+      if ((row - headerIndex) % YIELD_EVERY === 0) {
+        reportProgress(row - headerIndex, totalRows)
+        await yieldToUI()
+      }
+      for (const col of yearCols) {
+        const year = colYearMap[col]
         const cellValue = data[row] ? data[row][col] : null
         if (!cellValue) continue
 
@@ -355,19 +398,37 @@ function importWatched(db, workbook) {
 /**
  * 主导入函数 - 从 File 对象读取并导入
  */
-export async function importExcel(file) {
+export async function importExcel(file, { onProgress } = {}) {
   importedCount = 0
   errorCount = 0
   errors = []
-  sortCounter = 0
+  progressHook = onProgress || null
 
   const db = await getDb()
+  sortCounter = 0
+  for (const getter of ['getAllWatching', 'getAllRemaining', 'getAllWatched']) {
+    try {
+      const rows = db[getter]?.()
+      if (Array.isArray(rows)) {
+        for (const row of rows) sortCounter = Math.max(sortCounter, Number(row.sort_order) || 0)
+      }
+    } catch { /* 取不到就按 0 起算 */ }
+  }
 
   // 读取文件
   let workbook
   try {
     const arrayBuffer = await file.arrayBuffer()
-    workbook = XLSX.read(arrayBuffer, { type: 'array' })
+    if (arrayBuffer.byteLength > 20 * 1024 * 1024) {
+      return { success: false, message: '文件超过 20MB', imported: 0, errors: ['文件超过 20MB，请拆分后再导入'] }
+    }
+    workbook = XLSX.read(arrayBuffer, {
+      type: 'array',
+      cellStyles: false,
+      sheetStubs: false,
+      bookVBA: false,
+      dense: false
+    })
   } catch (err) {
     return {
       success: false,
@@ -377,18 +438,26 @@ export async function importExcel(file) {
     }
   }
 
-  // 导入追番数据
-  importWatching(db, workbook)
+  // 整批导入放进一个事务：命中 UNIQUE 的行单独回滚该行的写法不可行，
+  // 因此这里按「表级批」分批提交——每张表一个事务，避免逐条落盘的 O(n²)
+  try {
+    importWatching(db, workbook)
+    importRemaining(db, workbook)
+    await importWatched(db, workbook)
+  } catch (err) {
+    errors.push('导入过程异常: ' + err.message)
+  } finally {
+    // 无论成功与否都把未落盘的改动刷一次；失败时批已被 rollbackBatch 处理
+    try { await db.flush?.() } catch { /* ignore */ }
+  }
 
-  // 导入等番数据
-  importRemaining(db, workbook)
-
-  // 导入已看数据
-  importWatched(db, workbook)
-
+  const recognized = workbook.SheetNames.some(name => /追番|Watching|等番|等待|Remaining|Waiting|已看|回忆|Watched|历史|完成/.test(name))
+  const success = recognized && (importedCount > 0 || (errorCount === 0 && errors.length === 0))
   return {
-    success: true,
-    message: '导入完成！成功导入 ' + importedCount + ' 条数据，失败 ' + errorCount + ' 条',
+    success,
+    message: success
+      ? '导入完成！成功导入 ' + importedCount + ' 条数据，失败 ' + errorCount + ' 条'
+      : '导入失败：成功 ' + importedCount + ' 条，失败 ' + errorCount + ' 条',
     imported: importedCount,
     errors: errors
   }

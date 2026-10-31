@@ -9,25 +9,25 @@ const routes = [
     path: '/watching',
     name: 'Watching',
     component: () => import('../views/WatchingView.vue'),
-    meta: { title: '正在追番', icon: '📺' }
+    meta: { title: '正在追番', icon: 'tv' }
   },
   {
     path: '/remaining',
     name: 'Remaining',
     component: () => import('../views/RemainingView.vue'),
-    meta: { title: '等待更新', icon: '⏳' }
+    meta: { title: '等待更新', icon: 'clock' }
   },
   {
     path: '/watched',
     name: 'Watched',
     component: () => import('../views/WatchedView.vue'),
-    meta: { title: '已看历史', icon: '📚' }
+    meta: { title: '已看历史', icon: 'book' }
   },
   {
     path: '/import',
     name: 'Import',
     component: () => import('../views/ImportView.vue'),
-    meta: { title: '导入Excel', icon: '📥' }
+    meta: { title: '导入Excel', icon: 'upload' }
   }
 ]
 

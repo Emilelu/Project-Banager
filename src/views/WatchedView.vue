@@ -1,28 +1,28 @@
 <template>
-  <div class="space-y-5" @keydown="handleKeydown" tabindex="-1">
+  <div ref="pageRootRef" class="space-y-5" @keydown="handleKeydown" tabindex="-1">
     <!-- 顶部信息栏 + 操作面板合并 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
-            <label class="text-sm font-medium text-gray-700">选择年份:</label>
+            <label class="text-sm font-medium text-gray-700">{{ tt('watched.yearSelect') }}</label>
             <select v-model="selectedYear" @change="fetchData"
               class="px-4 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80">
-              <option value="__all__">📚 全部年份</option>
+              <option value="__all__"><AppIcon scale="sm" name="book" /> {{ tt('watched.allYears') }}</option>
               <option v-for="y in sortedYears" :key="y.year_label" :value="y.year_label">{{ y.year_label }}</option>
-              <option value="__unclassified__">📋 未分类</option>
+              <option value="__unclassified__"><AppIcon scale="sm" name="log" /> {{ tt('watched.unclassified') }}</option>
             </select>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl">
-              本年: {{ yearCount }}部
+              {{ tt('watched.thisYear', { count: yearCount }) }}
             </span>
             <span class="px-3 py-1.5 bg-gray-100 text-gray-600 font-bold rounded-xl">
-              总计: {{ totalCount }}部
+              {{ tt('watched.total', { count: totalCount }) }}
             </span>
           </div>
           <div class="relative">
-            <input v-model="searchQuery" type="text" placeholder="搜索作品名称..."
+            <input v-model="searchQuery" type="text" :placeholder="tt('watched.searchPlaceholder')"
               class="pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80 w-48" />
             <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
@@ -31,29 +31,42 @@
           </div>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
-          <button @click="openAddDialog" class="px-4 py-2 bg-gradient-to-r from-success to-emerald-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-success/30 transition-all btn-press">✨ 添加记录</button>
-          <button :disabled="!selected" @click="openEditDialog" class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">✏️ 编辑</button>
-          <button :disabled="!selected" @click="deleteItem" class="px-4 py-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 删除</button>
+          <button @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addRecord') }}</button>
+
+          <!-- 选中项专属操作：统一由 transition-group 平滑出现/收起 -->
+          <transition-group name="sel-anim" tag="div" class="flex items-center gap-2 flex-wrap">
+            <button v-for="b in selectedActions" :key="b.key" v-if="!!selected" @click="b.onClick"
+              class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
+          </transition-group>
+
           <div class="border-l border-white/30 h-6 mx-1"></div>
-          <button @click="toggleBatchMode" class="px-4 py-2 text-white rounded-xl text-sm font-medium transition-all btn-press" :class="batchMode?'bg-gradient-to-r from-primary to-primary-light shadow-lg shadow-primary/30':'bg-gradient-to-r from-gray-400 to-gray-500'">☑️ 批量选择</button>
-          <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="px-4 py-2 bg-gradient-to-r from-danger to-red-400 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-danger/30 transition-all btn-press disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none">🗑️ 批量删除 ({{ checkedIds.length }})</button>
-          <button v-if="batchMode" @click="toggleSelectAll" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">{{ isAllChecked?'取消全选':'全选' }}</button>
-          <button @click="openClearDialog" class="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">💣 清空列表</button>
+          <button @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
+            <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
+          </button>
+          <button v-if="batchMode" :disabled="checkedIds.length===0" @click="batchDelete" class="btn-base btn-danger">
+            <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
+          </button>
+          <button v-if="batchMode" @click="toggleSelectAll" class="btn-base btn-neutral">{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}</button>
+          <button @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
           <div class="border-l border-white/30 h-6 mx-1"></div>
-          <button @click="openAddYearDialog" class="px-4 py-2 bg-gradient-to-r from-secondary to-secondary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">✨ 添加年份</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="editYearLabel" class="px-4 py-2 bg-gradient-to-r from-primary to-primary-light text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">✏️ 编辑年份</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="openDeleteYearDialog" class="px-4 py-2 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all btn-press">🗑️ 删除年份</button>
+          <button @click="openAddYearDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addYear') }}</button>
+          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="editYearLabel" class="btn-base btn-toned"><AppIcon scale="sm" name="edit" />{{ tt('watched.editYear') }}</button>
+          <button v-if="selectedYear && selectedYear !== '__unclassified__'" @click="openDeleteYearDialog" class="btn-base btn-danger"><AppIcon scale="sm" name="trash" />{{ tt('watched.deleteYear') }}</button>
         </div>
       </div>
       <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
         <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
-        已选择 <span class="font-bold">{{ checkedIds.length }}</span> 项
+        {{ tt('watching.selectedCount', { count: checkedIds.length }) }}
       </div>
-      <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
-        当前选中: <span class="font-bold gradient-text">{{ selected.name }}</span>
-        <span class="text-gray-400">{{ selected.watch_date }}</span>
-      </div>
+
+      <transition name="sel-anim">
+          <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2 selectable-text">
+          <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
+          {{ tt('watching.currentSelected') }} <span class="font-bold gradient-text">{{ selected.name }}</span>
+          <span class="text-gray-400">{{ selected.watch_date }}</span>
+        </div>
+
+      </transition>
     </div>
 
     <!-- 列表视图 -->
@@ -62,27 +75,33 @@
         <thead>
           <tr class="bg-gradient-to-r from-primary/10 to-secondary/10 text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
-              <div class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
+              <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
+                @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
+                class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
                 :class="isAllChecked?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="isAllChecked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
             </th>
             <th class="text-center px-2 py-2.5 text-primary-dark font-bold whitespace-nowrap">#</th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition" @click="toggleSort('name')">
-              🌸 作品名称 {{ sortField==='name'?(sortOrder==='asc'?'↑':'↓'):'' }}
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition"
+              tabindex="0" role="button" :aria-sort="sortField==='name'?(sortOrder==='asc'?'ascending':'descending'):'none'"
+              @click="toggleSort('name')" @keydown.enter.prevent="toggleSort('name')" @keydown.space.prevent="toggleSort('name')">
+              <AppIcon scale="sm" name="sparkle" /> {{ tt('watched.colName') }} <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='name'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition whitespace-nowrap" @click="toggleSort('watch_date')">
-              📅 日期 {{ sortField==='watch_date'?(sortOrder==='asc'?'↑':'↓'):'' }}
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition whitespace-nowrap"
+              tabindex="0" role="button" :aria-sort="sortField==='watch_date'?(sortOrder==='asc'?'ascending':'descending'):'none'"
+              @click="toggleSort('watch_date')" @keydown.enter.prevent="toggleSort('watch_date')" @keydown.space.prevent="toggleSort('watch_date')">
+              <AppIcon scale="sm" name="calendar" /> {{ tt('watched.colDate') }} <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='watch_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap">🔗 链接</th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap">📝 备注</th>
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="link" /> {{ tt('watched.colUrl') }}</th>
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="note" /> {{ tt('watched.colNotes') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="paginatedList.length===0">
             <td :colspan="batchMode?6:5" class="py-16 text-center text-gray-400">
-              <div class="text-4xl mb-3">📭</div>
-              <div>{{ searchQuery ? '没有找到匹配的记录' : (selectedYear === '__unclassified__' ? '暂无未分类记录' : selectedYear + ' 暂无已看记录') }}</div>
+              <div class="text-4xl mb-3"><AppIcon scale="sm" name="emptyBox" /></div>
+              <div>{{ searchQuery ? tt('watched.emptyNoMatch') : (selectedYear === '__unclassified__' ? tt('watched.emptyUnclassified') : tt('watched.emptyYear', { year: selectedYear })) }}</div>
             </td>
           </tr>
           <tr v-for="(item,idx) in paginatedList" :key="item.id"
@@ -92,7 +111,10 @@
             @contextmenu.prevent="!batchMode && openContextMenu($event,item)"
             @mousedown.middle.prevent="openItemLink(item)">
             <td v-if="batchMode" class="text-center px-2 py-2.5" @click.stop="toggleCheck(item.id)">
-              <div class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
+              <div role="checkbox" tabindex="0" :aria-checked="checkedIds.includes(item.id) ? 'true' : 'false'"
+                :aria-label="tt('card.checkLabel', { name: item.name })"
+                @keydown.enter.prevent="toggleCheck(item.id)" @keydown.space.prevent="toggleCheck(item.id)"
+                class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
                 :class="checkedIds.includes(item.id)?'bg-danger border-danger':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="checkedIds.includes(item.id)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
@@ -100,25 +122,30 @@
             <td class="text-center px-2 py-2.5 text-xs text-gray-400 font-mono">{{ idx+1 }}</td>
             <td class="px-3 py-2.5" @dblclick.stop="!batchMode && startEdit(item,'name')">
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
+                :aria-label="tt('card.editWorkNameLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <span v-else class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate block">{{ item.name }}</span>
             </td>
             <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'watch_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='watch_date'" v-model="editValue"
+                :aria-label="tt('card.editDateLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
-                placeholder="如: 2025" autofocus />
+                :placeholder="tt('moveWatched.datePlaceholder')" autofocus />
               <span v-else class="text-sm text-gray-600 truncate block">{{ item.watch_date || '-' }}</span>
             </td>
             <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'url')">
               <input v-if="editing?.id===item.id&&editing?.field==='url'" v-model="editValue"
+                :aria-label="tt('card.editUrlLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
-                placeholder="https://..." autofocus />
+                :placeholder="tt('record.urlPlaceholder')" autofocus />
               <a v-else :href="item.url ? buildUrl(item) : defaultBgmUrl(item)" target="_blank" rel="noopener"
                 @click.stop @mousedown.middle.stop
-                class="text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || '🔍 bgm.tv' }}</a>
+                :aria-label="tt('card.openLinkLabel', { name: item.name })"
+                class="text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
             </td>
             <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'notes')">
               <input v-if="editing?.id===item.id&&editing?.field==='notes'" v-model="editValue"
+                :aria-label="tt('card.editNotesLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '-' }}</span>
             </td>
@@ -131,19 +158,21 @@
     <div v-if="filteredList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-3">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2 text-sm text-gray-600">
-          <span>共 {{ filteredList.length }} 条</span>
+          <span>{{ tt('watched.totalCount', { count: filteredList.length }) }}</span>
           <div class="relative inline-block">
             <button @click="showPageSizeMenu=!showPageSizeMenu" class="px-2 py-1 border border-primary/20 rounded-lg text-xs hover:bg-primary/5 transition bg-white/80">
-              每页 {{ pageSize }} 条 ▾
+              {{ tt('remaining.perPage', { n: pageSize }) }}<AppIcon scale="xs" class="inline-block align-middle ml-0.5" name="caretDown" />
             </button>
-            <div v-if="showPageSizeMenu" class="absolute left-0 bottom-full mb-1 glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[7.5rem] z-50">
-              <button v-for="s in pageSizeOptions" :key="s" @click="setPageSize(s)"
-                class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ s }} 条/页</button>
-              <div class="border-t border-white/20 my-1"></div>
-              <div class="px-3 py-2 flex items-center gap-2">
-                <input v-model="customPageSize" type="number" min="1" placeholder="自定义"
-                  class="w-16 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white/80" @keyup.enter="applyCustomPageSize" />
-                <button @click="applyCustomPageSize" class="px-2 py-1 text-xs text-primary hover:text-primary-dark transition">确定</button>
+            <!-- 与等待更新页一致：加宽到 12rem + 全程 nowrap，避免「确定」被挤成两行 -->
+            <div v-if="showPageSizeMenu" role="menu"
+              class="page-size-menu absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface">
+              <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
+                class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition whitespace-nowrap" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
+              <div class="border-t border-gray-200/60 my-1"></div>
+              <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
+                <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
+                  class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
+                <button @click="applyCustomPageSize" class="shrink-0 px-2 py-1 text-xs text-primary hover:text-primary-dark transition whitespace-nowrap">{{ tt('common.confirm') }}</button>
               </div>
             </div>
             <div v-if="showPageSizeMenu" class="fixed inset-0 z-40" @click="showPageSizeMenu=false"></div>
@@ -151,14 +180,14 @@
         </div>
         <div class="flex items-center gap-1">
           <button :disabled="currentPage<=1" @click="currentPage--"
-            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage<=1?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">上一页</button>
+            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage<=1?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">{{ tt('watched.prevPage') }}</button>
           <template v-for="p in displayPages" :key="p">
             <span v-if="p==='...'" class="px-2 py-1 text-xs text-gray-400">...</span>
             <button v-else @click="currentPage=p"
-              class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="p===currentPage?'bg-primary text-white font-bold':'text-gray-600 hover:bg-primary/10'">{{ p }}</button>
+              class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="p===currentPage?'btn-page-active font-bold':'text-gray-600 hover:bg-primary/10'">{{ p }}</button>
           </template>
           <button :disabled="currentPage>=totalPages" @click="currentPage++"
-            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage>=totalPages?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">下一页</button>
+            class="px-3 py-1.5 text-xs rounded-lg transition btn-press" :class="currentPage>=totalPages?'text-gray-300 cursor-not-allowed':'text-gray-600 hover:bg-primary/10'">{{ tt('watched.nextPage') }}</button>
         </div>
       </div>
     </div>
@@ -167,10 +196,10 @@
     <Teleport to="body">
       <div v-if="contextMenu.show" class="fixed z-[200]" :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
         <div class="glass rounded-xl shadow-2xl border border-white/30 py-1 min-w-[10rem] animate-scale-in context-menu">
-          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">✏️ 编辑</button>
-          <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}">🔗 打开链接</button>
+          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('common.edit') }}</button>
+          <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
           <div class="border-t border-white/20 my-1"></div>
-          <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2">🗑️ 删除</button>
+          <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
         </div>
       </div>
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
@@ -183,23 +212,25 @@
       </transition>
       <transition name="modal">
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="confirmActionFn">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" ref="confirmDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-confirm-title" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
-              <div class="text-4xl mb-3">{{ confirmAction==='clear'?'💣':confirmAction==='batchDelete'?'🗑️':confirmAction==='deleteYear'?'📅':'🗑️' }}</div>
-              <h3 class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear'?'确认清空':confirmAction==='batchDelete'?'批量删除':confirmAction==='deleteYear'?'删除年份':'确认删除' }}</h3>
+              <div class="mb-3 flex justify-center" aria-hidden="true">
+                <AppIcon scale="xl" class="text-danger" :name="confirmAction==='clear'?'clear':confirmAction==='deleteYear'?'calendar':'trash'" />
+              </div>
+              <h3 id="watched-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear' ? tt('confirm.clearTitle') : confirmAction==='batchDelete' ? tt('confirm.batchDeleteTitleShort') : confirmAction==='deleteYear' ? tt('watched.deleteYear') : tt('confirm.deleteTitle') }}</h3>
               <p class="text-sm text-gray-500">
                 <template v-if="confirmAction==='clear'">
-                  <template v-if="clearScope==='year'">确定要清空「<span class="font-semibold text-gray-700">{{ selectedYear }}</span>」年份的所有已看记录吗？此操作不可撤销。</template>
-                  <template v-else>确定要清空所有已看记录并删除所有年份吗？此操作不可撤销。</template>
+                  <template v-if="clearScope==='year'">{{ tt('confirm.clearYearMessage', { year: selectedYear }) }}</template>
+                  <template v-else>{{ tt('confirm.clearAllMessage') }}</template>
                 </template>
-                <template v-else-if="confirmAction==='batchDelete'">确定要删除选中的 <span class="font-semibold text-danger">{{ confirmTarget }}</span> 项记录吗？此操作不可撤销。</template>
-                <template v-else-if="confirmAction==='deleteYear'">确定要删除年份「<span class="font-semibold text-gray-700">{{ confirmTarget }}</span>」吗？该年份下的番剧记录不会被删除。</template>
-                <template v-else>确定要删除「<span class="font-semibold text-gray-700">{{ confirmTarget }}</span>」吗？此操作不可撤销。</template>
+                <template v-else-if="confirmAction==='batchDelete'">{{ tt('confirm.batchDeleteMessageWatched', { count: confirmTarget }) }}</template>
+                <template v-else-if="confirmAction==='deleteYear'">{{ tt('confirm.deleteYearMessage', { year: confirmTarget }) }}</template>
+                <template v-else>{{ tt('confirm.deleteOneMessage', { name: confirmTarget }) }}</template>
               </p>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-center gap-3">
-              <button @click="showConfirmDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">取消</button>
-              <button @click="confirmActionFn" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">{{ confirmAction==='clear'?'确认清空':confirmAction==='deleteYear'?'确认删除':'确认删除' }}</button>
+              <button @click="showConfirmDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
+              <button @click="confirmActionFn" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">{{ confirmAction==='clear' ? tt('confirm.confirmClear') : tt('confirm.confirmDelete') }}</button>
             </div>
           </div>
         </div>
@@ -213,22 +244,22 @@
       </transition>
       <transition name="modal">
         <div v-if="showClearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog">
+          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" ref="clearDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-clear-title">
             <div class="px-6 py-5 text-center">
-              <div class="text-4xl mb-3">💣</div>
-              <h3 class="text-lg font-bold text-gray-800 mb-2">选择清空范围</h3>
-              <p class="text-sm text-gray-500 mb-4">请选择要清空的范围：</p>
+              <div class="text-4xl mb-3" aria-hidden="true"><AppIcon scale="sm" name="clear" /></div>
+              <h3 id="watched-clear-title" class="text-lg font-bold text-gray-800 mb-2">{{ tt('clearScope.title') }}</h3>
+              <p class="text-sm text-gray-500 mb-4">{{ tt('clearScope.hint') }}</p>
               <div class="flex flex-col gap-3">
                 <button @click="doClearYear" class="px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-warning to-amber-400 rounded-xl hover:shadow-lg hover:shadow-warning/30 transition-all btn-press">
-                  清空当前年份 ({{ selectedYear }})
+                  {{ tt('clearScope.clearYear', { year: selectedYear }) }}
                 </button>
                 <button @click="doClearAll" class="px-5 py-3 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">
-                  清空所有记录并删除所有年份
+                  {{ tt('clearScope.clearAll') }}
                 </button>
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-center">
-              <button @click="showClearDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">取消</button>
+              <button @click="showClearDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
             </div>
           </div>
         </div>
@@ -242,38 +273,41 @@
       </transition>
       <transition name="modal">
         <div v-if="showDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[28.75rem] border border-white/40 pointer-events-auto app-dialog" ref="recordDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-record-title" @keydown.ctrl.enter="saveForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
-              <span class="text-xl">{{ dialogMode==='add'?'✨':'✏️' }}</span>
-              <h3 class="text-lg font-bold gradient-text">{{ dialogMode==='add'?'添加历史记录':'编辑历史记录' }}</h3>
+              <AppIcon scale="lg" :name="dialogMode==='add' ? 'sparkle' : 'edit'" />
+              <h3 id="watched-record-title" class="text-lg font-bold gradient-text">{{ dialogMode==='add' ? tt('record.addTitle') : tt('record.editTitle') }}</h3>
             </div>
             <div class="px-6 py-5 space-y-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">作品名称</label>
-                <input ref="dialogNameInput" v-model="form.name" type="text" placeholder="请输入作品名称"
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('watched.colName') }}</label>
+                <input ref="dialogNameInput" v-model="form.name" type="text" :placeholder="tt('watched.namePlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>观看日期</span>
-                  <button type="button" @click="dateManualInput=!dateManualInput" class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput?'使用日期选择器':'手动输入' }}</button>
+                  <span>{{ tt('moveWatched.date') }}</span>
+                  <button type="button" @click="dateManualInput=!dateManualInput" class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>
-                <input v-if="dateManualInput" v-model="form.watch_date" type="text" placeholder="如: 2025 或 2025/07 或 2025/07/15"
+                <input v-if="dateManualInput" v-model="form.watch_date" type="text" :placeholder="tt('moveWatched.datePlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80"
                   :class="{'border-danger/50 ring-danger/20': formDateValidationError}" />
                 <input v-else :value="formatToDateInput(form.watch_date)" @input="form.watch_date = dateInputToFormat($event.target.value)" @click="$event.target.showPicker()" type="date"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                <p v-if="!dateManualInput && isCoarseDate(form.watch_date)" class="text-xs text-amber-600 mt-1">
+                  {{ tt('record.coarseDateHint', { date: form.watch_date }) }}
+                </p>
                 <p v-if="formDateValidationError" class="text-xs text-danger mt-1">{{ formDateValidationError }}</p>
-                <p v-else-if="dateManualInput" class="text-xs text-gray-400 mt-1">支持: 年份(2025)、年月(2025/07)、完整日期(2025/07/15)、年份范围(2014~2017)</p>
+                <p v-else-if="dateManualInput" class="text-xs text-gray-400 mt-1">{{ tt('record.dateFormatsHint') }}</p>
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>时间（可选）</span>
-                  <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker?'手动输入':'时钟选择' }}</button>
+                  <span>{{ tt('moveWatched.time') }}</span>
+                  <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.manualInput') : tt('showDialog.clockPicker') }}</button>
                 </label>
                 <div v-if="!formShowTimePicker" class="relative">
                   <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">
-                    <span class="text-sm font-mono" :class="formTime?'text-gray-800':'text-gray-400'">{{ formTime || '点击选择时间' }}</span>
+                    <span class="text-sm font-mono" :class="formTime?'text-gray-800':'text-gray-400'">{{ formTime || tt('showDialog.clickToPickTime') }}</span>
                     <svg class="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
                   <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 w-full glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
@@ -298,29 +332,29 @@
                 <div v-else class="flex items-center gap-2">
                   <input v-model="formTime" type="text" placeholder="HH:mm"
                     class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                  <button @click="formTime=''" class="px-3 py-2.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">清除</button>
+                  <button @click="formTime=''" class="px-3 py-2.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('record.clearTime') }}</button>
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">链接 URL</label>
-                <input v-model="form.url" type="text" placeholder="如: https://..."
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.url') }}</label>
+                <input v-model="form.url" type="text" :placeholder="tt('record.urlPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
               </div>
               <div v-if="form.url">
-                <label class="block text-sm font-medium text-gray-700 mb-1">URL 动态参数</label>
-                <input v-model="form.url_params" type="text" placeholder="如: keyword={集数} 或 keyword={集数}&page=1"
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.urlParams') }}</label>
+                <input v-model="form.url_params" type="text" :placeholder="tt('record.urlParamsPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                <p class="text-xs text-gray-400 mt-1">用 {集数} 代表当前集数，点击链接时自动替换。如: keyword={集数} → keyword=914</p>
+                <p class="text-xs text-gray-400 mt-1">{{ tt('showDialog.episodeTokenHint') }}</p>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
-                <textarea v-model="form.notes" rows="2" placeholder="可选备注"
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.notes') }}</label>
+                <textarea v-model="form.notes" rows="2" :placeholder="tt('showDialog.notesPlaceholder')"
                   class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition resize-none bg-white/80"></textarea>
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">取消</button>
-              <button @click="saveForm" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-light rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press">保存</button>
+              <button @click="showDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
+              <button @click="saveForm" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-primary to-primary-dark rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all btn-press disabled:opacity-40">{{ tt('common.save') }}</button>
             </div>
           </div>
         </div>
@@ -334,20 +368,20 @@
       </transition>
       <transition name="modal">
         <div v-if="showYearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto app-dialog" @keydown.ctrl.enter="saveYearForm">
+          <div class="relative glass rounded-2xl shadow-2xl w-[25rem] border border-white/40 pointer-events-auto app-dialog" ref="yearDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-year-title" @keydown.ctrl.enter="saveYearForm">
             <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2">
-              <span class="text-xl">📅</span>
-              <h3 class="text-lg font-bold gradient-text">{{ yearDialogMode==='add'?'添加年份':'编辑年份' }}</h3>
+              <AppIcon scale="lg" name="calendar" />
+              <h3 id="watched-year-title" class="text-lg font-bold gradient-text">{{ yearDialogMode==='add' ? tt('watched.addYear') : tt('watched.editYear') }}</h3>
             </div>
             <div class="px-6 py-5">
-              <label class="block text-sm font-medium text-gray-700 mb-1">年份标签</label>
-              <input v-model="yearForm.year_label" type="text" placeholder="如: 2025 或 2014~2017"
+              <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('watched.yearLabel') }}</label>
+              <input v-model="yearForm.year_label" type="text" :placeholder="tt('watched.yearLabelPlaceholder')"
                 class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-              <p class="text-xs text-gray-400 mt-1">支持单个年份(2025)或年份范围(2014~2017)</p>
+              <p class="text-xs text-gray-400 mt-1">{{ tt('watched.yearLabelHint') }}</p>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
-              <button @click="showYearDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">取消</button>
-              <button @click="saveYearForm" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-secondary to-secondary-light rounded-xl hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">保存</button>
+              <button @click="showYearDialog=false" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
+              <button @click="saveYearForm" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-secondary to-secondary-dark rounded-xl hover:shadow-lg hover:shadow-secondary/30 transition-all btn-press">{{ tt('common.save') }}</button>
             </div>
           </div>
         </div>
@@ -361,7 +395,12 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, dateInputToFormat, formatToDateInput, extractYear, extractAllYears, compareDateKey, todayStr } from '../composables/useDatePicker'
 import { showToast } from '../composables/useToast'
+import { openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
+import { useDialogFocus } from '../composables/useDialogFocus'
+import { useI18n } from '../composables/useI18n'
+
+const { tt } = useI18n()
 
 const years = ref([])
 const watchedList = ref([])
@@ -489,7 +528,7 @@ const displayPages = computed(() => {
 // ========== 批量操作 ==========
 const batchMode = ref(false)
 const checkedIds = ref([])
-const isAllChecked = computed(() => paginatedList.value.length > 0 && checkedIds.value.length === paginatedList.value.length)
+const isAllChecked = computed(() => paginatedList.value.length > 0 && paginatedList.value.every(item => checkedIds.value.includes(item.id)))
 
 const toggleBatchMode = () => {
   batchMode.value = !batchMode.value
@@ -502,6 +541,8 @@ const handleKeydown = (e) => {
     if (showDialog.value) { showDialog.value = false; return }
     if (showConfirmDialog.value) { showConfirmDialog.value = false; return }
     if (showClearDialog.value) { showClearDialog.value = false; return }
+    if (showYearDialog.value) { showYearDialog.value = false; return }
+    if (contextMenu.value.show) { contextMenu.value.show = false; return }
     if (batchMode.value) { batchMode.value = false; checkedIds.value = [] }
   }
 }
@@ -513,7 +554,10 @@ const toggleCheck = (id) => {
 }
 
 const toggleSelectAll = () => {
-  checkedIds.value = isAllChecked.value ? [] : paginatedList.value.map(i => i.id)
+  const pageIds = paginatedList.value.map(i => i.id)
+  checkedIds.value = isAllChecked.value
+    ? checkedIds.value.filter(id => !pageIds.includes(id))
+    : [...new Set([...checkedIds.value, ...pageIds])]
 }
 
 const batchDelete = () => {
@@ -539,7 +583,7 @@ const doClearAll = async () => {
   showClearDialog.value = false
   confirmAction.value = 'clear'
   clearScope.value = 'all'
-  confirmTarget.value = '所有记录'
+  confirmTarget.value = tt('watched.allRecords')
   showConfirmDialog.value = true
 }
 
@@ -566,7 +610,7 @@ const defaultBgmUrl = (item) => {
 
 const openItemLink = (item) => {
   const url = item.url ? buildUrl(item) : defaultBgmUrl(item)
-  window.open(url, '_blank')
+  openExternal(url)
 }
 const yearForm = ref({ year_label:'' })
 
@@ -581,7 +625,7 @@ const ctxEdit = () => { closeContextMenu(); openEditDialog() }
 const ctxOpenUrl = () => {
   const item = contextMenu.value.item
   closeContextMenu()
-  if (item?.url) window.open(buildUrl(item), '_blank')
+  if (item?.url) openExternal(buildUrl(item))
 }
 const ctxDelete = () => { closeContextMenu(); openConfirmDialog() }
 
@@ -608,43 +652,43 @@ const confirmActionFn = async () => {
   if (confirmAction.value === 'batchDelete') {
     try {
       const res = await batchApi.batchDeleteWatched(checkedIds.value)
-      if (res.data.success) { showToast(`已批量删除 ${checkedIds.value.length} 项 🗑️`); checkedIds.value=[]; batchMode.value=false; await fetchData() }
-      else showToast(res.data.error||'批量删除失败','error')
-    } catch { showToast('批量删除失败','error') }
+      if (res.data.success) { showToast(tt('toast.batchDeleted', { count: checkedIds.value.length })); checkedIds.value=[]; batchMode.value=false; await fetchData() }
+      else showToast(res.data.error||tt('toast.batchDeleteFailed'),'error')
+    } catch { showToast(tt('toast.batchDeleteFailed'),'error') }
   } else if (confirmAction.value === 'clear') {
     try {
       if (clearScope.value === 'year') {
         // 清空当前年份
         const yearItems = watchedList.value.map(i => i.id)
-        if (yearItems.length === 0) { showToast('当前年份没有记录','warning'); return }
+        if (yearItems.length === 0) { showToast(tt('toast.noRecordThisYear'),'warning'); return }
         const res = await batchApi.batchDeleteWatched(yearItems)
-        if (res.data.success) { showToast(`${selectedYear.value} 已清空 💣`); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
-        else showToast(res.data.error||'清空失败','error')
+        if (res.data.success) { showToast(tt('toast.yearCleared', { year: selectedYear.value })); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
+        else showToast(res.data.error||tt('toast.clearFailed'),'error')
       } else {
         // 清空所有
         const res = await batchApi.clearWatched()
         if (res.data.success) {
           await batchApi.clearWatchedYears()
-          showToast('所有已看记录已清空 💣'); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchYears(); await fetchData()
+          showToast(tt('toast.allWatchedCleared')); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchYears(); await fetchData()
         }
-        else showToast(res.data.error||'清空失败','error')
+        else showToast(res.data.error||tt('toast.clearFailed'),'error')
       }
-    } catch { showToast('清空失败','error') }
+    } catch { showToast(tt('toast.clearFailed'),'error') }
   } else if (confirmAction.value === 'deleteYear') {
     const y = years.value.find(y => y.year_label === confirmTarget.value)
     if (!y) return
     try {
       const res = await watchedYearsApi.delete(y.id)
-      if (res.data.success) { showToast('年份已删除 🗑️'); await fetchYears(); if (years.value.length > 0) { selectedYear.value = years.value[0].year_label } else { selectedYear.value = '' } await fetchData() }
-      else showToast(res.data.error||'删除失败','error')
-    } catch { showToast('删除失败','error') }
+      if (res.data.success) { showToast(tt('toast.yearDeleted')); await fetchYears(); if (years.value.length > 0) { selectedYear.value = years.value[0].year_label } else { selectedYear.value = '' } await fetchData() }
+      else showToast(res.data.error||tt('toast.delFailed'),'error')
+    } catch { showToast(tt('toast.delFailed'),'error') }
   } else if (confirmAction.value === 'delete') {
     if (!selected.value) return
     try {
       const res = await watchedApi.delete(selected.value.id)
-      if (res.data.success) { showToast('已删除 🗑️'); selected.value=null; await fetchData() }
-      else showToast(res.data.error||'删除失败','error')
-    } catch { showToast('删除失败','error') }
+      if (res.data.success) { showToast(tt('toast.deleted')); selected.value=null; await fetchData() }
+      else showToast(res.data.error||tt('toast.delFailed'),'error')
+    } catch { showToast(tt('toast.delFailed'),'error') }
   }
 }
 
@@ -664,7 +708,13 @@ const fetchYears = async () => {
 }
 
 const fetchData = async () => {
-  if (!selectedYear.value) return
+  if (!selectedYear.value) {
+    watchedList.value = []
+    yearCount.value = 0
+    selected.value = null
+    checkedIds.value = []
+    return
+  }
   try {
     if (selectedYear.value === '__all__') {
       const res = await watchedApi.getAll()
@@ -676,11 +726,25 @@ const fetchData = async () => {
     } else if (selectedYear.value === '__unclassified__') {
       const res = await watchedApi.getAll()
       if (res.data.success) {
-        const yearLabels = new Set(years.value.map(y => y.year_label))
+        const ranges = years.value.map(y => String(y.year_label)).map(label => {
+          const m = label.match(/^(\d{4})\s*~\s*(\d{4})$/)
+          if (m) return { label, start: parseInt(m[1], 10), end: parseInt(m[2], 10) }
+          const single = label.match(/^(\d{4})$/)
+          if (single) { const y = parseInt(single[1], 10); return { label, start: y, end: y } }
+          return { label, start: null, end: null }
+        })
         watchedList.value = res.data.data.filter(item => {
-          const itemYears = extractAllYears(item.watch_date)
-          if (itemYears.length === 0) return true
-          return !itemYears.some(y => yearLabels.has(y))
+          const d = String(item.watch_date || '')
+          if (!d) return true
+          const matched = ranges.some(r => {
+            if (d === r.label) return true
+            if (r.start == null) return false
+            const m = d.match(/^(\d{4})/)
+            if (!m) return false
+            const y = parseInt(m[1], 10)
+            return y >= r.start && y <= r.end
+          })
+          return !matched
         })
         yearCount.value = watchedList.value.length
         totalCount.value = res.data.data.length
@@ -693,17 +757,27 @@ const fetchData = async () => {
         totalCount.value = res.data.totalCount
       }
     }
-  } catch { showToast('获取数据失败','error') }
+    const visible = new Set(watchedList.value.map(item => item.id))
+    checkedIds.value = checkedIds.value.filter(id => visible.has(id))
+    selected.value = selected.value ? watchedList.value.find(item => item.id === selected.value.id) || null : null
+  } catch { showToast(tt('toast.fetchFailed'),'error') }
 }
 
 const selectItem = (item) => { selected.value = item }
+
+// 年份 / 年月 / 年份范围精度的日期无法表示在 type="date" 里
+const isCoarseDate = (value) => {
+  const v = String(value || '').trim()
+  if (!v) return false
+  return !/^\d{4}\/\d{1,2}\/\d{1,2}/.test(v)
+}
 
 // 点击表格行和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
 const onDocClick = (e) => {
   if (editing.value && !e.target.closest('input, select, textarea')) {
     cancelEdit()
   }
-  if (e.target.closest('tbody tr, button, input, select, textarea, a, .app-dialog, .context-menu')) return
+  if (e.target.closest('tbody tr, button, input, select, textarea, a, .app-dialog, .context-menu, .selectable-text')) return
   selected.value = null
 }
 
@@ -717,17 +791,29 @@ const cancelEdit = () => { editing.value = null }
 
 const saveEdit = async () => {
   if (!editing.value) return
-  const { id, field } = editing.value
+  const token = editing.value
+  const { id, field } = token
+  let val = editValue.value
+  if (field === 'name') {
+    val = val.trim()
+    if (!val) { showToast(tt('toast.pleaseEnterWorkName'), 'warning'); return }
+  }
+  if (field === 'watch_date') {
+    const validation = validateDate(val)
+    if (!validation.valid) { showToast(validation.error, 'warning'); return }
+    val = validation.normalized
+  }
   const item = watchedList.value.find(i => i.id === id)
   const originalValue = String(item?.[field] ?? '')
-  if (editValue.value === originalValue) { editing.value = null; return }
+  if (val === originalValue) { if (editing.value === token) editing.value = null; return }
   try {
-    const res = await watchedApi.update(id, { [field]: editValue.value })
+    const res = await watchedApi.update(id, { [field]: val })
     if (res.data.success) {
-      if (item) item[field] = editValue.value
-    } else { showToast(res.data.error||'更新失败','error') }
-  } catch { showToast('更新失败','error') }
-  editing.value = null
+      if (item) item[field] = val
+      if (field === 'watch_date') await fetchYears()
+    } else { showToast(res.data.error||tt('toast.updateFailed'),'error') }
+  } catch { showToast(tt('toast.updateFailed'),'error') }
+  if (editing.value === token) editing.value = null
 }
 
 // ========== 年份操作 ==========
@@ -747,28 +833,28 @@ const editYearLabel = () => {
 }
 
 const saveYearForm = async () => {
-  if (!yearForm.value.year_label.trim()) { showToast('请输入年份标签','warning'); return }
+  if (!yearForm.value.year_label.trim()) { showToast(tt('toast.pleaseEnterYearLabel'),'warning'); return }
   try {
     if (yearDialogMode.value === 'add') {
       const res = await watchedYearsApi.add(yearForm.value)
       if (res.data.success) {
-        showToast('年份已添加 ✨')
+        showToast(tt('toast.yearAdded'))
         showYearDialog.value = false
         await fetchYears()
         selectedYear.value = yearForm.value.year_label
         await fetchData()
-      } else { showToast(res.data.error||'添加失败','error') }
+      } else { showToast(res.data.error||tt('toast.addFailed'),'error') }
     } else {
       const res = await watchedYearsApi.update(editingYearId.value, yearForm.value)
       if (res.data.success) {
-        showToast('年份已更新 ✏️')
+        showToast(tt('toast.yearUpdated'))
         showYearDialog.value = false
         await fetchYears()
         selectedYear.value = yearForm.value.year_label
         await fetchData()
-      } else { showToast(res.data.error||'更新失败','error') }
+      } else { showToast(res.data.error||tt('toast.updateFailed'),'error') }
     }
-  } catch { showToast('操作失败','error') }
+  } catch { showToast(tt('toast.operationFailed'),'error') }
 }
 
 // ========== 记录操作 ==========
@@ -797,10 +883,21 @@ const openAddDialog = () => {
   focusNameInput()
 }
 
+/**
+ * 选中项专属操作按钮：集中定义，模板 v-for 渲染。
+ * 颜色由语义类决定（全部跟随主题色），配合 transition-group 统一动效。
+ */
+const selectedActions = computed(() => [
+  { key: 'edit', icon: 'edit', label: tt('common.edit'), cls: 'btn-toned', onClick: () => openEditDialog() },
+  { key: 'del', icon: 'trash', label: tt('common.delete'), cls: 'btn-danger', onClick: () => deleteItem() },
+])
+
 const openEditDialog = () => {
   if (!selected.value) return
   dialogMode.value = 'edit'
   const watchDate = selected.value.watch_date || ''
+  // 年 / 年月精度无法用 type="date" 表示，自动切手动输入避免显示为空
+  dateManualInput.value = isCoarseDate(watchDate)
   const parts = watchDate.split(' ')
   const datePart = parts[0] || ''
   const timePart = parts.length > 1 ? parts.slice(1).join(' ') : ''
@@ -820,7 +917,7 @@ const openEditDialog = () => {
 }
 
 const saveForm = async () => {
-  if (!form.value.name.trim()) { showToast('请输入作品名称','warning'); return }
+  if (!form.value.name.trim()) { showToast(tt('toast.pleaseEnterWorkName'),'warning'); return }
   if (form.value.watch_date && form.value.watch_date.trim()) {
     const validation = validateDate(form.value.watch_date)
     if (!validation.valid) {
@@ -831,23 +928,26 @@ const saveForm = async () => {
     form.value.watch_date = validation.normalized
   }
   if (formTime.value) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(formTime.value)) {
+      formDateValidationError.value = tt('toast.timeFormatInvalid')
+      return
+    }
     const dateStr = form.value.watch_date
-    if (/^\d{4}$/.test(dateStr) || /^\d{4}\/\d{2}$/.test(dateStr) || /~/.test(dateStr)) {
-    } else {
+    if (!(/^\d{4}$/.test(dateStr) || /^\d{4}\/\d{2}$/.test(dateStr) || /~/.test(dateStr))) {
       form.value.watch_date = dateStr + ' ' + formTime.value
     }
   }
   try {
     if (dialogMode.value === 'add') {
       const res = await watchedApi.add(form.value)
-      if (res.data.success) { showToast('历史记录已添加 ✨'); showDialog.value=false; await fetchData() }
-      else showToast(res.data.error||'添加失败','error')
+      if (res.data.success) { showToast(tt('toast.historyAdded')); showDialog.value=false; await fetchYears(); await fetchData() }
+      else showToast(res.data.error||tt('toast.addFailed'),'error')
     } else {
       const res = await watchedApi.update(selected.value.id, form.value)
-      if (res.data.success) { showToast('历史记录已更新 ✏️'); showDialog.value=false; selected.value=null; await fetchData() }
-      else showToast(res.data.error||'更新失败','error')
+      if (res.data.success) { showToast(tt('toast.historyUpdated')); showDialog.value=false; selected.value=null; await fetchYears(); await fetchData() }
+      else showToast(res.data.error||tt('toast.updateFailed'),'error')
     }
-  } catch { showToast('操作失败','error') }
+  } catch { showToast(tt('toast.operationFailed'),'error') }
 }
 
 const deleteItem = async () => {
@@ -856,6 +956,35 @@ const deleteItem = async () => {
   confirmAction.value = 'delete'
   showConfirmDialog.value = true
 }
+
+// 弹窗焦点管理：打开聚焦首个输入、Tab 在弹窗内循环、关闭后焦点归还
+const confirmDialogRef = ref(null)
+const clearDialogRef = ref(null)
+const recordDialogRef = ref(null)
+const yearDialogRef = ref(null)
+const pageRootRef = ref(null)
+
+useDialogFocus({
+  isOpen: () => showDialog.value,
+  getDialog: () => recordDialogRef.value,
+  root: () => pageRootRef.value,
+  initialFocus: () => dialogNameInput.value,
+})
+useDialogFocus({
+  isOpen: () => showConfirmDialog.value,
+  getDialog: () => confirmDialogRef.value,
+  root: () => pageRootRef.value,
+})
+useDialogFocus({
+  isOpen: () => showClearDialog.value,
+  getDialog: () => clearDialogRef.value,
+  root: () => pageRootRef.value,
+})
+useDialogFocus({
+  isOpen: () => showYearDialog.value,
+  getDialog: () => yearDialogRef.value,
+  root: () => pageRootRef.value,
+})
 
 onMounted(async () => {
   await fetchYears()
