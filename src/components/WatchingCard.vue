@@ -35,19 +35,26 @@
          收敛后的走法：卡片本体（唯一常驻 Tab 位）→ Enter/Space 选中 → 再 Tab 进入该卡片的 4 个字段
          → 每个字段 Enter/Space 进入编辑 → Esc 取消 / Enter 保存（输入框内已是既有逻辑）。
          正在编辑的字段本身是 input，此时不再把外层 div 暴露成按钮（避免 role=button 内套 input）。 -->
+    <!-- 名称单元格同时是「名称 + 外链 + 标签」的行容器（card-name-row: flex/nowrap）。
+         双击/键盘进入编辑的语义不变（仍是这个 .editable-cell 自身）。 -->
     <div v-bind="editCellProps('name')" :aria-label="editLabels.name"
       @keydown="onCellKeydown($event, 'name')"
-      @dblclick.stop="!batchMode && $emit('start-edit', 'name')" class="editable-cell" :class="{'ml-5': batchMode}">
+      @dblclick.stop="!batchMode && $emit('start-edit', 'name')"
+      class="editable-cell card-name-row" :class="{'ml-5': batchMode}">
       <input v-if="editing?.id === item.id && editing?.field === 'name'" :value="editValue"
         :aria-label="editLabels.name"
         @input="$emit('update:editValue', $event.target.value)"
         @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
-      <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors">{{ item.name }}</span>
+      <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors card-name-text">{{ item.name }}</span>
       <a v-if="item.url" :href="itemUrl" target="_blank" rel="noopener" @click.stop
         :aria-label="openLinkLabel"
-        class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center" v-tip="openLinkTip">
+        class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center shrink-0" v-tip="openLinkTip">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
       </a>
+      <!-- 标签排在作品名称右边（不是另起一行）：名称可省略号收缩、标签可收缩，
+           整行 nowrap，因此卡片宽度不变、不会横向溢出。
+           无标签时组件不渲染任何节点，卡片高度与没加标签时完全一致。 -->
+      <ItemTags v-if="item.tags" :tags="item.tags" :max="3" compact class="card-name-tags" />
     </div>
     <div class="flex items-center gap-1 mt-0.5 card-ep-row">
       <span class="text-sm font-bold text-gray-800 shrink-0 card-ep-label" aria-hidden="true">e</span>
@@ -110,9 +117,6 @@
         @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
       <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '' }}</span>
     </div>
-    <!-- 标签：列宽窄，compact 模式下最多显示 2 个 + 「+N」，
-         无标签时不渲染（不留空白，避免卡片高度跳动） -->
-    <ItemTags v-if="item.tags" :tags="item.tags" :max="2" compact class="mt-0.5 card-tags" />
   </div>
 </template>
 
@@ -259,3 +263,36 @@ const onCardKeydown = (e) => {
   emit('select')
 }
 </script>
+
+<style scoped>
+/* 作品名称行：名称 + 外链图标 + 标签 chips 同一行，**永不换行**。
+   列宽只有约 1/7 屏（960 宽约 100px、1440 宽约 169px）。
+   收缩优先级：名称先截断（ellipsis），标签随后收缩（chip 内部 ellipsis）。
+   反过来（让标签先占位）实测会把名称压成「标…」、chip 也压成「Ac…」，两边都读不出来；
+   名称是本行最重要的信息，必须优先保住。
+   不换行很重要：一旦允许折行，标签会竖着堆到名称下方，把卡片首行撑成 3 行（已实测到）。 */
+.card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.card-name-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 标签跟在名称右边：只拿剩余空间（上限 55%，保证名称始终有位置）；
+   再窄就由 chip 自身收缩 + 省略号，绝不撑出卡片。 */
+.card-name-tags {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+}
+</style>

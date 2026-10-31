@@ -80,15 +80,21 @@ const ensureTip = () => {
   const el = document.createElement('div')
   el.className = TIP_CLASS
   el.setAttribute('role', 'tooltip')
-  // 长文案（例如主题设置里那些十几字的提示）必须换行，
-  // 只靠 whitespace-nowrap 会直接把文字顶出视口，夹取也无法救。
+  // 与侧边栏气泡（App.vue 的 #sidebar-tip）**完全对齐**：
+  //   · 短文案单行显示（不折行）—— 侧栏是 whitespace-nowrap；
+  //   · 只有超长文案才允许折行，靠 maxWidth 限制 + break-word 兜底，
+  //     否则「主题设置里十几字的提示」会把文字顶出视口，夹取也救不回来。
   el.style.whiteSpace = 'normal'
   el.style.overflowWrap = 'break-word'
   el.style.maxWidth = 'min(22rem, calc(100vw - 1rem))'
   el.style.transform = 'translateY(-50%)'
-  el.style.transition = 'opacity 120ms ease'
+  // 动效与侧栏一致：侧栏走 <transition name="fade">，其
+  // .fade-enter-active/.fade-leave-active 是 `opacity 0.15s ease-out`，
+  // 这里用同样的 150ms / ease-out，两处观感才真正统一（原来是 120ms ease）。
+  el.style.transition = 'opacity 150ms ease-out'
   el.style.opacity = '0'
   el.style.visibility = 'hidden'
+  el.style.willChange = 'opacity'
   tipEl = el
   document.body.appendChild(el)
   return el

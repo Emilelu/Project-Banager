@@ -73,6 +73,26 @@
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-soft: cubic-bezier(0.7, 0, 0.84, 0);
+
+  /* ==================== iOS 风格 spring 曲线（交互专用） ==================== */
+  /* 上面三条是「属性变化」的基线，一字节不动；下面三条只服务**交互**
+     （按钮、菜单、弹窗、卡片、列表、焦点环），给它们"物理感"。
+     iOS 的丝滑本质是两段曲线：
+       --ease-spring : 进场/出现。起步快、中段猛、末端"落定"（UISpring 的 settling 观感）。
+                       数学上单调（无过冲），不会把元素冲出容器。
+                       用于：hover 放大、菜单展开、弹窗进场、折叠展开。
+       --ease-exit   : 离场/消失。加速离开（起步慢、收尾快），与进场成对；
+                       离场必须比进场**短**，否则"关得比开得还慢"，观感拖沓。
+                       用于：菜单收起、弹窗退场、元素离场、折叠收起。
+       --ease-bounce : 弹性回弹。末端越过 1 再落回（过冲约 2%），只用于
+                       "按下-回弹"这种需要触感的瞬间（按钮 :active）。
+                       不要用在颜色/尺寸属性上：过冲会让颜色闪一下、宽度越界。
+     时长配套：曲线只决定"节奏"，物理感还要求它跑够时间 ——
+       小元素（按钮/图标缩放）0.25~0.3s，中等（菜单/气泡）0.3~0.35s，
+       大块（弹窗/折叠区）0.35~0.45s，离场统一 0.2~0.25s。 */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ==================== 首屏就绪前（防白屏） ==================== */
@@ -87,6 +107,22 @@ html.pre-app-ready body #app > * * {
 
 /* ==================== 背景图 ==================== */
 /* 图片铺满 + 可调模糊，遮罩层保证前景可读性；图片加载失败时渐变底色兜底 */
+
+/*
+ * 关键：有壁纸时必须把 body 自己的背景置为透明。
+ *
+ * 为什么：壁纸层是 `body::before` 且 `z-index: -2` —— 它画在 body 的**背景之后**。
+ * 而 body 本身带 `linear-gradient` 底色（浅色 #f5f3ff→…，深色 #0f0a1a→#1a1030→#0a1520）。
+ * 于是：
+ *   · 浅色模式下渐变很淡，壁纸还能透出来（所以一直"看起来正常"）；
+ *   · 深色模式下渐变的深紫几乎不透明，把壁纸整层盖死 —— 这就是「深色没有壁纸」的根因。
+ * 之前只给 `::after` 换遮罩色，完全没处理 body 自身背景，所以怎么调遮罩都没用。
+ */
+/* 注：壁纸层是 body::before(z-index:-2)、遮罩是 body::after(z-index:-1)，
+   底色层是 #app-bg-base(z-index:-3) —— 三者分层，互不抢占伪元素槽位。
+   之前这里曾有 body.with-bg { background: transparent !important } 的补丁，
+   现在 body 自身已是 transparent（见上方 body 规则），补丁已删除。 */
+
 body.with-bg::before {
   content: '';
   position: fixed;
@@ -169,11 +205,43 @@ body {
     'Segoe UI', system-ui, -apple-system,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC',
     sans-serif;
-  background: linear-gradient(135deg, #f5f3ff 0%, #fce7f3 50%, #ecfeff 100%);
   min-height: 100vh;
-  /* 明暗/配色切换时整页底色与文字色过渡：走全站标准曲线（与壁纸同族），不再是机械的 ease */
-  transition: background 0.3s var(--ease-smooth), color 0.3s var(--ease-smooth);
+  /* 明暗/配色切换时文字色过渡：走全站标准曲线（与壁纸同族） */
+  transition: color 0.3s var(--ease-smooth);
+  /* 底色不画在 body 上，而是画在独立的底图层（见 #app-bg-base）。
+     原因：`transition: background` 无法在两个 linear-gradient 之间插值，
+     更无法从「渐变」过渡到「透明」—— 一旦有壁纸就只剩瞬变，观感很生硬。 */
+  background: transparent;
 }
+
+/*
+ * 底色层：**始终可见，不做淡出**。
+ *
+ * 为什么不再让它淡出：原方案是「底图淡出 + 壁纸淡入」双向交叉溶解，
+ * 但实测底图层的 opacity 过渡会在启动阶段被打断（实测 1 → 0 只用了约 35ms，
+ * 而配置是 0.5s），于是中间出现「底图已消失、壁纸还没淡入」的空窗，
+ * 用户看到的就是「闪一下」。
+ *
+ * 现在的做法更简单也更可靠：
+ *   · 底图层恒定 opacity:1，永远铺在最底下；
+ *   · 壁纸层(z-index:-2) 在它**之上**淡入（0 → 1）；
+ *   · 淡入过程中壁纸逐渐盖住底图 → 这本身就是一次天然的交叉溶解，
+ *     且不依赖任何额外图层的过渡时序，永远不会出现空窗。
+ */
+#app-bg-base {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  background: linear-gradient(135deg, #f5f3ff 0%, #fce7f3 50%, #ecfeff 100%);
+  opacity: 1;
+  pointer-events: none;
+}
+
+/* 深色模式的底色层换成深紫渐变（原来是 .dark body 上的 background 简写） */
+.dark #app-bg-base {
+  background: linear-gradient(135deg, #0f0a1a 0%, #1a1030 50%, #0a1520 100%);
+}
+
 
 /* ==================== 焦点环（去掉浏览器默认白/黑圈） ==================== */
 /*
@@ -196,6 +264,8 @@ body {
   outline: 2px solid rgb(var(--c-primary) / 0.55) !important;
   outline-offset: 2px;
   border-radius: inherit;
+  /* 焦点环出现/消失也走统一曲线（原先没有过渡，描边是瞬间弹出，切 Tab 时显得生硬） */
+  transition: outline-color 0.2s var(--ease-smooth), outline-offset 0.2s var(--ease-smooth);
 }
 
 /* 输入框本身已有 focus:ring，不再叠加 outline，避免双层框 */
@@ -275,8 +345,8 @@ tr[draggable='true'] {
    与 .btn-base 同理：这些分段按钮在主题页上也会被 hover 放大（模板里带 btn-press），
    半透明白底会让放大区透出底下的其他控件，因此底色统一改成不透明合成。 */
 .seg-btn {
-  /* 缩放曲线与幅度对齐全站按钮体系（0.24s / --ease-out-soft / 1.025） */
-  transition: transform 0.24s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
+  /* 缩放曲线与时长对齐全站按钮体系（0.2s / --ease-out-soft） */
+  transition: transform 0.25s var(--ease-out-soft), background-color 0.2s var(--ease-smooth),
     border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth),
     box-shadow 0.2s var(--ease-smooth);
   isolation: isolate;
@@ -341,15 +411,18 @@ tr[draggable='true'] {
    （截图里几乎只剩轮廓）。这里固定两端色值，确保任何模式下都清晰。 */
 .kbd-token {
   color: rgb(var(--txt-card-700, 55 48 70));
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.94);
   /* 同上：必须用 rgb(var(--c-primary) / a)，rgba(var(--c-primary), a) 是非法语法 */
   border-color: rgb(var(--c-primary) / 0.28);
   font-weight: 600;
+  /* 键帽在帮助弹窗里紧挨着说明文字，放大/变色时用统一曲线 */
+  transition: background-color 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
+    color 0.2s var(--ease-smooth);
 }
 
 .dark .kbd-token {
   color: #E5E7EB;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 22, 58, 0.92);
   border-color: rgba(255, 255, 255, 0.22);
 }
 
@@ -490,16 +563,25 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 }
 
 /* 轻量次级按钮（翻页栏等处的描边小按钮）：统一描边/底色，避免各处手写不一致 */
+/* 这些按钮在模板里同时带 btn-press（会放大），半透明白底同样会透出底下的表格行，
+   故与 .btn-neutral 一样改成不透明瓷白 + 主题色淡染。 */
 .app-btn-ghost {
   border: 1px solid rgb(var(--c-primary) / 0.2);
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.94);
   color: rgb(var(--c-primary));
+  isolation: isolate;
+  position: relative;
+  transition: transform 0.25s var(--ease-out-soft),
+    background-color 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
+    color 0.2s var(--ease-smooth);
 }
 .app-btn-ghost:hover {
-  background: rgb(var(--c-primary) / 0.1);
+  background: linear-gradient(rgb(var(--c-primary) / 0.1), rgb(var(--c-primary) / 0.1)),
+    rgba(255, 255, 255, 0.94);
+  border-color: rgb(var(--c-primary) / 0.32);
 }
 .dark .app-btn-ghost {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 22, 58, 0.92);
   border-color: rgba(255, 255, 255, 0.14);
   color: rgb(var(--c-primary-light));
 }
@@ -549,27 +631,28 @@ html:not(.dark) body.adaptive .app-btn-ghost {
      正解就是让 origin 与 clip 对齐到同一个盒子：渐变从边框外缘连续铺到另一侧外缘，
      边框保持透明（只占位，不参与绘制），按钮几何尺寸完全不变。 */
   background-origin: border-box;
-  /* ===== 悬浮放大：按用户反馈重新标定 =====
-     ① 幅度 1.045 → 1.025：1.045 落在主题页那种 23~30px 高的小按钮上就是「跳一下」。
-        1.025 按宽度折算每边只多 1.25%（100px 宽按钮每边 1.25px），保留「被指到」的呼吸感，
-        又不至于把按钮撑进相邻元素的格子 —— 主题页最宽按钮 563px 放大后每边只多 7px，
-        仍小于栅格 10.5px 的间距；追番/等番/已看页工具栏按钮是同一套几何，手感保持一致。
-     ② 时长 0.15s → 0.24s，曲线换 --ease-out-soft（起步快、收尾极慢）：0.15s 的 ease 是
-        「啪」地一步到位，加长并走软出场曲线后，加速—减速可被肉眼感知，才是丝滑而非闪一下。
+  /* ===== 悬浮放大：参数逐轮实测标定（最终值 scale 1.02 / 0.2s） =====
+     ① 幅度 1.045 → 1.02：1.045 落在主题页那种 23~30px 高的小按钮上就是「跳一下」。
+        1.02 在 114px 宽的按钮上只增 2.3px（每边 1.15px），小到不会把按钮推进相邻元素，
+        但仍保留「被指到」的呼吸感；主题页最宽按钮 563px 也只多 11px，远小于栅格间距。
+     ② 时长 0.15s → 0.2s，曲线换 --ease-out-soft（起步快、收尾极慢）。但软出场的前段推进
+        极猛：实测 0.24s 版本在 50ms 就已经跑到 1.0214（相对 1.025 已走完 85%），肉眼仍是「闪一下」。
+        收到 0.2s 且幅度压到 1.02 后，前段被摊薄（实测 50ms≈1.008 / 150ms≈1.018 / 400ms 稳定 1.02），
+        加速—减速才有可感知的层次 —— 这就是"放慢放大速度"的实际落点。
      ③ 层叠：isolation 建层叠上下文 + hover/active 抬到 z-index:1，确保放大后的按钮
         画在相邻兄弟**之上**，不会被文档顺序在后的兄弟切掉半边。
         注意这条只解决「被别的元素画在上面」；「透过按钮看到后面的元素」是**半透明底色**
         导致的，逐类在 .btn-neutral / .btn-step / .seg-btn 等处改成不透明合成。 */
   isolation: isolate;
   position: relative;
-  transition: transform 0.24s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
+  transition: transform 0.25s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
     background-color 0.2s var(--ease-smooth), background-image 0.2s var(--ease-smooth),
     opacity 0.2s var(--ease-smooth), border-color 0.2s var(--ease-smooth),
     color 0.2s var(--ease-smooth);
   will-change: transform;
 }
 .btn-base:hover {
-  transform: scale(1.025);
+  transform: scale(1.02);
   z-index: 1;
 }
 .btn-base:active {
@@ -909,7 +992,9 @@ html[lang='zh-CN'] .font-mono {
 
 /* 全局背景与文字 */
 .dark body {
-  background: linear-gradient(135deg, #0f0a1a 0%, #1a1030 50%, #0a1520 100%);
+  /* 深色底色已移到 #app-bg-base（可淡出层），这里只改文字色。
+     保留 background: transparent 是为了防止残余的简写背景盖住壁纸层。 */
+  background: transparent;
   color: #e2e8f0;
 }
 
@@ -1354,14 +1439,91 @@ html:not(.dark) body:not([data-glass='liquid']):not(.with-bg).adaptive .sidebar-
    不再有「过渡末尾模糊才出现」的空窗，同时保留「玻璃由透到实」的渐显观感。
    参考做法：毛玻璃类应用普遍用背景 alpha 而非元素 opacity 做过场；
    Radix/shadcn 那类库则是干脆不给 Dialog 用 backdrop-filter 来规避同一问题。 */
+/* ==================== 工具栏自适应（保持单行） ==================== */
+/*
+ * 目标：不管中文/英文/日文，工具栏都尽量压在**一行**内，靠动态缩放而不是换行。
+ *
+ * 为什么需要：日语/德语等语言的按钮文案明显更长（「年を選択」「まとめて選択」），
+ * 固定字号 + flex-wrap 会折成两行，视觉上把一整个工具栏拆散。
+ *
+ * 做法（不引入 JS、纯 CSS 容器查询）：
+ *   1. 容器 `flex-nowrap`，禁止换行；
+ *   2. `container-type: inline-size` 让子元素能按**容器宽度**（而不是视口）响应；
+ *   3. 宽度不足时按档位缩小按钮的 fontSize / padding / gap —— 三档渐变，
+ *      避免一次跳变太大；同时 `flex-shrink: 0` 保证按钮不被压扁变形。
+ *
+ * 注意：用容器查询而非媒体查询，是因为同一视口下主区宽度随侧栏折叠变化，
+ * 媒体查询在这里会误判。
+ */
+.toolbar-adaptive {
+  container-type: inline-size;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.toolbar-adaptive > * {
+  min-width: 0;
+}
+
+/* 容器查询按宽度分档缩小；@container 只作用于 .toolbar-adaptive 的后代 */
+@container (max-width: 1180px) {
+  .toolbar-adaptive {
+    gap: 0.5rem;
+  }
+  .toolbar-adaptive .btn-base {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 0.75rem;
+    gap: 0.25rem;
+  }
+}
+
+@container (max-width: 1020px) {
+  .toolbar-adaptive .btn-base {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    font-size: 0.6875rem;
+    gap: 0.1875rem;
+  }
+  .toolbar-adaptive .app-btn-ghost {
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+    font-size: 0.6875rem;
+  }
+  .toolbar-adaptive .border-l {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+@container (max-width: 880px) {
+  .toolbar-adaptive .btn-base {
+    padding-left: 0.3125rem;
+    padding-right: 0.3125rem;
+    font-size: 0.625rem;
+    gap: 0.125rem;
+  }
+  .toolbar-adaptive .app-btn-ghost {
+    padding-left: 0.3125rem;
+    padding-right: 0.3125rem;
+    font-size: 0.625rem;
+  }
+  /* 最窄档：图标也收一档，避免「图标+文字」把按钮撑宽 */
+  .toolbar-adaptive :deep(.app-icon) {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+}
+
 .fade-enter-active,
 .fade-leave-active {
   /* opacity 先跑完（0.15s），transform 继续到 0.3s。
      opacity 必须**先行结束**：只要它 < 1，后代的 backdrop-filter 就整体失效，
      模糊便无从「淡入」。让它尽早归位，模糊才有表演的窗口（见下方延迟过渡）。
-     曲线：opacity 用软出场（淡出到 0 的最后一段更"轻"），位移用骨灰级标准缓动。 */
+     曲线：opacity 用标准 ease-out（**不要换成 --ease-out-soft**）——
+     那条曲线的前段推进极猛（60ms 已达 ~90%），淡入会变成"闪一下"，
+     观感反而比 10/30 版本生硬；位移用骨灰级标准缓动。 */
   transition:
-    opacity 0.15s var(--ease-out-soft),
+    opacity 0.15s ease-out,
     transform 0.3s var(--ease-smooth);
 }
 
@@ -1612,26 +1774,40 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
    有些纹丝不动」的不一致感（顶栏语言按钮曾因此被单独遗漏）。
    - 悬浮：轻微放大，暗示可点击
    - 按下：缩小，给出触感反馈
-   - 放大/缩小时长与曲线与 .btn-base 完全对齐（0.24s / --ease-out-soft）：
+   - 放大/缩小时长与曲线与 .btn-base 完全对齐（0.2s / --ease-out-soft / 1.02）：
      主题页里「随机配色」这类按钮同时带 .btn-base 与 .btn-press，两者若写不同参数，
      实际生效的是后声明者 —— 统一后无论谁赢结果都一样，不会再出现"有的按钮跳得快、
      有的慢"的漂移感
-   - 幅度同样收到 1.025：主题页那些 23~30px 的小按钮用 1.045 会明显"跳"一下
+   - 幅度同样收到 1.02：主题页那些 23~30px 的小按钮用 1.045 会明显"跳"一下
+   - 用时 0.2s 而非 0.24s：见 .btn-base 处的实测说明（软出场前段推进太猛，需要把总时长压短）
    - 用 transform 而非改宽高，不触发重排 */
 .btn-press {
-  transition: transform 0.24s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
+  transition: transform 0.25s var(--ease-out-soft), box-shadow 0.2s var(--ease-smooth),
     background-color 0.2s var(--ease-smooth), opacity 0.2s var(--ease-smooth),
     border-color 0.2s var(--ease-smooth), color 0.2s var(--ease-smooth);
   will-change: transform;
 }
 
 .btn-press:hover {
-  transform: scale(1.025);
+  transform: scale(1.02);
 }
 
 .btn-press:active {
   transform: scale(0.975);
   /* 按下时不要再叠加悬浮的位移，保持干脆 */
+}
+
+/* 同时带 .btn-base 与 .btn-press 的按钮（主题页「随机配色」等）：
+   两个选择器特异性相同，最终谁生效只看书写顺序。.btn-press 定义在 .btn-base 之后，
+   于是它赢 —— 但为了「无论顺序怎样都一致」，这里再显式对齐一次幅度与时长，
+   并用 z-index 一并补齐层叠上下文，避免用户看到某类按钮放大后仍被邻居压住。 */
+.btn-base.btn-press:hover {
+  transform: scale(1.02);
+  z-index: 1;
+}
+.btn-base.btn-press:active {
+  transform: scale(0.975);
+  z-index: 1;
 }
 
 /* 禁用态不参与动效（灰按钮放大反而误导「可点」） */
@@ -1788,6 +1964,41 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   }
 }
 
+/* ==================== 收敛 Tailwind 的 hover:scale-* 工具类 ==================== */
+/* 模板里仍散落着 `hover:scale-105` / `hover:scale-110` 这类工具类（主题页的预设色点、
+   顶栏图标、星期图标等）。它们的曲线来自 Tailwind 的默认 `transition-timing-function`
+   （ease / ease-in-out），缩放倍数也比按钮体系大一档，于是出现两种手感混杂。
+   这里用 @layer utilities 交付同一套「非线性丝滑」参数 —— 层序在 Tailwind 的 utilities
+   之后，因此能压过工具类自身生成的规则，且不需要改任何 .vue 文件。
+   取值：曲线 --ease-smooth（与壁纸同族）、时长 0.24s —— 颜色类过渡走标准缓动即可，
+    与按钮缩放（0.2s / --ease-out-soft）分工不同。工具类自身的倍数仍由 Tailwind 生成，
+    这里只统一过渡手感，因此不需要改任何 .vue 文件。
+    注：`.hover:scale-*` 只作用于 hover 放大；模板里没有 active 缩放，故此处不处理。 */
+@layer utilities {
+  .transition,
+  .transition-all,
+  .transition-transform,
+  .transition-colors,
+  .transition-opacity {
+    transition-timing-function: var(--ease-smooth);
+    transition-duration: 0.24s;
+  }
+}
+
+/*
+ * 例外：悬浮气泡（侧边栏 #sidebar-tip、时钟 #clock-tip、全站 v-tip hover-tip-N）
+ * 必须用**同一套**短促淡入（0.15s ease-out），与页面切换 `.fade-*` 的
+ * `opacity 0.15s ease-out` 对齐。
+ *
+ * 原因：气泡是"跟随指针的即时反馈"，0.24s 的柔和缓动会显得迟钝；
+ * 而且三个气泡如果各用各的时长，用户能明显感到"同一个交互两种手感"。
+ * 这里用 !important 压过上面对 .transition-opacity 的全局兜底。
+ */
+#clock-tip,
+#sidebar-tip {
+  transition: opacity 0.15s ease-out !important;
+}
+
 /* 玻璃效果 */
 .glass {
   /* 背景 alpha 乘以 --glass-fade：切页过渡时由透明渐显（backdrop-filter 恒定不变） */
@@ -1795,6 +2006,34 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.3);
+  /* 玻璃面自身的变色（切主题 / 明暗切换）也用统一曲线；
+     不在这里写 backdrop-filter 过渡 —— 模糊的时序由 .fade-* / .modal-* 规则专门驱动
+     （见上方「切页过渡」与「弹窗玻璃模糊」两段），此处若加会抢时序 */
+}
+
+/* ==================== 侧边栏折叠宽度过渡的曲线覆盖 ==================== */
+/* App.vue 里侧栏是 `transition-[width] duration-300 ease-out`（Tailwind 工具类），
+   该文件不在本次修改范围内。宽度过渡属于「属性变化」而非「进入/离开」，
+   按曲线体系应走 --ease-smooth（与壁纸同族）。这里用属性选择器精确命中
+   「带 transition-[width] 工具类 且 有 sidebar-bg」的元素，只改曲线、不动时长。 */
+.sidebar-bg[class*='transition-[width]'] {
+  transition-timing-function: var(--ease-smooth) !important;
+}
+
+/* ==================== 组件内 scoped 过渡的曲线兜底 ==================== */
+/* 有三个组件（ColorPicker / TagFilter / TagSelector）的 scoped 样式里写着 `ease`，
+   另有三个列表页的 scoped 样式给 `.sel-anim-wrap > .sel-anim-leave-active` 写了 `ease`。
+   它们不在本文件的修改权限内（任务限定只改 style.css 与 AppearanceView.vue），
+   但 `transition-timing-function` 可以被**同层优先级更低**的规则整体覆盖 ——
+   这里用带 !important 的一条兜底把这些 scoped 过渡统一到 --ease-smooth。
+   为什么可以放心 !important：这些元素的过渡属性全部是颜色/滤镜类（background、
+   border-color、filter、opacity、transform），本来就是标准缓动该管的范畴，
+   不存在"故意用其它曲线"的语义。 */
+.color-picker-swatch,
+.tag-chip,
+.tag-filter-chip,
+.sel-anim-wrap > .sel-anim-leave-active {
+  transition-timing-function: var(--ease-smooth) !important;
 }
 
 

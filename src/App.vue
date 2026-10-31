@@ -82,29 +82,31 @@
         :class="sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-3'">
         <div :class="sidebarCollapsed ? 'flex flex-col gap-1.5' : 'grid grid-cols-2 gap-2'">
           <!-- 壁纸背景开关。
-               需求三：气泡固定显示在按钮**正上方**，内容是**当前状态**（开启/关闭），
-               而不是「点击会发生什么」；所以这里传 bgStateLabel。 -->
+               气泡方向按侧栏状态区分（与其它导航项一致）：
+                 · 收起态（只剩图标）→ 右侧气泡，与其他导航图标行为统一；
+                 · 展开态（按钮已有文字）→ 正上方气泡，内容是**当前状态**（开启/关闭）。
+               之所以展开态也要气泡：按钮文字只写「壁纸」，不说明当前是开还是关。 -->
           <button @click="onToggleBg"
             class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
             :class="{ 'opacity-50': !bgActive }"
             :aria-pressed="appearance.state.bgEnabled ? 'true' : 'false'"
             :aria-label="bgActive ? tt('topbar.bgOff') : tt('topbar.bgOn')"
-            @mouseenter="sidebarCollapsed && showSidebarTip($event, bgStateLabel, 'top')"
+            @mouseenter="showBottomBtnTip($event, tt('sidebar.bgToggle'), bgStateLabel)"
             @mouseleave="hideSidebarTip"
-            @focus="sidebarCollapsed && showSidebarTip($event, bgStateLabel, 'top')"
+            @focus="showBottomBtnTip($event, tt('sidebar.bgToggle'), bgStateLabel)"
             @blur="hideSidebarTip">
             <AppIcon scale="sm" :name="bgActive ? 'image' : 'imageOff'" />
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.bgToggle') }}</span>
           </button>
 
           <!-- 深浅模式切换（浅/深/自动 三态循环）。
-               需求三：气泡固定在按钮正上方，文案为 themeLabel（浅色 / 深色 / 跟随系统）。 -->
+               气泡方向同上：收起态走右侧，展开态在正上方显示 themeLabel（浅色 / 深色 / 跟随系统）。 -->
           <button @click="toggleTheme"
             class="w-full flex items-center justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs font-medium transition-all btn-press whitespace-nowrap"
             :aria-label="themeLabel"
-            @mouseenter="sidebarCollapsed && showSidebarTip($event, themeLabel, 'top')"
+            @mouseenter="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"
             @mouseleave="hideSidebarTip"
-            @focus="sidebarCollapsed && showSidebarTip($event, themeLabel, 'top')"
+            @focus="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"
             @blur="hideSidebarTip">
             <AppIcon scale="sm" :name="themeIconName" />
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.themeToggle') }}</span>
@@ -188,7 +190,7 @@
                需求一：order 2 —— 占用 GitHub 原来的槽位（帮助与时钟之间）。
                互换后：GitHub 1251 → 语言 1293，帮助/时钟原地不动。 -->
           <div class="relative" style="order: 2">
-            <button ref="langBtnRef" @click="toggleLangMenu"
+            <button ref="langBtnRef" @click="(e) => toggleLangMenu(e)"
               class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 hover:bg-primary/10 btn-press"
               :class="{ 'bg-primary/10': showLangMenu }"
               :aria-label="tt('lang.switch')"
@@ -249,8 +251,11 @@
               {{ dateDisplay }}
             </div>
             <Teleport to="body">
+              <!-- 时钟气泡：材质/边框/阴影/字号/动画与侧边栏气泡(#sidebar-tip)完全对齐。
+                   唯一保留的差异是 font-mono + tabular-nums —— 时间是数字，
+                   等宽+等宽数字能避免秒数跳动时气泡宽度抖动，这是刻意的例外。 -->
               <div id="clock-tip" ref="clockTipRef" role="tooltip"
-                class="pointer-events-none fixed z-[120] px-2.5 py-1.5 rounded-lg glass border border-white/30 shadow-xl text-xs font-mono tabular-nums transition-opacity duration-200"
+                class="pointer-events-none fixed z-[120] px-2.5 py-1.5 rounded-lg app-menu-surface border border-white/40 shadow-lg text-xs font-medium text-gray-700 font-mono tabular-nums transition-opacity duration-150 ease-out"
                 :class="showTimeTip ? 'opacity-100' : 'opacity-0'"
                 :style="clockTipStyle">
                 {{ timeDisplay }}
@@ -443,6 +448,25 @@ const showSidebarTip = (e, text, placement = 'right') => {
 
 const hideSidebarTip = () => {
   sidebarTip.value = { ...sidebarTip.value, show: false }
+}
+
+/**
+ * 侧边栏左下角「壁纸」「主题」两个按钮的气泡文案与方向。
+ *
+ * 两个状态用**不同文案**，因为用户此时能获取的信息不同：
+ *   · 收起态：按钮只剩图标，用户看不出这是"壁纸"还是"主题"，
+ *     所以文案必须是「名称 + 状态」（如「壁纸 · 已开启」）；
+ *   · 展开态：按钮上已有「壁纸」「主题」两个字，用户明确了它是什么，
+ *     此时再重复名称就是废话，气泡只报**状态**（如「已开启」/「跟随系统」）。
+ * 方向同理按状态切换：收起走右侧（与其它导航图标一致），展开在正上方。
+ *
+ * @param {MouseEvent|FocusEvent} e
+ * @param {string} name  按钮名称（收起态拼进文案）
+ * @param {string} state 当前状态文案
+ */
+const showBottomBtnTip = (e, name, state) => {
+  const text = sidebarCollapsed.value ? `${name} · ${state}` : state
+  showSidebarTip(e, text, sidebarCollapsed.value ? 'right' : 'top')
 }
 
 /**
@@ -772,8 +796,11 @@ const langBtnRef = ref(null)
 const langMenuRef = ref(null)
 const langMenuPos = ref({ left: 0, top: 0 })
 
-// Teleport 后的菜单是 fixed 定位，需要按按钮位置算出坐标：
-// 右对齐到按钮右边、下沿贴按钮下方；超出视口时整体夹回来。
+// 语言菜单挂到 body（fixed 定位），按**鼠标指针**位置算坐标：
+// 水平以指针为中心、垂直落在指针下方；靠右/靠下时夹进视口，下方放不下则翻到上方。
+// 键盘打开（无指针坐标）时退化为「按按钮右侧对齐」，保证键盘用户也能用。
+let langMenuPointer = null
+
 const measureLangMenu = () => {
   const btn = langBtnRef.value
   const menu = langMenuRef.value
@@ -783,10 +810,26 @@ const measureLangMenu = () => {
   const h = menu?.offsetHeight || 120
   const gap = 6
   const margin = 8
-  const left = Math.min(Math.max(b.right - w, margin), Math.max(margin, window.innerWidth - w - margin))
-  let top = b.bottom + gap
-  if (top + h > window.innerHeight - margin) top = b.top - h - gap
+
+  // 有指针坐标 → 以指针为中心；否则退化为按钮锚点
+  const anchorX = langMenuPointer ? langMenuPointer.x : b.right - w / 2
+  const anchorTop = langMenuPointer ? langMenuPointer.y : b.bottom
+
+  const left = Math.min(Math.max(anchorX - w / 2, margin), Math.max(margin, window.innerWidth - w - margin))
+  let top = anchorTop + gap
+  if (top + h > window.innerHeight - margin) {
+    // 下方放不下 → 翻到指针上方
+    top = langMenuPointer ? langMenuPointer.y - h - gap : b.top - h - gap
+  }
+  top = Math.max(margin, top)
   langMenuPos.value = { left: Math.round(left), top: Math.round(top) }
+}
+
+/** 记录打开菜单前的鼠标位置（键盘打开时该值为 null） */
+const rememberLangPointer = (e) => {
+  if (e && typeof e.clientX === 'number') {
+    langMenuPointer = { x: e.clientX, y: e.clientY }
+  }
 }
 
 const langMenuStyle = computed(() => ({
@@ -794,11 +837,15 @@ const langMenuStyle = computed(() => ({
   top: `${langMenuPos.value.top}px`,
 }))
 
-const toggleLangMenu = async () => {
+const toggleLangMenu = async (e) => {
   showLangMenu.value = !showLangMenu.value
   if (showLangMenu.value) {
+    // 记录本次点击的指针位置：菜单要出现在**指针下方居中**
+    rememberLangPointer(e)
     await nextTick()
     measureLangMenu()
+  } else {
+    langMenuPointer = null
   }
 }
 const selectLocale = (code) => {
@@ -838,7 +885,13 @@ const bgActive = computed(() => appearance.state.bgEnabled && !!appearance.state
  * 后者还要求「已取到图且没加载失败」，网络抖动时会瞬间翻成「已关闭」，
  * 与用户刚点下的开关自相矛盾。按钮的 aria-pressed 也会同步成同一个开关状态。
  */
-const bgStateLabel = computed(() => (appearance.state.bgEnabled ? tt('appearance.bgEnabledToast') : tt('appearance.bgDisabledToast')))
+/**
+ * 壁纸按钮的**纯状态**文案（已开启 / 已关闭）。
+ * 展开态用它（按钮上已有「壁纸」二字，再重复名称会啰嗦）；
+ * 收起态由 showBottomBtnTip 拼成「壁纸 · 已开启」，此时名称是必要信息。
+ */
+const bgStateLabel = computed(() =>
+  appearance.state.bgEnabled ? tt('sidebar.bgStateOn') : tt('sidebar.bgStateOff'))
 const onToggleBg = () => { appearance.toggleBackground() }
 const { theme, isDark, toggleTheme } = useTheme()
 
@@ -1007,6 +1060,16 @@ async function confirmImportDb() {
 }
 
 // 顶栏主题按钮已改为内联 SVG 三态图标（太阳/月亮/自动），此处旧的 emoji 映射已删除
+/**
+ * 主题按钮的**纯状态**文案（日间 / 暗色 / 跟随系统），供侧边栏气泡使用。
+ * 顶栏的 aria-label 仍用 themeLabel（完整句，含「点击切换」的动作提示），
+ * 因为那里是读屏唯一的信息来源，需要说明可点击。
+ */
+const themeStateLabel = computed(() => {
+  if (theme.value === 'dark') return tt('sidebar.themeStateDark')
+  if (theme.value === 'light') return tt('sidebar.themeStateLight')
+  return tt('sidebar.themeStateAuto')
+})
 const themeLabel = computed(() => {
   if (theme.value === 'dark') return tt('topbar.themeDark')
   if (theme.value === 'light') return tt('topbar.themeLight')

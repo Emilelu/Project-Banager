@@ -2,7 +2,7 @@
   <div ref="pageRootRef" class="space-y-5" tabindex="-1">
     <!-- 顶部信息栏 + 操作面板 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
-      <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-3">
           <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl text-sm">
             {{ tt('remaining.count', { count: remainingList.length }) }}
@@ -150,7 +150,15 @@
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 :aria-label="tt('card.editNameLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate block">{{ item.name }}</span>
+              <!-- 作品名称 + 标签同排（标签在名称右侧）：
+                   不新增 td（既有列索引的测试断言不受影响），也不另起一行
+                   —— 否则带标签的行会比无标签的行高、整张表行高参差。
+                   名称允许 ellipsis 收缩，标签按自身宽度靠右，整块不撑出 td。
+                   标签 chip 不可点（编辑走弹窗），所以不进 Tab 序。 -->
+              <div v-else class="name-with-tags">
+                <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
+                <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
+              </div>
             </td>
             <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'expected_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='expected_date'" v-model="editValue"
@@ -174,8 +182,6 @@
                 :aria-label="tt('card.editNotesLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '-' }}</span>
-              <!-- 标签放在「备注」列内、备注下方：不新增 td，避免打乱既有列索引的测试断言 -->
-              <ItemTags v-if="item.tags" :tags="item.tags" :max="3" class="mt-0.5" />
             </td>
           </tr>
         </tbody>
@@ -1196,5 +1202,28 @@ const unpinLeavingGroup = (el) => {
 
 .sel-anim-wrap {
   position: relative;
+}
+
+/* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。
+   名称用 flex:0 1 auto + ellipsis：名称长时先截断名称，标签保持完整；
+   标签用 flex:0 0 auto：自己不被压扁，放不下时靠容器的 overflow 裁掉。
+   无标签时只剩名称，行高与其它行完全一致（标签绝不另起一行）。 */
+.name-with-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.name-with-tags > .text-sm {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name-with-tags > .item-tags {
+  flex: 0 0 auto;
 }
 </style>

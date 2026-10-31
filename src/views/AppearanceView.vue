@@ -2,8 +2,9 @@
   <div class="space-y-5">
     <!-- 请注意：本页面由弹窗改造而来，三大区块的交互逻辑与弹窗版完全一致，
          仅外壳从 fixed 遮罩换成普通页面流。 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-7 py-6 space-y-8">
+    <div class="space-y-5">
       <!-- 玻璃风格 -->
+      <div class="glass rounded-2xl shadow-lg border border-white/30 px-7 py-6">
             <section>
               <h4 class="text-sm font-bold text-gray-700 mb-3">{{ tt('theme.glassStyle') }}</h4>
               <div class="grid grid-cols-2 gap-4">
@@ -23,9 +24,11 @@
                 </button>
               </div>
             </section>
+      </div>
 
             <!-- 配色：按「选什么颜色 → 颜色从哪来」的决策顺序分层，
                  自定义取色收进折叠，避免一排颜色选择器把主流程冲散。 -->
+      <div class="glass rounded-2xl shadow-lg border border-white/30 px-7 py-6">
             <section>
               <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.palette') }}</h4>
@@ -104,8 +107,10 @@
                 </div>
               </transition>
             </section>
+      </div>
 
             <!-- 背景图 -->
+      <div class="glass rounded-2xl shadow-lg border border-white/30 px-7 py-6">
             <section>
               <div class="flex items-center justify-between mb-3">
                 <h4 class="text-sm font-bold text-gray-700">{{ tt('theme.wallpaper') }}</h4>
@@ -224,6 +229,7 @@
               </template>
               <p v-else class="tone-meta text-xs text-gray-400">{{ tt('theme.bgOffHint') }}</p>
             </section>
+      </div>
     </div>
   </div>
 </template>
@@ -251,7 +257,7 @@ const noCorsSource = computed(() => providerBlocksPalette(state.bgProvider))
 // 这里把预览改为「离主线程解码 + 缩小到 1600px 内 + 编码为小尺寸 blob URL」的缩略图，
 // 弹窗内 <img> 只渲染小图，原图永远不在弹窗里解码。
 // 注意：tc.alcy.cc 等图床直链无 CORS 头，直接 fetch 会被拦，需走与取色一致的代理链兜底。
-const MAX_PREVIEW_SIDE = 1600
+const MAX_PREVIEW_SIDE = 800
 const PREVIEW_PROXIES = [
   (u) => `https://proxy.cors.sh/${u}`,
   (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -278,19 +284,10 @@ async function buildPreview(url) {
     previewFailed.value = false
     return
   }
-  // ② 无字节缓存（无 CORS 图源）：跨域图源既抓不到字节、代理链也已全部失效，
-  //    直接标记「原图直出」——<img> 加载跨域图不受 CORS 限制，照常显示。
-  //    顺带避免三次注定失败的代理请求刷满 console 红错。
-  if (isCrossOrigin(url)) {
-    previewFailed.value = true
-    return
-  }
-  // ③ 同源图：本地抓取 + 降采样（避免在弹窗里解码大图造成卡顿）
-  // 太老的浏览器不支持 createImageBitmap：直接退回原图
-  if (typeof createImageBitmap !== 'function') {
-    previewFailed.value = true
-    return
-  }
+  // ② 无字节缓存（无 CORS 图源）：**不要直接放弃缩略图**。
+  //    跨域图虽然 <img> 能显示，但 4K 大图直接解码会明显卡顿，
+  //    所以先尝试代理链取字节 + 降采样；只有全部代理都失败才回退「原图直出」。
+  //    （原实现这里直接 return previewFailed，导致随机图床下缩略图永远不显示）
   const gen = ++previewGen
   previewFailed.value = false
   let blob = getWallpaperBlob()?.blob || null
@@ -299,8 +296,7 @@ async function buildPreview(url) {
     if (!r.ok) throw new Error('fetch failed')
     return r.blob()
   }
-  // ② 无缓存时再抓：直连仅用于同源（custom / blob URL）；跨域图床（tc.alcy.cc 等无 CORS 头）
-  //    直接走代理链，跳过必败的直连 fetch——避免 console 刷 CORS 红错
+  // 无缓存时再抓：直连仅用于同源；跨域图床直接走代理链，跳过必败的直连 fetch
   if (!blob) {
     const sources = isCrossOrigin(url)
       ? PREVIEW_PROXIES.map((make) => make(url))
@@ -314,6 +310,11 @@ async function buildPreview(url) {
   }
   if (gen !== previewGen) return
   if (!blob) {
+    previewFailed.value = true
+    return
+  }
+  // 太老的浏览器不支持 createImageBitmap：退回原图直出（能显示但可能较慢）
+  if (typeof createImageBitmap !== 'function') {
     previewFailed.value = true
     return
   }

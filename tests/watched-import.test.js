@@ -222,6 +222,29 @@ afterEach(() => {
 // ===========================================================================
 // 1. 年份分组
 // ===========================================================================
+
+/**
+ * 年份下拉现在不是原生 <select>，而是自定义菜单（与标签筛选同款样式）。
+ * 测试统一走这个辅助函数：打开菜单 → 按文案点选目标项。
+ */
+const selectYear = async (wrapperRef, label) => {
+  // 打开菜单
+  const trigger = wrapperRef.find('.year-filter-trigger')
+  if (!trigger.exists()) throw new Error('找不到年份选择按钮')
+  await trigger.trigger('click')
+  await flushPromises()
+  // 菜单里显示的是本地化文案，而测试传的是内部值，这里做一次映射
+  const labelText = { '__unclassified__': '未分类', '__all__': '全部年份' }[label] || label
+  const items = Array.from(document.querySelectorAll('[role="menuitemradio"]'))
+  const target = items.find(el => el.textContent.trim().includes(labelText))
+  if (!target) throw new Error('年份菜单里找不到: ' + label + '（现有: ' + items.map(i => i.textContent.trim()).join('/') + '）')
+  target.click()
+  await flushPromises()
+  // pickYear 内部会 await fetchData()，数据回来是下一轮微任务，
+  // 再冲一次保证断言看到最新的年份/总计数量
+  await flushPromises()
+}
+
 describe('已看历史 · 年份分组', () => {
   it('默认选中今年，并分别显示本年与总计数量', async () => {
     const thisYear = String(new Date().getFullYear())
@@ -233,7 +256,7 @@ describe('已看历史 · 年份分组', () => {
       ],
     })
     mocks.watchedApi.getByYear.mockResolvedValue(okYear(items, 2, 7))
-    await wrapper.find('select').setValue(thisYear)
+    await selectYear(wrapper, thisYear)
     await flushPromises()
 
     expect(wrapper.text()).toContain('本年: 2部')
@@ -265,7 +288,7 @@ describe('已看历史 · 年份分组', () => {
         }),
       },
     })
-    await wrapper.find('select').setValue('2014~2017')
+    await selectYear(wrapper, '2014~2017')
     await flushPromises()
 
     expect(wrapper.text()).toContain('组内记录')
@@ -278,7 +301,7 @@ describe('已看历史 · 年份分组', () => {
       years: [{ id: 1, year_label: '2014~2017', sort_order: 1 }],
       allItems: rows,
     })
-    await wrapper.find('select').setValue('__unclassified__')
+    await selectYear(wrapper, '__unclassified__')
     await flushPromises()
 
     // extractAllYears('2014~2017') 展开为 2014..2017，但 yearLabels 里是字面量
@@ -297,7 +320,7 @@ describe('已看历史 · 搜索与分页', () => {
 
   it('分页只渲染当前页，并显示总条数', async () => {
     await mountWatched({ byYear: { 2025: many } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     expect(dataRows(wrapper)).toHaveLength(20)
@@ -308,7 +331,7 @@ describe('已看历史 · 搜索与分页', () => {
 
   it('翻页后渲染剩余记录且行序号连续', async () => {
     await mountWatched({ byYear: { 2025: many } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     await buttonByText(wrapper, '下一页').trigger('click')
@@ -321,7 +344,7 @@ describe('已看历史 · 搜索与分页', () => {
 
   it('输入搜索词后回到第 1 页并只保留匹配项', async () => {
     await mountWatched({ byYear: { 2025: many } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     await buttonByText(wrapper, '下一页').trigger('click')
@@ -338,7 +361,7 @@ describe('已看历史 · 搜索与分页', () => {
 
   it('搜索无结果时显示空态而不是空表', async () => {
     await mountWatched({ byYear: { 2025: many } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     await wrapper.find('input[placeholder="搜索作品名称..."]').setValue('不存在的作品')
@@ -358,9 +381,9 @@ describe('已看历史 · 搜索与分页', () => {
     })
     await wrapper.find('input[placeholder="搜索作品名称..."]').setValue('作品01')
     await flushPromises()
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
-    await wrapper.find('select').setValue('2024')
+    await selectYear(wrapper, '2024')
     await flushPromises()
 
     expect(wrapper.find('input[placeholder="搜索作品名称..."]').element.value).toBe('作品01')
@@ -380,7 +403,7 @@ describe('已看历史 · 批量选择与删除', () => {
 
   it('进入批量模式会清空已选，勾选后显示计数', async () => {
     await mountWatched({ byYear: { 2025: forty } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     await enterBatch()
@@ -394,7 +417,7 @@ describe('已看历史 · 批量选择与删除', () => {
 
   it('批量删除确认后调用 batchApi 并刷新数据', async () => {
     await mountWatched({ byYear: { 2025: forty } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await enterBatch()
     await dataRows(wrapper)[0].trigger('click')
@@ -414,7 +437,7 @@ describe('已看历史 · 批量选择与删除', () => {
 
   it('批量删除取消则不调用 API', async () => {
     await mountWatched({ byYear: { 2025: forty } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await enterBatch()
     await dataRows(wrapper)[0].trigger('click')
@@ -428,7 +451,7 @@ describe('已看历史 · 批量选择与删除', () => {
 
   it('全选只作用于当前页', async () => {
     await mountWatched({ byYear: { 2025: forty } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await enterBatch()
 
@@ -440,7 +463,7 @@ describe('已看历史 · 批量选择与删除', () => {
 
   it('[缺陷#03] 跨页勾选后本页「全选」状态不应误判', async () => {
     await mountWatched({ byYear: { 2025: forty } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await enterBatch()
 
@@ -464,14 +487,14 @@ describe('已看历史 · 批量选择与删除', () => {
       ],
       byYear: { 2025: forty, 2024: [makeItem(500, '旧记录', '2024/05/01')] },
     })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await enterBatch()
     await dataRows(wrapper)[0].trigger('click')
     await dataRows(wrapper)[1].trigger('click')
     await flushPromises()
 
-    await wrapper.find('select').setValue('2024')
+    await selectYear(wrapper, '2024')
     await flushPromises()
 
     // 勾选仍残留：此时点「批量删除 (2)」会删掉不可见的 2025 记录
@@ -486,13 +509,13 @@ describe('已看历史 · 批量选择与删除', () => {
       ],
       byYear: { 2025: [makeItem(1, '去年的番', '2025/01/01')], 2024: [] },
     })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     await dataRows(wrapper)[0].trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('当前选中')
 
-    await wrapper.find('select').setValue('2024')
+    await selectYear(wrapper, '2024')
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('当前选中')
@@ -505,7 +528,7 @@ describe('已看历史 · 批量选择与删除', () => {
 describe('已看历史 · 日期与行内编辑', () => {
   it('双击日期单元格进入编辑，回车保存调用 update', async () => {
     await mountWatched({ byYear: { 2025: [makeItem(1, '甲', '2025/01/01')] } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     const dateCell = dataRows(wrapper)[0].findAll('td')[2]
@@ -523,7 +546,7 @@ describe('已看历史 · 日期与行内编辑', () => {
   it('保存失败时提示错误并回滚单元格显示', async () => {
     mocks.watchedApi.update.mockResolvedValue({ data: { success: false, error: '写库失败' } })
     await mountWatched({ byYear: { 2025: [makeItem(1, '甲', '2025/01/01')] } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     const dateCell = dataRows(wrapper)[0].findAll('td')[2]
@@ -539,7 +562,7 @@ describe('已看历史 · 日期与行内编辑', () => {
 
   it('[缺陷#11] 行内编辑非法日期时不应写库', async () => {
     await mountWatched({ byYear: { 2025: [makeItem(1, '甲', '2025/01/01')] } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     const dateCell = dataRows(wrapper)[0].findAll('td')[2]
@@ -554,7 +577,7 @@ describe('已看历史 · 日期与行内编辑', () => {
 
   it('[缺陷#12] 编辑弹窗对「年月」精度记录应保留原值并给出提示', async () => {
     await mountWatched({ byYear: { 2025: [makeItem(1, '甲', '2025/07')] } })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
 
     await dataRows(wrapper)[0].trigger('click')
@@ -593,7 +616,7 @@ describe('已看历史 · 年份维护', () => {
       years: [{ id: 1, year_label: '2025', sort_order: 1 }],
       byYear: { 2025: [makeItem(1, '甲')] },
     })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     expect(dataRows(wrapper)).toHaveLength(1)
 
@@ -612,7 +635,7 @@ describe('已看历史 · 年份维护', () => {
       years: [{ id: 1, year_label: '2025', sort_order: 1 }],
       byYear: { 2025: [] },
     })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     const callsBefore = mocks.watchedYearsApi.getAll.mock.calls.length
 
@@ -637,7 +660,7 @@ describe('已看历史 · 年份维护', () => {
       years: [{ id: 1, year_label: '2025', sort_order: 1 }],
       byYear: { 2025: [makeItem(1, '甲', '2025/03/01')], '2025~2026': [] },
     })
-    await wrapper.find('select').setValue('2025')
+    await selectYear(wrapper, '2025')
     await flushPromises()
     expect(dataRows(wrapper)).toHaveLength(1)
 

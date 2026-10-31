@@ -396,7 +396,7 @@
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
         <div class="app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
-          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2">{{ tt('watching.edit') }}</button>
+          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
           <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
           <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
           <button @click="ctxMoveToWatched" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="check" />{{ tt('watching.moveToWatched') }}</button>

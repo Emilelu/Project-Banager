@@ -14,6 +14,9 @@
     <title>Project Banager</title>
   </head>
   <body>
+    <!-- 底图层：无壁纸时显示渐变底色，有壁纸时淡出（与壁纸层交叉溶解）。
+         必须是真实元素而非 body::before——伪元素槽位已被壁纸层(-2) 与遮罩(-1) 占用。 -->
+    <div id="app-bg-base" aria-hidden="true"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

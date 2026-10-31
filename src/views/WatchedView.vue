@@ -2,16 +2,73 @@
   <div ref="pageRootRef" class="space-y-5" @keydown="handleKeydown" tabindex="-1">
     <!-- 顶部信息栏 + 操作面板合并 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
-      <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
-            <label class="text-sm font-medium text-gray-700">{{ tt('watched.yearSelect') }}</label>
-            <select v-model="selectedYear" @change="fetchData"
-              class="px-4 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80">
-              <option value="__all__"><AppIcon scale="sm" name="book" /> {{ tt('watched.allYears') }}</option>
-              <option v-for="y in sortedYears" :key="y.year_label" :value="y.year_label">{{ y.year_label }}</option>
-              <option value="__unclassified__"><AppIcon scale="sm" name="log" /> {{ tt('watched.unclassified') }}</option>
-            </select>
+            <!-- 年份选择：改用与「标签筛选」完全一致的下拉样式
+                 （原来是一个原生 <select>，与旁边的 TagFilter 观感割裂）。 -->
+            <div class="relative inline-block">
+              <button ref="yearTriggerRef" type="button" @click="toggleYearMenu"
+                class="app-btn-ghost year-filter-trigger inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition whitespace-nowrap"
+                :class="{ 'year-filter-active': selectedYear !== '__all__' }"
+                :aria-expanded="showYearMenu" aria-haspopup="menu"
+                :aria-label="tt('watched.yearSelect')">
+                <AppIcon scale="xs" name="book" />
+                <span>{{ yearMenuLabel }}</span>
+                <AppIcon scale="xs" :name="showYearMenu ? 'caretUp' : 'caretDown'" class="ml-0.5" />
+              </button>
+
+              <Teleport to="body">
+                <div v-if="showYearMenu" class="fixed inset-0 z-[100]" @click="showYearMenu = false"></div>
+                <transition name="pop">
+                  <div v-if="showYearMenu" ref="yearMenuRef" role="menu"
+                    class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[10rem] max-h-[60vh] overflow-y-auto"
+                    style="--pop-origin-y: top; --pop-from-y: -6px"
+                    :style="yearMenuStyle"
+                    :aria-label="tt('watched.yearSelect')">
+                    <!-- 全部年份 -->
+                    <button type="button" role="menuitemradio"
+                      :aria-checked="selectedYear === '__all__' ? 'true' : 'false'"
+                      @click="pickYear('__all__')"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      :class="selectedYear === '__all__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-primary"></span>
+                      <span class="flex-1">{{ tt('watched.allYears') }}</span>
+                      <span :class="selectedYear === '__all__' ? 'text-primary' : 'text-gray-300'">
+                        <AppIcon v-if="selectedYear === '__all__'" scale="xs" name="check" />
+                      </span>
+                    </button>
+
+                    <!-- 各年份 -->
+                    <button v-for="y in sortedYears" :key="y.year_label" type="button" role="menuitemradio"
+                      :aria-checked="selectedYear === y.year_label ? 'true' : 'false'"
+                      @click="pickYear(y.year_label)"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      :class="selectedYear === y.year_label ? 'font-semibold text-gray-800' : 'text-gray-600'">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-sakura"></span>
+                      <span class="flex-1">{{ y.year_label }}</span>
+                      <span :class="selectedYear === y.year_label ? 'text-primary' : 'text-gray-300'">
+                        <AppIcon v-if="selectedYear === y.year_label" scale="xs" name="check" />
+                      </span>
+                    </button>
+
+                    <!-- 未归类 -->
+                    <div class="border-t border-gray-200/60 my-1"></div>
+                    <button type="button" role="menuitemradio"
+                      :aria-checked="selectedYear === '__unclassified__' ? 'true' : 'false'"
+                      @click="pickYear('__unclassified__')"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      :class="selectedYear === '__unclassified__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-warning"></span>
+                      <span class="flex-1">{{ tt('watched.unclassified') }}</span>
+                      <span :class="selectedYear === '__unclassified__' ? 'text-primary' : 'text-gray-300'">
+                        <AppIcon v-if="selectedYear === '__unclassified__'" scale="xs" name="check" />
+                      </span>
+                    </button>
+                  </div>
+                </transition>
+              </Teleport>
+            </div>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <span class="px-4 py-2 bg-gradient-to-r from-primary/10 to-secondary/10 text-primary font-bold rounded-xl">
@@ -131,7 +188,15 @@
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 :aria-label="tt('card.editWorkNameLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
-              <span v-else class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate block">{{ item.name }}</span>
+              <!-- 作品名称 + 标签同排（标签在名称右侧）：
+                   不新增 td（既有列索引的测试断言不受影响），也不另起一行
+                   —— 否则带标签的行会比无标签的行高、整张表行高参差。
+                   名称允许 ellipsis 收缩，标签按自身宽度靠右，整块不撑出 td。
+                   标签 chip 不可点（编辑走弹窗），所以不进 Tab 序。 -->
+              <div v-else class="name-with-tags">
+                <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
+                <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
+              </div>
             </td>
             <td class="px-3 py-2.5" @dblclick.stop="startEdit(item,'watch_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='watch_date'" v-model="editValue"
@@ -155,8 +220,6 @@
                 :aria-label="tt('card.editNotesLabel', { name: item.name })"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <span v-else class="text-sm text-gray-400 truncate block">{{ item.notes || '-' }}</span>
-              <!-- 标签放在「备注」列内、备注下方：不新增 td，避免打乱既有列索引的测试断言 -->
-              <ItemTags v-if="item.tags" :tags="item.tags" :max="3" class="mt-0.5" />
             </td>
           </tr>
         </tbody>
@@ -430,6 +493,72 @@ const years = ref([])
 const watchedList = ref([])
 const selected = ref(null)
 const selectedYear = ref('')
+
+// ===== 年份下拉菜单（与 TagFilter 同一套交互与样式）=====
+const showYearMenu = ref(false)
+const yearTriggerRef = ref(null)
+const yearMenuRef = ref(null)
+const yearMenuPos = ref({ left: 0, top: 0 })
+
+const yearMenuStyle = computed(() => ({
+  left: `${yearMenuPos.value.left}px`,
+  top: `${yearMenuPos.value.top}px`,
+}))
+
+/** 触发按钮上的文案：当前年份 / 全部 / 未归类 */
+const yearMenuLabel = computed(() => {
+  if (selectedYear.value === '__all__') return tt('watched.allYears')
+  if (selectedYear.value === '__unclassified__') return tt('watched.unclassified')
+  return selectedYear.value || tt('watched.allYears')
+})
+
+const measureYearMenu = () => {
+  const btn = yearTriggerRef.value
+  const menu = yearMenuRef.value
+  if (!btn) return
+  const b = btn.getBoundingClientRect()
+  const w = menu?.offsetWidth || 160
+  const h = menu?.offsetHeight || 200
+  const gap = 6
+  const margin = 8
+  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
+  let top = b.bottom + gap
+  if (top + h > window.innerHeight - margin) top = b.top - h - gap
+  yearMenuPos.value = { left: Math.round(left), top: Math.round(Math.max(margin, top)) }
+}
+
+const toggleYearMenu = async () => {
+  showYearMenu.value = !showYearMenu.value
+  if (showYearMenu.value) {
+    await nextTick()
+    measureYearMenu()
+  }
+}
+
+/**
+ * 选择某年：切换后重新拉数据。
+ * 注意：即使选的是当前已选中的年份也要重新拉——
+ * 首次挂载时 selectedYear 可能已经是默认值但数据还没加载完，
+ * 早退会让"再点一次当前年份"什么都不发生（测试里正是这个场景）。
+ */
+const pickYear = async (label) => {
+  showYearMenu.value = false
+  selectedYear.value = label
+  await fetchData()
+}
+
+// 点击外部 / Esc / 滚动时关闭
+const onYearDocClick = (e) => {
+  if (!showYearMenu.value) return
+  if (yearTriggerRef.value?.contains(e.target)) return
+  if (yearMenuRef.value?.contains(e.target)) return
+  if (e.target.closest?.('[role="menu"]')) return
+  showYearMenu.value = false
+}
+const onYearKeydown = (e) => {
+  if (e.key === 'Escape' && showYearMenu.value) showYearMenu.value = false
+}
+
 const yearCount = ref(0)
 const totalCount = ref(0)
 const showDialog = ref(false)
@@ -1026,11 +1155,16 @@ onMounted(async () => {
   await fetchData()
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', onDocClick)
+  // 年份下拉的关闭监听（点击外部 / Esc）
+  document.addEventListener('click', onYearDocClick)
+  document.addEventListener('keydown', onYearKeydown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
+  document.removeEventListener('click', onYearDocClick)
+  document.removeEventListener('keydown', onYearKeydown)
 })
 
 // ========== 工具栏离场元素「原地淡出」定位（说明见 WatchingView.vue） ==========
@@ -1074,5 +1208,28 @@ const unpinLeavingGroup = (el) => {
 
 .sel-anim-wrap {
   position: relative;
+}
+
+/* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。
+   名称用 flex:0 1 auto + ellipsis：名称长时先截断名称，标签保持完整；
+   标签用 flex:0 0 auto：自己不被压扁，放不下时靠容器的 overflow 裁掉。
+   无标签时只剩名称，行高与其它行完全一致（标签绝不另起一行）。 */
+.name-with-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.name-with-tags > .text-sm {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name-with-tags > .item-tags {
+  flex: 0 0 auto;
 }
 </style>
