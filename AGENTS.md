@@ -120,3 +120,70 @@ node scripts/run.mjs --safe "console.log(1)"  # 内联执行（严格校验，�
 - 自建 i18n，三语 `src/locales/{zh,en,ja}.js` 的 **key 集合必须完全一致**，占位符 `{name}` 也必须一致
   （`tests/i18n.test.js` 会校验）。
 - 模板里的所有用户可见文案都必须走 `tt()`，不允许硬编码中文！
+
+---
+
+## ⚠️ Commit 规范：必须遵守（已重写历史）
+
+参考 <https://github.com/feflow/git-commit-style-guide>。仓库历史已在 2026-11-02
+从 204 个提交压缩为 **28 个阶段性提交**，全部按此规范重写并 force push。
+
+### 格式
+
+```
+<type>(<scope>): <subject>
+<BLANK LINE>
+<body>
+```
+
+### 硬性规则
+
+1. **标题 ≤50 字符**（含 `type(scope): ` 前缀）。这是最容易违反的一条。
+2. **type 只能是 9 种之一**：`feat` `fix` `docs` `style` `refactor` `perf` `test` `chore` `revert`
+3. **必须有 scope**，用功能域命名：`app` `ux` `theme` `wallpaper` `appearance` `palette`
+   `glass` `navigation` `i18n` `ui` `tags` `transfer` `cover` `stats` `db` `table` `tooling`
+   `interaction` `menu` `time` `topbar` `watching`
+4. **subject 首字母小写，不以句号结尾，不含非 ASCII 字符**
+5. **必须有 body**，空行分隔。body 说明：
+   - 为什么这个变更是必须的（修什么 bug / 补什么能力）
+   - 怎么解决的（关键机制或决策）
+   - 有无副作用或风险
+6. body 每行建议 ≤72 字符。
+
+### 反面例子（历史遗留，已修正）
+
+```
+fix(ui): 分页按钮补齐 pager-btn 类（36→40px 高）、每页触发器同步 40px，三按钮同高同圆角
+```
+
+问题：中文、超长、把多个不相关改动塞进一条。
+正确写法应拆成独立提交，英文标题，细节进 body。
+
+### 阶段划分原则
+
+按**功能阶段**合并，不按提交日期机械切分。同一阶段的
+`chore(vX.Y.Z): 版本升级` 与 `docs(memory): ...` 应并入该阶段，不要单独保留。
+
+### 重写历史的可复现做法
+
+用 `git commit-tree` 而非 `rebase -i`（后者依赖交互式编辑器，自动化环境不可靠）：
+
+```bash
+# 1. 备份
+git branch backup-before-squash HEAD
+
+# 2. 取每个阶段最后一个提交的 tree，串联成新链
+git rev-parse <stage-end-hash>^{tree}
+GIT_AUTHOR_DATE=<date> GIT_COMMITTER_DATE=<date> \
+  git commit-tree <tree> -p <parent> -m "<message>"
+
+# 3. 动 main 之前必须验证代码树未变
+git rev-parse <new-head>^{tree}   # 应与 backup-before-squash^{tree} 完全相同
+
+# 4. 更新并推送
+git reset --hard <new-head>
+git push --force-with-lease origin main
+```
+
+**注意**：`^{tree}` 里的 `^` 会被 PowerShell 5.1 吃掉 → 用 `execFileSync`
+逐参数传给 git，不要拼字符串命令。
