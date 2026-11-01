@@ -1,6 +1,6 @@
 {
   "name": "bangumi-manager-standalone",
-  "version": "1.15.2",
+  "version": "1.15.7",
   "private": true,
   "type": "module",
   "scripts": {

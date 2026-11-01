@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://emilelu.github.io/pbm.html"><img alt="在线试玩" src="https://img.shields.io/badge/demo-online-22c55e?style=flat-square&logo=googlechrome&logoColor=white"></a>
-  <img alt="version 1.15.2" src="https://img.shields.io/badge/version-1.15.2-7C3AED?style=flat-square">
+  <img alt="version 1.15.7" src="https://img.shields.io/badge/version-1.15.7-7C3AED?style=flat-square">
   <img alt="473 tests passing" src="https://img.shields.io/badge/tests-473%20passing-2ea44f?style=flat-square">
   <img alt="languages zh en ja" src="https://img.shields.io/badge/languages-zh%20%7C%20en%20%7C%20ja-orange?style=flat-square">
   <img alt="single file 1.5 MB" src="https://img.shields.io/badge/single%20file-1.5%20MB-ff69b4?style=flat-square">

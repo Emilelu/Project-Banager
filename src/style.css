@@ -141,7 +141,13 @@ body.with-bg::before {
   background: var(--bg-image) center / cover no-repeat;
   filter: blur(var(--bg-blur));
   transform: scale(1.08);
-  transition: opacity 0.4s ease, filter 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 三个属性各自独立的过渡时长：
+     · opacity   —— 壁纸入场淡入，0.4s
+     · transform —— 聚焦态缩放（1.08 ↔ 1.13），0.8s（用户确认这个动画是对的，必须保留）
+     · filter    —— 聚焦态加深模糊，**0s**：打开弹窗/菜单时模糊立刻到位，
+                    不能出现「弹窗已经弹出、背景还在慢慢糊」
+     把它们拆开写在同一条 transition 里即可，不需要任何额外覆盖规则。 */
+  transition: opacity 0.4s ease, filter 0s, transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 启动"壁纸入场"：后台就绪后一次性应用新壁纸，从透明淡入（纯 opacity，合成器属性，不重栅格化） */
@@ -154,27 +160,6 @@ body.with-bg.bg-focus::before {
   filter: blur(calc(var(--bg-blur) + 16px));
   transform: scale(1.13);
 }
-
-/* ==================== MODAL FOCUS BLUR — instant ==================== */
-/*
- * 打开弹窗/菜单时，背景模糊必须**立刻到位**，不要慢慢加深。
- *
- * 基础规则 body.with-bg::before 上有一条 filter/transform 0.8s 的过渡，
- * 那是给「壁纸入场淡入」用的（不可改）。但它同时让 bg-focus 的模糊变成 0.8s 渐变，
- * 观感是「弹窗已经弹出来了，背景还在慢慢糊」。
- *
- * 这里只把 filter / transform 的过渡时长归零；opacity（壁纸淡入）保持原样，
- * 所以既满足「聚焦态立刻生效」，又不破坏壁纸入场动画。
- */
-body.with-bg.bg-focus::before,
-body.with-bg.bg-custom.bg-focus::before {
-  transition: opacity 0.4s ease, filter 0s, transform 0s;
-}
-/* 退出聚焦态同样立即恢复（否则关闭弹窗后背景要 0.8s 才清晰） */
-body.with-bg::before {
-  transition: opacity 0.4s ease, filter 0s, transform 0s;
-}
-
 
 /* 自定义壁纸（通常是大图直链）：弹窗聚焦降级——不再叠加额外模糊
    （避免全屏大图每帧重栅格化造成卡顿），仅轻微缩放；其余壁纸保持原聚焦效果 */

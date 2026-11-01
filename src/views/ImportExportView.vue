@@ -2,7 +2,7 @@
   <div ref="pageRootRef" class="space-y-5" tabindex="-1">
     <!-- ==================== 导入（不选格式：一个按钮 + 系统文件对话框） ==================== -->
     <section class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4" data-test="import-card">
-      <div class="flex items-center gap-2 mb-1">
+      <div class="flex items-center gap-2 mb-3">
         <AppIcon scale="md" name="upload" class="text-primary" />
         <!-- 「点击下方按钮选择文件。支持 Excel / CSV …会按文件类型自动识别…」是**卡片用法说明**，
              改为标题上的悬浮气泡；卡片正文直接从按钮开始，少两行灰字。 -->
@@ -108,7 +108,7 @@
 
     <!-- ==================== 导出（必须显式选五种格式之一） ==================== -->
     <section class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4" data-test="export-card">
-      <div class="flex items-center gap-2 mb-1">
+      <div class="flex items-center gap-2 mb-3">
         <AppIcon scale="md" name="download" class="text-primary" />
         <!-- 「选择需要导出的格式，文件会直接下载。」是导出选项的用法说明 → 标题气泡 -->
         <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"

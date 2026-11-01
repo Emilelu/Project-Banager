@@ -16,8 +16,8 @@
       <!-- Logo区域：logo 本身就是折叠/展开按钮。
            悬浮时 logo 淡出、面板图标淡入（同一位置、同一尺寸，无位移跳动），
            这样既省掉了独立按钮占用的垂直空间，交互入口也更容易发现。 -->
-      <div class="relative z-10 border-b border-white/10"
-        :class="sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-4'">
+      <div class="relative z-10 border-b border-white/10 h-14 flex items-center"
+        :class="sidebarCollapsed ? 'px-2' : 'px-4'">
         <div class="flex items-center gap-3" :class="sidebarCollapsed ? 'justify-center' : ''">
           <button type="button" @click="toggleSidebar"
             class="relative w-8 h-8 rounded-lg shrink-0 overflow-hidden group cursor-pointer

@@ -849,6 +849,23 @@ let focusObserverStarted = false;
 let bootFocusPending = false;
 
 function hasFullscreenDialog() {
+  // 触发壁纸聚焦（加深模糊 + 放大）的浮层类型：
+  //   · 全屏弹窗    body > .fixed.inset-0.z-50     （添加/编辑/确认对话框）
+  //   · 下拉菜单    body > .fixed.inset-0.z-40      （每页条数、时间下拉）
+  //   · 年份/标签菜单 body > .fixed.inset-0.z-[100] · 右键菜单 z-[199]
+  //
+  // 为什么要把菜单也算进来：用户明确要求「打开菜单的背景模糊要立刻出现」。
+  // 原实现只认 z-50 的对话框，菜单（z-40 / z-[100] / z-[199]）打开时背景毫无变化，
+  // 观感上「菜单像是浮在没变暗的桌面上」。
+  //
+  // 用 z 值的数值区间判断而不是逐个列举具体 class：菜单的 z 值随场景变化
+  // （z-40 / z-[100] / z-[199]），列举会漏。凡是 body 直挂的全屏 fixed 遮罩都算。
+  const overlays = document.querySelectorAll('body > .fixed.inset-0');
+  for (const el of overlays) {
+    const z = Number(getComputedStyle(el).zIndex);
+    // z >= 40 的全屏遮罩都视为「打开了浮层」（主内容区最高到 z-30 左右）
+    if (Number.isFinite(z) && z >= 40) return true;
+  }
   return !!document.querySelector("body > .fixed.inset-0.z-50");
 }
 

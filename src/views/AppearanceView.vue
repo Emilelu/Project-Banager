@@ -62,26 +62,20 @@
                 </button>
               </div>
 
-              <!-- ② 配色来源：跟随壁纸 / 每次随机（互斥二选一，做成清晰的三段式） -->
-              <div class="mt-5">
-                <div class="text-xs text-gray-500 mb-2">{{ tt('theme.paletteSource') }}</div>
-                <div class="grid grid-cols-2 gap-3">
-                  <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
-                    v-tip="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
-                    class="btn-base btn-sm btn-neutral disabled:opacity-40 disabled:cursor-not-allowed"
-                    :class="isPaletteAuto ? 'btn-primary' : 'btn-neutral'">
-                    <AppIcon scale="xs" name="palette" />{{ tt('theme.pickFromWallpaper') }}
-                  </button>
-                  <button @click="setPaletteMode('random')"
-                    class="btn-base btn-sm btn-neutral"
-                    :class="state.paletteMode === 'random' ? 'btn-primary' : 'btn-neutral'">
-                    <AppIcon scale="xs" name="refresh" />{{ tt('theme.randomEachRefresh') }}
-                  </button>
-                </div>
-                <!-- 图源不支持跨域取色时，只提示一次（原先分散在按钮后缀 + 底部两条提示里） -->
-                <p v-if="noCorsSource" class="tone-warning text-xs text-warning-dark mt-1.5 flex items-start gap-1">
-                  <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsWarning') }}
-                </p>
+              <!-- 配色来源：跟随壁纸 / 每次随机（互斥二选一）—— 标签与两个按钮同一行 -->
+              <div class="mt-5 flex items-center gap-2.5 flex-wrap">
+                <span class="text-xs text-gray-500 shrink-0">{{ tt('theme.paletteSource') }}</span>
+                <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
+                  v-tip="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
+                  class="btn-base btn-sm btn-neutral shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  :class="isPaletteAuto ? 'btn-primary' : 'btn-neutral'">
+                  <AppIcon scale="xs" name="palette" />{{ tt('theme.pickFromWallpaper') }}
+                </button>
+                <button @click="setPaletteMode('random')"
+                  class="btn-base btn-sm btn-neutral"
+                  :class="state.paletteMode === 'random' ? 'btn-primary' : 'btn-neutral'">
+                  <AppIcon scale="xs" name="refresh" />{{ tt('theme.randomEachRefresh') }}
+                </button>
               </div>
 
               <!-- ③ 自定义取色：低频高级项，默认折叠 -->
@@ -183,7 +177,7 @@
                       loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
-                  <div class="flex items-center gap-2.5 mt-2">
+                  <div class="flex items-center gap-2.5 mt-2 flex-wrap">
                     <p v-if="bgFailed" class="tone-danger text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
                     <button @click="openOriginal"
                       class="btn-base btn-neutral shrink-0"
@@ -191,14 +185,8 @@
                     <button @click="downloadOriginal"
                       class="btn-base btn-neutral shrink-0"
                       v-tip="tt('theme.downloadOriginalHint')"><AppIcon scale="sm" name="download" />{{ tt('theme.downloadOriginal') }}</button>
-                  </div>
-                  <p v-if="noCorsSource" class="tone-warning card-sub mt-1 flex items-start gap-1">
-                    <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsDetail') }}
-                  </p>
-                </div>
-                <!-- 遮罩/模糊属于低频微调：默认折叠，避免弹窗被撑到必须滚动，
-                     导致底部控件被裁（原先「遮罩浓度」滑块就被切掉一半）。 -->
-                <div class="mt-4 flex items-center justify-between">
+              <!-- 「遮罩与模糊」折叠入口与上面的按钮同一行，省掉一整行高度 -->
+              <div class="flex items-center gap-1.5 ml-auto">
                   <button @click="showTuning = !showTuning"
                     class="btn-base btn-sm btn-link tone-fold"
                     :aria-expanded="showTuning">
@@ -210,7 +198,14 @@
                     <button v-if="showTuning" @click="resetBgTuning" v-tip="tt('theme.resetMaskBlurHint')"
                       class="btn-base btn-sm btn-link tone-fold shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
                   </transition>
+              </div>
+                  </div>
+                  <p v-if="noCorsSource" class="tone-warning card-sub mt-1 flex items-start gap-1">
+                    <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsDetail') }}
+                  </p>
                 </div>
+                <!-- 遮罩/模糊属于低频微调：默认折叠，避免弹窗被撑到必须滚动，
+                     导致底部控件被裁（原先「遮罩浓度」滑块就被切掉一半）。 -->
                 <!-- 对比度：容器底是半透明白，透出壁纸后浅灰文字明显不够看。
                      这里把标签与数值统一提到 text-700 级别并加 font-medium，
                      实测在亮/暗壁纸下都 ≥4.5:1。
