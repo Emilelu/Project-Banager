@@ -26,47 +26,9 @@
              全部元素共处一组后，任一元素出入场时其余元素都会平滑归位（.sel-anim-move）。 -->
         <!-- 注意：tag 容器不能是 display:contents —— 那样元素不参与布局，
              Vue 的 -move 位移计算失去参照，归位动画不会播放。用正常 flex 盒子。 -->
-        <transition-group name="sel-anim" tag="div" ref="toolbarRef" class="sel-anim-wrap flex items-center gap-2 flex-wrap"
-          @before-leave="pinLeavingGroup" @leave-cancelled="unpinLeavingGroup">
-        <button key="add" @click="openAddDialog" class="btn-base btn-primary">
-          <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
-        </button>
-
-        <!-- 「选中项专属操作」整体作为**一个** transition-group 子节点进出场。
-             为什么不把 6 个 button 各当一个子节点：它们会逐个离场，第一个
-             一旦脱离文档流、后面的兄弟立刻左移，于是第二个量到的已是挤压后
-             的坐标，根本钉不回原位（实测 6 个全堆到 355 附近）。
-             收成一个包装元素后，离场/入场只有一次测量，落点精确。 -->
-        <div v-if="!!selected" key="sel-actions" class="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
-          <button v-for="btn in selectedActions" :key="btn.key" @click="btn.onClick"
-            class="btn-base" :class="btn.cls">
-            <AppIcon scale="sm" :name="btn.icon" />{{ btn.label }}
-          </button>
-        </div>
-
-        <div key="sep-1" class="toolbar-sep"></div>
-        <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
-          <AppIcon scale="sm" name="checkbox" />{{ batchMode ? tt('watching.cancelBatchSelect') : tt('watching.batchSelect') }}
-        </button>
-        <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length===0" @click="batchDelete"
-          class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
-          <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
-        </button>
-        <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
-          <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
-        </button>
-          <!-- 反选：在当前页已选/未选之间翻转，方便「删掉除某几条外的全部」 -->
-          <button v-if="batchMode" key="invert" @click="invertSelection" class="btn-base btn-neutral">
-            <AppIcon scale="sm" name="swap" />{{ tt('watching.invertSelection') }}
-          </button>
-        <button key="clear" @click="openClearDialog" class="btn-base btn-neutral">
-          <AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}
-        </button>
-        <div key="sep-2" class="toolbar-sep"></div>
-        <button key="time-sort" @click="toggleTimeSort" class="btn-base btn-toned" v-tip="tt('watching.timeAsc')">
-          <AppIcon scale="sm" name="timeSort" /> {{ timeSortAsc ? tt('watching.timeAsc') : tt('watching.timeDesc') }}
-        </button>
-        </transition-group>
+        <!-- 工具栏按钮已按要求全部移到顶栏（见 setPageActions 注册）。
+             「添加番剧」按钮也移除了 —— 改为在周历空白处右键即可添加。
+             本卡片保留为空，让周历获得更多纵向空间。 -->
       <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支），此处不再需要 transition -->
 
     </div>
@@ -84,7 +46,8 @@
           <span class="ml-1">{{ dayLabel(day) }}</span>
         </div>
         <div v-for="(day, colIdx) in weekDays" :key="'col-'+day"
-          class="border-r border-white/10 last:border-r-0 min-h-[18.75rem] flex flex-col bg-white/30">
+          class="border-r border-white/10 last:border-r-0 min-h-[18.75rem] flex flex-col bg-white/30"
+          @contextmenu.prevent.self="openEmptyAreaMenu($event)">
           <WatchingCard v-for="item in getItemsByDay(day)" :key="item.id" class="flex-1"
             :item="item"
             :selected="selected?.id===item.id"
@@ -94,7 +57,7 @@
             v-model:editValue="editValue"
             @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
             @toggle-check="toggleCheck(item.id)"
-            @context-menu="!batchMode && openContextMenu($event, item)"
+            @context-menu="handleCardContextMenu($event, item)"
             @open-dialog="openCardDialog(item)"
             @middle-click="handleCardMiddleClick($event, item)"
             @start-edit="startEdit(item, $event)"
@@ -105,7 +68,9 @@
           <!-- ⚠️ 勿在此处加无限动画：本元素在 .glass（backdrop-filter）子树内，
                动画会使这块占屏 62% 的玻璃每帧重新捕获背景并模糊，导致 GPU 持续满载。
                详见 .workbuddy/memory/2026-09-13.md -->
-          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center">
+          <!-- 周历空白处右键 → 添加番剧（用户要求：不再需要按钮） -->
+          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center cursor-default"
+            @contextmenu.prevent="openEmptyAreaMenu($event)">
             <span class="empty-inline"><AppIcon scale="sm" name="sparkle" />{{ tt('watching.noItem') }}</span>
           </div>
         </div>
@@ -149,7 +114,7 @@
           v-model:editValue="editValue"
           @select="batchMode ? toggleCheck(item.id) : selectItem(item)"
           @toggle-check="toggleCheck(item.id)"
-          @context-menu="!batchMode && openContextMenu($event, item)"
+          @context-menu="handleCardContextMenu($event, item)"
           @open-dialog="openCardDialog(item)"
           @middle-click="handleCardMiddleClick($event, item)"
           @start-edit="startEdit(item, $event)"
@@ -403,6 +368,51 @@
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
     </Teleport>
 
+    <!-- 周历空白处右键 → 添加番剧（用户要求移除「添加番剧」按钮） -->
+    <Teleport to="body">
+      <transition name="pop">
+        <div v-if="emptyAreaMenu.show" class="fixed z-[200]"
+          style="--pop-origin-y: top; --pop-from-y: -4px"
+          :style="{ left: emptyAreaMenu.x + 'px', top: emptyAreaMenu.y + 'px' }">
+          <div class="app-menu-panel min-w-[10rem] context-menu">
+            <button type="button" role="menuitem" @click="emptyAreaAddShow"
+              class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
+              <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watching.addShow') }}</span>
+            </button>
+          </div>
+        </div>
+      </transition>
+      <div v-if="emptyAreaMenu.show" class="fixed inset-0 z-[199]" @click="closeEmptyAreaMenu"
+        @contextmenu.prevent="closeEmptyAreaMenu"></div>
+    </Teleport>
+
+    <!-- 批量勾选后右键 → 批量删除 / 移至等番 / 移至已看 -->
+    <Teleport to="body">
+      <transition name="pop">
+        <div v-if="batchMenu.show" class="fixed z-[200]"
+          style="--pop-origin-y: top; --pop-from-y: -4px"
+          :style="{ left: batchMenu.x + 'px', top: batchMenu.y + 'px' }">
+          <div class="app-menu-panel min-w-[10rem] context-menu">
+            <button type="button" role="menuitem" @click="batchDeleteFromMenu"
+              class="flex items-center gap-2 text-left transition hover:bg-danger/10 text-danger whitespace-nowrap">
+              <AppIcon scale="xs" name="trash" /><span class="flex-1">{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}</span>
+            </button>
+            <div class="menu-sep"></div>
+            <button type="button" role="menuitem" @click="batchMoveToRemaining"
+              class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
+              <AppIcon scale="xs" name="clock" /><span class="flex-1">{{ tt('watching.moveToRemaining') }}</span>
+            </button>
+            <button type="button" role="menuitem" @click="batchMoveToWatched"
+              class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
+              <AppIcon scale="xs" name="check" /><span class="flex-1">{{ tt('watching.moveToWatched') }}</span>
+            </button>
+          </div>
+        </div>
+      </transition>
+      <div v-if="batchMenu.show" class="fixed inset-0 z-[199]" @click="closeBatchMenu"
+        @contextmenu.prevent="closeBatchMenu"></div>
+    </Teleport>
+
     <!-- 删除确认对话框 -->
     <Teleport to="body">
       <transition name="modal-overlay">
@@ -447,7 +457,7 @@ import { validateDate, todayStr } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl, defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { showToast } from '../composables/useToast'
-import { setPageStats, setPageSelection, clearPageSelection } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
@@ -662,6 +672,31 @@ const batchDelete = () => {
   showConfirmDialog.value = true
 }
 
+/**
+ * 批量移动：把勾选记录移到目标页。
+ *
+ * 项目只有**单条**移动 API，所以逐个调用。数量不大（一页最多几十条），
+ * 串行足够，且失败时能精确定位是哪一条出错。
+ */
+const batchMoveTo = async (target) => {
+  const ids = [...checkedIds.value]
+  if (ids.length === 0) return
+  try {
+    const move = target === 'remaining'
+      ? watchingApi.moveWatchingToRemaining
+      : watchingApi.moveWatchingToWatched
+    for (const id of ids) {
+      await move(id)
+    }
+    checkedIds.value = []
+    batchMode.value = false
+    await fetchData()
+    showToast(tt('toast.movedCount', { count: ids.length }), 'success')
+  } catch (err) {
+    showToast(String(err?.message || err), 'error')
+  }
+}
+
 const openClearDialog = () => {
   confirmTarget.value = tt('watching.allWatching')
   confirmAction.value = 'clear'
@@ -777,10 +812,78 @@ const applyTemplate = () => {
 }
 
 const contextMenu = ref({ show:false, x:0, y:0, item:null })
+
+/*
+ * 周历空白处右键菜单。
+ *
+ * 用户要求：移除「添加番剧」按钮，改为在周历空白处右键即可添加。
+ * 单独一套 state（不复用卡片右键菜单），因为两者菜单项完全不同：
+ * 卡片右键是「编辑/打开链接/移至…/删除」，空白处只有「添加番剧」。
+ */
+const emptyAreaMenu = ref({ show: false, x: 0, y: 0 })
+
+const openEmptyAreaMenu = (e) => {
+  emptyAreaMenu.value = { show: true, x: e.clientX, y: e.clientY }
+}
+
+const closeEmptyAreaMenu = () => { emptyAreaMenu.value.show = false }
+
+/** 空白右键菜单 → 添加番剧 */
+const emptyAreaAddShow = () => {
+  closeEmptyAreaMenu()
+  openAddDialog()
+}
+
+/** 批量勾选后右键 → 批量操作菜单（删除 / 移至等番 / 移至已看） */
+const batchMenu = ref({ show: false, x: 0, y: 0 })
+
+const openBatchMenu = (e) => {
+  if (!batchMode.value || checkedIds.value.length === 0) return false
+  batchMenu.value = { show: true, x: e.clientX, y: e.clientY }
+  return true
+}
+
+const closeBatchMenu = () => { batchMenu.value.show = false }
+
+/** 批量移到等番：逐个调用 moveToRemaining */
+const batchMoveToRemaining = async () => {
+  closeBatchMenu()
+  await batchMoveTo('remaining')
+}
+
+/** 批量移到已看 */
+const batchMoveToWatched = async () => {
+  closeBatchMenu()
+  await batchMoveTo('watched')
+}
+
+const batchDeleteFromMenu = () => {
+  closeBatchMenu()
+  batchDelete()
+}
 const openContextMenu = (e, item) => {
   selected.value = item
   // 贴边/贴底时自动翻转，避免菜单被视口裁掉
   placeContextMenu(contextMenu, e, { item })
+}
+
+/**
+ * 卡片右键分发。
+ *
+ * 三种情况：
+ *   批量模式 + 有勾选 → 批量操作菜单（删除 / 移至等番 / 移至已看）
+ *   非批量模式       → 原有的单卡片操作菜单
+ *   批量模式但无勾选  → 不弹菜单（没有可操作对象）
+ */
+const handleCardContextMenu = (e, item) => {
+  if (batchMode.value) {
+    if (checkedIds.value.length > 0) {
+      e.preventDefault()
+      openBatchMenu(e)
+    }
+    return
+  }
+  openContextMenu(e, item)
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }
@@ -1177,6 +1280,34 @@ watch(
 
 const ROUTE_KEY = '/watching'
 
+/**
+ * 顶栏操作按钮。
+ *
+ * 用户要求：「添加番剧」改为周历空白处右键（已移除按钮），
+ * 其余（批量选择 / 清空列表 / 时间排序 / 批量操作）移到顶栏。
+ */
+watch(
+  [() => batchMode.value, () => checkedIds.value.length, () => isAllChecked.value, () => selected.value, () => timeSortAsc.value],
+  () => {
+    const items = [
+      { key: 'batch', icon: 'checkbox', label: batchMode.value ? tt('watching.cancelBatchSelect') : tt('watching.batchSelect'), onClick: toggleBatchMode },
+    ]
+    if (selected.value && !batchMode.value) {
+      for (const a of selectedActions.value) {
+        items.push({ key: 'sel-' + a.key, icon: a.icon, label: a.label, onClick: a.onClick, danger: a.cls === 'btn-danger' })
+      }
+    }
+    if (batchMode.value || checkedIds.value.length > 0) {
+      items.push({ key: 'sel-all', icon: 'checkbox', label: isAllChecked.value ? tt('watching.unselectAll') : tt('watching.selectAll'), onClick: toggleSelectAll })
+      items.push({ key: 'invert', icon: 'swap', label: tt('watching.invertSelection'), onClick: invertSelection })
+      items.push({ key: 'batch-del', icon: 'trash', label: tt('watching.batchDeleteCount', { count: checkedIds.value.length }), onClick: batchDelete, danger: true })
+    }
+    items.push({ key: 'clear', icon: 'clear', label: tt('watching.clearList'), onClick: openClearDialog, danger: true })
+    items.push({ key: 'time-sort', icon: 'timeSort', label: timeSortAsc.value ? tt('watching.timeAsc') : tt('watching.timeDesc'), onClick: toggleTimeSort })
+    setPageActions('/watching', items)
+  },
+  { immediate: true, deep: true },
+)
 /** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
 /**
  * 顶栏「当前选中 / 已选择 N 项」同步（含批量选中分支）。
@@ -1211,6 +1342,7 @@ watch(
 
 onUnmounted(() => {
   clearPageSelection(ROUTE_KEY)
+  clearPageActions(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })

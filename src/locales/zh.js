@@ -254,7 +254,9 @@ export default {
   'remaining.colName': '番剧名称',
   'remaining.colDate': '预计日期',
   'remaining.colUrl': '链接',
-  'remaining.colNotes': '备注',
+  'remaining.colNotes': '备注',  'remaining.add': '添加等番',  'remaining.clearList': '清空列表',
+
+
   'remaining.emptyTitle': '暂无等番记录',
   'remaining.searchPlaceholder': '搜索番剧名称...',
   'remaining.batchAddTitle': '批量添加等番',
@@ -290,7 +292,8 @@ export default {
   'watched.colName': '作品名称',
   'watched.colDate': '日期',
   'watched.colUrl': '链接',
-  'watched.colNotes': '备注',
+  'watched.colNotes': '备注',  'watched.clearList': '清空列表',
+
   'watched.emptyTitle': '暂无已看记录',
   'watched.emptyNoMatch': '没有找到匹配的记录',
   'watched.emptyUnclassified': '暂无未分类记录',

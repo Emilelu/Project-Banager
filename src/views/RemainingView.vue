@@ -6,65 +6,25 @@
            表格卡片里那份重复的「☰ 番剧名称 / 共 N 条」已删除（见下方 table 处注释），
            分页卡片里那份也一并删除；同一页面只剩这一个计数入口。
            .topbar-stat 与 App.vue 顶栏徽章是同一套样式（更紧凑），两处观感一致。 -->
-      <div class="toolbar-enter toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
-        <div class="flex items-center gap-3">
-          <!-- 本季新番链接（yuc.wiki）：与工具栏主按钮同一几何/配色（.btn-base + 语义变体） -->
-          <a :href="currentSeasonLink.url" target="_blank" rel="noopener"
-            class="btn-base btn-toned shrink-0">
-            <AppIcon scale="sm" name="tv" />{{ currentSeasonLink.label }}
-            <AppIcon scale="xs" name="link" />
-          </a>
-          <div class="inline-block">
-            <!-- season-trigger 标记必需：onDocClick 靠它判断「点触发按钮不算外部点击」。
-                 缺了它会出现「点开→document 监听立刻判为外部→菜单瞬关」，
-                 外部表现就是"点击完全没反应"。
-                 外观统一走 .filter-trigger（与 TagFilter / 年份筛选同一套：实色底 +
-                 text-sm + rounded-xl），与工具栏 34px 主按钮同一高度，不再另写一套。 -->
-            <button ref="seasonMenuBtn" @click="toggleSeasonMenu"
-              class="filter-trigger season-trigger">
-              <AppIcon scale="sm" name="calendar" />{{ tt('remaining.viewSeasons') }}<AppIcon scale="xs" name="caretDown" class="ml-0.5" />
-            </button>
-          </div>
-          <div class="relative">
-            <input v-model="searchQuery" type="text" :placeholder="tt('remaining.searchPlaceholder')"
-              class="pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80 w-48" />
-            <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition" :aria-label="tt('common.clear')">
-              <AppIcon scale="xs" name="close" />
-            </button>
-          </div>
-          <!-- 按标签筛选（多选 OR），与搜索框并列 -->
-          <TagFilter v-model="tagFilter" />
+      <!-- 工具栏：只保留搜索框与标签筛选（内容相关控件）。
+           本季新番 / 查看新番 / 添加等番 / 批量添加 / 批量删除 / 全选 / 反选 / 清空
+           已按要求全部移到顶栏（见 setPageActions 注册）。
+           搜索框加长到 28rem 并居中，是这一行的视觉主体。 -->
+      <div class="toolbar-enter toolbar-adaptive flex items-center justify-center gap-3 flex-wrap">
+        <!-- 左侧透明占位：TagFilter 在搜索框右边，
+             左侧补同宽占位后，整个 flex 居中的结果是搜索框正好落在正文中心。 -->
+        <span class="w-[7.3rem] shrink-0" aria-hidden="true"></span>
+        <div class="relative w-[28rem] max-w-full shrink-0">
+          <input v-model="searchQuery" type="text" :placeholder="tt('remaining.searchPlaceholder')"
+            :aria-label="tt('remaining.searchPlaceholder')"
+            class="w-full pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+          <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <button v-if="searchQuery" @click="searchQuery=''" :aria-label="tt('common.clear')"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
+            <AppIcon scale="xs" name="close" />
+          </button>
         </div>
-        <transition-group name="sel-anim" tag="div" ref="toolbarRef" class="sel-anim-wrap flex items-center gap-2 flex-wrap"
-          @before-leave="pinLeavingGroup" @leave-cancelled="unpinLeavingGroup">
-          <button key="add" @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('remaining.addRemaining') }}</button>
-          <button key="batch-add" @click="openBatchAddDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="note" />{{ tt('remaining.batchAdd') }}</button>
-
-          <!-- 选中项专属操作整体 = 一个 transition-group 子节点（见 WatchingView.vue 注释）：
-               若 6 个 button 各自当子节点，它们会逐个离场，第一个一旦脱离文档流
-               后面的兄弟立刻左移，第二个量到的已是挤压后坐标，钉不回原位。 -->
-          <div v-if="!!selected" key="sel-actions" class="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
-            <button v-for="b in selectedActions" :key="b.key" @click="b.onClick"
-              class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
-          </div>
-
-          <div key="sep-1" class="toolbar-sep"></div>
-          <!-- 「批量选择」按钮已移除：点击行首序号即可选中该行。
-           批量操作按钮在 checkedIds 非空时自动出现。 -->
-          <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length === 0" @click="batchDelete"
-            class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
-            <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
-          </button>
-          <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
-            <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
-          </button>
-          <!-- 反选：在当前页已选/未选之间翻转，方便「删掉除某几条外的全部」 -->
-          <button v-if="batchMode" key="invert" @click="invertSelection" class="btn-base btn-neutral">
-            <AppIcon scale="sm" name="swap" />{{ tt('watching.invertSelection') }}
-          </button>
-          <button key="clear" @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
-        </transition-group>
+        <TagFilter v-model="tagFilter" />
       </div>
       <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
 
@@ -561,7 +521,7 @@ import { remainingApi, batchApi } from '../db/api'
 import { compareDateKey, todayStr, validateDate, normalizeDate } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
-import { setPageStats, setPageSelection, clearPageSelection } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
 import { defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -1518,6 +1478,47 @@ function hideCoverZoom() {
 }
 
 const ROUTE_KEY = '/remaining'
+
+/** 本季新番：外链，新标签打开 */
+const openSeasonLink = () => {
+  if (typeof window !== 'undefined' && currentSeasonLink.value?.url) {
+    window.open(currentSeasonLink.value.url, '_blank', 'noopener')
+  }
+}
+
+/**
+ * 顶栏操作按钮。
+ *
+ * 用户要求把工具栏按钮从页面内移到顶栏，页面只留搜索与筛选。
+ * 顶栏空间有限，所以全部以**图标**形态渲染，文案由 App.vue 用 v-tip 显示。
+ *
+ * 批量相关按钮只在 batchMode 或有勾选时出现 —— 否则顶栏常驻 8 个图标太拥挤。
+ */
+watch(
+  [() => currentSeasonLink.value, () => batchMode.value, () => checkedIds.value.length, () => isAllChecked.value, () => selected.value],
+  () => {
+    const items = [
+      { key: 'season-link', icon: 'tv', label: currentSeasonLink.value.label, onClick: openSeasonLink },
+      { key: 'season-menu', icon: 'calendar', label: tt('remaining.viewSeasons'), onClick: toggleSeasonMenu },
+      { key: 'add', icon: 'plus', label: tt('remaining.add'), onClick: openAddDialog },
+      { key: 'batch-add', icon: 'upload', label: tt('remaining.batchAdd'), onClick: openBatchAddDialog },
+    ]
+    // 选中某一项时，展示编辑 / 移至追番 / 删除（原来在工具栏的 sel-actions 区）
+    if (selected.value && !batchMode.value) {
+      for (const a of selectedActions.value) {
+        items.push({ key: 'sel-' + a.key, icon: a.icon, label: a.label, onClick: a.onClick, danger: a.cls === 'btn-danger' })
+      }
+    }
+    if (batchMode.value || checkedIds.value.length > 0) {
+      items.push({ key: 'sel-all', icon: 'checkbox', label: isAllChecked.value ? tt('watching.unselectAll') : tt('watching.selectAll'), onClick: toggleSelectAll })
+      items.push({ key: 'invert', icon: 'swap', label: tt('watching.invertSelection'), onClick: invertSelection })
+      items.push({ key: 'batch-del', icon: 'trash', label: tt('watching.batchDeleteCount', { count: checkedIds.value.length }), onClick: batchDelete, danger: true })
+    }
+    items.push({ key: 'clear', icon: 'clear', label: tt('remaining.clearList'), onClick: openClearDialog, danger: true })
+    setPageActions('/remaining', items)
+  },
+  { immediate: true, deep: true },
+)
 
 /** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
 /**

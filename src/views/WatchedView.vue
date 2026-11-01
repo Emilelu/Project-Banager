@@ -5,7 +5,7 @@
       <!-- 需求 B：本页两个计数（本年 N 部 / 总计 N 部）就放在**顶部第一张卡片标题行的右侧**。
            表格卡片与分页卡片里那些重复的「共 N 条」标题行已全部删除。
            .topbar-stat 与 App.vue 顶栏徽章同一套样式（更紧凑），两处观感一致。 -->
-      <div class="toolbar-enter toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
+      <div class="toolbar-enter toolbar-adaptive flex items-center justify-center gap-3 flex-wrap">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
             <!-- 年份选择：改用与「标签筛选」完全一致的下拉样式
@@ -69,6 +69,24 @@
                         <AppIcon v-if="selectedYear === '__unclassified__'" scale="xs" name="check" />
                       </span>
                     </button>
+
+                    <!-- 年份 CRUD 收进本菜单：用户要求不再保留三个独立按钮。
+                         放在菜单底部、分隔线之后，与「选择年份」区分开。 -->
+                    <div class="border-t border-gray-200/60 my-1"></div>
+                    <button type="button" role="menuitem" @click="openAddYearDialog"
+                      class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
+                      <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watched.addYear') }}</span>
+                    </button>
+                    <button v-if="selectedYear && selectedYear !== '__unclassified__' && selectedYear !== '__all__'"
+                      type="button" role="menuitem" @click="editYearLabel"
+                      class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
+                      <AppIcon scale="xs" name="edit" /><span class="flex-1">{{ tt('watched.editYear') }}</span>
+                    </button>
+                    <button v-if="selectedYear && selectedYear !== '__unclassified__' && selectedYear !== '__all__'"
+                      type="button" role="menuitem" @click="openDeleteYearDialog"
+                      class="flex items-center gap-2 text-left transition hover:bg-danger/10 text-danger whitespace-nowrap">
+                      <AppIcon scale="xs" name="trash" /><span class="flex-1">{{ tt('watched.deleteYear') }}</span>
+                    </button>
                   </div>
                 </transition>
               </Teleport>
@@ -88,37 +106,6 @@
           <!-- 按标签筛选（多选 OR），与搜索框并列 -->
           <TagFilter v-model="tagFilter" />
         </div>
-        <transition-group name="sel-anim" tag="div" ref="toolbarRef" class="sel-anim-wrap flex items-center gap-2 flex-wrap"
-          @before-leave="pinLeavingGroup" @leave-cancelled="unpinLeavingGroup">
-          <button key="add" @click="openAddDialog" class="btn-base btn-primary"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addRecord') }}</button>
-
-          <!-- 选中项专属操作整体 = 一个 transition-group 子节点（见 WatchingView.vue 注释）：
-               多个 button 各自作子节点时会逐个离场，第一个脱离文档流后后面的兄弟立刻
-               左移，第二个量到的已是挤压后坐标，钉不回原位。 -->
-          <div v-if="!!selected" key="sel-actions" class="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
-            <button v-for="b in selectedActions" :key="b.key" @click="b.onClick"
-              class="btn-base" :class="b.cls"><AppIcon scale="sm" :name="b.icon" />{{ b.label }}</button>
-          </div>
-
-          <div key="sep-1" class="toolbar-sep"></div>
-          <!-- 「批量选择」按钮已移除：点击行首序号即可选中该行。 -->
-          <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length===0" @click="batchDelete"
-            class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
-            <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
-          </button>
-          <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
-            <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
-          </button>
-          <!-- 反选：在当前页已选/未选之间翻转，方便「删掉除某几条外的全部」 -->
-          <button v-if="batchMode" key="invert" @click="invertSelection" class="btn-base btn-neutral">
-            <AppIcon scale="sm" name="swap" />{{ tt('watching.invertSelection') }}
-          </button>
-          <button key="clear" @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
-          <div key="sep-2" class="toolbar-sep"></div>
-          <button key="add-year" @click="openAddYearDialog" class="btn-base btn-toned"><AppIcon scale="sm" name="sparkle" />{{ tt('watched.addYear') }}</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" key="edit-year" @click="editYearLabel" class="btn-base btn-toned"><AppIcon scale="sm" name="edit" />{{ tt('watched.editYear') }}</button>
-          <button v-if="selectedYear && selectedYear !== '__unclassified__'" key="del-year" @click="openDeleteYearDialog" class="btn-base btn-danger"><AppIcon scale="sm" name="trash" />{{ tt('watched.deleteYear') }}</button>
-        </transition-group>
       </div>
       <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
 
@@ -571,7 +558,7 @@ import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, extractYear, extractAllYears, compareDateKey, todayStr } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
-import { setPageStats, setPageSelection, clearPageSelection } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
 import { openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -1508,6 +1495,33 @@ function hideCoverZoom() {
 
 const ROUTE_KEY = '/watched'
 
+/**
+ * 顶栏操作按钮。
+ *
+ * 用户要求把工具栏按钮从页面内移到顶栏；年份 CRUD 已收进年份下拉菜单，
+ * 所以这里只有「添加记录 / 清空列表 / 批量操作 / 选中项操作」。
+ */
+watch(
+  [() => batchMode.value, () => checkedIds.value.length, () => isAllChecked.value, () => selected.value],
+  () => {
+    const items = [
+      { key: 'add', icon: 'plus', label: tt('watched.addRecord'), onClick: openAddDialog },
+    ]
+    if (selected.value && !batchMode.value) {
+      for (const a of selectedActions.value) {
+        items.push({ key: 'sel-' + a.key, icon: a.icon, label: a.label, onClick: a.onClick, danger: a.cls === 'btn-danger' })
+      }
+    }
+    if (batchMode.value || checkedIds.value.length > 0) {
+      items.push({ key: 'sel-all', icon: 'checkbox', label: isAllChecked.value ? tt('watching.unselectAll') : tt('watching.selectAll'), onClick: toggleSelectAll })
+      items.push({ key: 'invert', icon: 'swap', label: tt('watching.invertSelection'), onClick: invertSelection })
+      items.push({ key: 'batch-del', icon: 'trash', label: tt('watching.batchDeleteCount', { count: checkedIds.value.length }), onClick: batchDelete, danger: true })
+    }
+    items.push({ key: 'clear', icon: 'clear', label: tt('watched.clearList'), onClick: openClearDialog, danger: true })
+    setPageActions('/watched', items)
+  },
+  { immediate: true, deep: true },
+)
 /** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
 /**
  * 顶栏「当前选中 / 已选择 N 项」同步（含批量选中分支）。
@@ -1540,6 +1554,7 @@ watch(
 
 onUnmounted(() => {
   clearPageSelection(ROUTE_KEY)
+  clearPageActions(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('click', onYearDocClick)

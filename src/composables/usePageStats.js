@@ -46,6 +46,52 @@ export function usePageStats(keyRef) {
   return computed(() => (keyRef?.value ? pageStats[keyRef.value] || [] : []))
 }
 
+
+/* ==================== 页面操作按钮（顶栏） ==================== */
+
+/**
+ * 各页要显示在**顶栏**的操作按钮。
+ *
+ * 结构：
+ *   { key: string, icon: string, label: string, cls?: string, onClick: () => void, danger?: boolean }
+ *
+ * 为什么要把按钮放到顶栏：
+ *   用户要求工具栏按钮统一上移，页面内只保留搜索 / 筛选这类内容控件，
+ *   这样正文区更干净，按钮位置在所有页面也一致。
+ *
+ * 顶栏空间有限（标题 + 计数 + 右侧图标已占大半），所以按钮以**图标形态**渲染，
+ * 文案通过 v-tip 悬浮气泡显示，不占宽度。
+ */
+export const pageActions = reactive({
+  '/watching': [],
+  '/remaining': [],
+  '/watched': [],
+  '/tags': [],
+})
+
+/**
+ * 写入某页的顶栏操作按钮。
+ * @param {string} key 路由 path
+ * @param {Array<{key:string, icon:string, label:string, cls?:string, onClick:Function, danger?:boolean}>} items
+ */
+export function setPageActions(key, items) {
+  if (!pageActions[key]) return
+  pageActions[key] = items || []
+}
+
+/** 清空某页操作按钮（页面卸载时调用，避免残留上一页的按钮） */
+export function clearPageActions(key) {
+  if (pageActions[key]) pageActions[key] = []
+}
+
+/**
+ * 当前路由对应的操作按钮（App.vue 顶栏用）。
+ * @param {import('vue').Ref<string>} keyRef
+ */
+export function usePageActions(keyRef) {
+  return computed(() => (keyRef?.value ? pageActions[keyRef.value] || [] : []))
+}
+
 /* ==================== 当前选中信息 ==================== */
 
 /**

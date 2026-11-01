@@ -78,7 +78,7 @@
                     <div v-if="showPaletteSourceMenu" class="fixed inset-0 z-[100]"
                       @click="showPaletteSourceMenu = false"></div>
                     <div v-if="showPaletteSourceMenu" role="menu"
-                      class="fixed z-[110] app-menu-panel min-w-[13rem]"
+                      class="fixed z-[110] app-menu-panel min-w-[12rem]"
                       :style="paletteSourceMenuStyle">
                       <button @click="pickPaletteMode('auto')" :disabled="noCorsSource" role="menuitemradio"
                         :aria-checked="isPaletteAuto ? 'true' : 'false'"

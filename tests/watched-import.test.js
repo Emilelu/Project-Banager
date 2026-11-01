@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { pageStats, pageSelection } from '../src/composables/usePageStats'
+import { pageStats, pageSelection, pageActions } from '../src/composables/usePageStats'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import * as XLSX from 'xlsx'
@@ -122,11 +122,80 @@ const makeItem = (id, name, watch_date = '2025/01/01', extra = {}) => ({
 
 const dataRows = (wrapper) => wrapper.findAll('tr.list-item')
 
-const buttonByText = (scope, text) =>
-  scope.findAll('button').find((b) => b.text().includes(text))
+/**
+ * 找按钮：先在本 view DOM 里找，找不到回退到 pageActions
+ * （工具栏按钮已移到顶栏，测试只挂载 view、没有 App.vue 顶栏）。
+ */
+const buttonByText = (scope, text) => {
+  const hit = scope.findAll('button').find((b) => b.text().includes(text))
+  if (hit) return hit
+  // 年份菜单是 Teleport 到 body 的，不在 view 的 wrapper 里
+  for (const domBtn of document.querySelectorAll('button, [role="menuitem"], [role="menuitemradio"]')) {
+    if ((domBtn.textContent || '').includes(text)) {
+      return {
+        trigger: () => { domBtn.click(); return Promise.resolve() },
+        text: () => domBtn.textContent || '',
+        exists: () => true,
+        element: domBtn,
+        attributes: (k) => domBtn.getAttribute(k),
+      }
+    }
+  }
+  for (const key of Object.keys(pageActions)) {
+    const a = (pageActions[key] || []).find((x) => (x.label || '').includes(text))
+    if (a) {
+      return {
+        trigger: () => { a.onClick(); return Promise.resolve() },
+        text: () => a.label,
+        exists: () => true,
+        element: { click: () => a.onClick(), focus: () => {}, blur: () => {} },
+        attributes: () => ({}),
+      }
+    }
+  }
+  return undefined
+}
 
-const buttonByExact = (scope, text) =>
-  scope.findAll('button').find((b) => b.text().trim() === text)
+const buttonByExact = (scope, text) => {
+  const hit = scope.findAll('button').find((b) => b.text().trim() === text)
+  if (hit) return hit
+  for (const domBtn of document.querySelectorAll('button, [role="menuitem"], [role="menuitemradio"]')) {
+    if ((domBtn.textContent || '').trim() === text) {
+      return {
+        trigger: () => { domBtn.click(); return Promise.resolve() },
+        text: () => domBtn.textContent || '',
+        exists: () => true,
+        element: domBtn,
+        attributes: (k) => domBtn.getAttribute(k),
+      }
+    }
+  }
+  for (const key of Object.keys(pageActions)) {
+    const a = (pageActions[key] || []).find((x) => (x.label || '').trim() === text)
+    if (a) {
+      return {
+        trigger: () => { a.onClick(); return Promise.resolve() },
+        text: () => a.label,
+        exists: () => true,
+        element: { click: () => a.onClick(), focus: () => {}, blur: () => {} },
+        attributes: () => ({}),
+      }
+    }
+  }
+  return undefined
+}
+
+/**
+ * 打开年份下拉菜单（年份 CRUD 已收进这个菜单里，不再是独立按钮）。
+ */
+async function openYearMenu(scope) {
+  const trig = scope.findAll('button').find((b) => String(b.attributes('class') || '').includes('year-filter-trigger'))
+  if (trig) {
+    await trig.trigger('click')
+    await flushPromises()
+  }
+}
+
 
 /**
  * 按 aria-label 查找按钮。
@@ -660,6 +729,7 @@ describe('已看历史 · 年份维护', () => {
     expect(dataRows(wrapper)).toHaveLength(1)
 
     mocks.watchedYearsApi.getAll.mockResolvedValue(ok([]))
+    await openYearMenu(wrapper)
     await buttonByText(wrapper, '删除年份').trigger('click')
     await flushPromises()
     dialogButton('确认删除').click()
@@ -704,9 +774,14 @@ describe('已看历史 · 年份维护', () => {
     mocks.watchedYearsApi.getAll.mockResolvedValue(ok([{ id: 1, year_label: '2025~2026', sort_order: 1 }]))
     // 改名后 db 层已把该组记录的 watch_date 迁到新标签，因此新分组能查到
     mocks.watchedApi.getByYear.mockImplementation(async () => ok([makeItem(1, '甲', '2025~2026')]))
+    await openYearMenu(wrapper)
     await buttonByText(wrapper, '编辑年份').trigger('click')
     await flushPromises()
-    const labelInput = document.querySelector('.app-dialog input[placeholder="如: 2025 或 2014~2017"]')
+    // 弹窗内第一个文本输入框（占位文案可能变，选择器放宽）
+    const dlgEl = document.querySelector('.app-dialog')
+    const labelInput =
+      document.querySelector('.app-dialog input[placeholder="如: 2025 或 2014~2017"]') ||
+      (dlgEl && dlgEl.querySelector('input[type="text"], input:not([type])'))
     labelInput.value = '2025~2026'
     labelInput.dispatchEvent(new Event('input'))
     await flushPromises()

@@ -3693,6 +3693,8 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
      所以 text-sm 实际是 12.25px，不是 14px —— 直接写 14px 会偏大。
      原来各菜单混用 text-xs(10.5px) / text-sm(12.25px)，视觉不齐。 */
   font-size: 0.875rem;
+  /* 最小宽度 12rem（约 168px），与「查看新番」基准一致 */
+  min-width: 12rem;
   padding-top: 3.5px;
   padding-bottom: 3.5px;
 }
@@ -3719,7 +3721,9 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 14px;
+  /* 纵向 11px：原来 7px 太紧，项与项之间几乎贴在一起。
+     11px 让每项高度约 39.5px，读起来有呼吸感，仍保持整行可点的列表观感。 */
+  padding: 11px 14px;
   font-size: 0.875rem;
   line-height: 17.5px;
   text-align: left;
@@ -3758,8 +3762,8 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 11px 12px;
+  font-size: 0.875rem;
   line-height: 1.4;
   text-align: left;
   color: #374151;

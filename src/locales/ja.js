@@ -257,7 +257,9 @@ export default {
   'remaining.colName': '作品名',
   'remaining.colDate': '予定日',
   'remaining.colUrl': 'リンク',
-  'remaining.colNotes': 'メモ',
+  'remaining.colNotes': 'メモ',  'remaining.add': '追加',  'remaining.clearList': 'リストをクリア',
+
+
   'remaining.emptyTitle': '更新待ちの作品はまだありません',
   'remaining.searchPlaceholder': '作品名を検索...',
   'remaining.batchAddTitle': '更新待ちをまとめて追加',
@@ -293,7 +295,8 @@ export default {
   'watched.colName': '作品タイトル',
   'watched.colDate': '日付',
   'watched.colUrl': 'リンク',
-  'watched.colNotes': 'メモ',
+  'watched.colNotes': 'メモ',  'watched.clearList': 'リストをクリア',
+
   'watched.emptyTitle': '視聴履歴はまだありません',
   'watched.emptyNoMatch': '一致する記録が見つかりません',
   'watched.emptyUnclassified': '未分類の記録はありません',

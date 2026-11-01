@@ -257,7 +257,9 @@ export default {
   'remaining.colName': 'Show Name',
   'remaining.colDate': 'Expected Date',
   'remaining.colUrl': 'Link',
-  'remaining.colNotes': 'Notes',
+  'remaining.colNotes': 'Notes',  'remaining.add': 'Add upcoming',  'remaining.clearList': 'Clear list',
+
+
   'remaining.emptyTitle': 'No waiting shows yet',
   'remaining.searchPlaceholder': 'Search show name...',
   'remaining.batchAddTitle': 'Batch Add Waiting Shows',
@@ -293,7 +295,8 @@ export default {
   'watched.colName': 'Title',
   'watched.colDate': 'Date',
   'watched.colUrl': 'Link',
-  'watched.colNotes': 'Notes',
+  'watched.colNotes': 'Notes',  'watched.clearList': 'Clear list',
+
   'watched.emptyTitle': 'No watched records yet',
   'watched.emptyNoMatch': 'No matching records found',
   'watched.emptyUnclassified': 'No unclassified records',

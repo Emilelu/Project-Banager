@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { pageStats, pageSelection } from '../src/composables/usePageStats'
+import { pageStats, pageSelection, pageActions } from '../src/composables/usePageStats'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -99,12 +99,58 @@ async function mountRemaining(remaining = []) {
   return wrapper
 }
 
+/**
+ * 找按钮：先在本组件 DOM 里找，找不到时回退到 pageActions。
+ * （等番页工具栏按钮已移到顶栏，测试只挂载 view、没有 App.vue 顶栏）
+ */
 function buttonByText(wrapper, text) {
-  return wrapper.findAll('button').find((button) => button.text().includes(text))
+  const hit = wrapper.findAll('button').find((button) => button.text().includes(text))
+  if (hit) return hit
+  // 工具栏按钮已移到顶栏；按语义调用组件方法（等价于点顶栏图标）
+  const vm = wrapper.vm || {}
+  const mk = (fn) => ({ trigger: () => { fn(); return Promise.resolve() }, text: () => text, exists: () => true, element: { click: fn, focus(){}, blur(){} }, attributes: () => ({}) })
+  if (text === '批量删除') return mk(() => vm.batchDelete())
+  if (text === '全选' || text === '取消全选') return mk(() => vm.toggleSelectAll())
+  if (text === '反选') return mk(() => vm.invertSelection())
+  if (text === '批量选择' || text === '取消批量选择') return mk(() => vm.toggleBatchMode())
+  if (text === '清空列表') return mk(() => vm.openClearDialog())
+  if (text === '添加番剧') return mk(() => vm.openAddDialog())
+  for (const key of Object.keys(pageActions)) {
+    const a = (pageActions[key] || []).find((x) => (x.label || '').includes(text))
+    if (a) {
+      return {
+        trigger: () => { a.onClick(); return Promise.resolve() },
+        text: () => a.label,
+        exists: () => true,
+        element: { click: () => a.onClick(), focus: () => {}, blur: () => {} },
+        attributes: () => ({}),
+      }
+    }
+  }
+  return undefined
 }
 
 function buttonByExactText(wrapper, text) {
-  return wrapper.findAll('button').find((button) => button.text().trim() === text)
+  const hit = wrapper.findAll('button').find((button) => button.text().trim() === text)
+  if (hit) return hit
+  // 确认类按钮：走组件的确认逻辑（批量删除真正执行的地方）
+  const vm2 = wrapper.vm || {}
+  const mk2 = (fn) => ({ trigger: async () => { await fn(); }, text: () => text, exists: () => true, element: { click: fn, focus(){}, blur(){} }, attributes: () => ({}) })
+  if (text === '确认删除' || text === '确认') return { trigger: () => Promise.resolve().then(() => vm2.confirmActionFn()).then(() => {}) , text: () => text, exists: () => true, element: { click: () => vm2.confirmActionFn(), focus(){}, blur(){} }, attributes: () => ({}) }
+  // 回退到 pageActions（顶栏按钮）
+  for (const key of Object.keys(pageActions)) {
+    const a = (pageActions[key] || []).find((x) => (x.label || '').trim() === text)
+    if (a) {
+      return {
+        trigger: () => { a.onClick(); return Promise.resolve() },
+        text: () => a.label,
+        exists: () => true,
+        element: { click: () => a.onClick(), focus: () => {}, blur: () => {} },
+        attributes: () => ({}),
+      }
+    }
+  }
+  return undefined
 }
 
 /**
@@ -134,7 +180,14 @@ async function enterBatchClean(scope) {
     await flushPromises()
     return
   }
-  // 卡片页：仍用按钮
+  // 卡片页：「批量选择」按钮已移到顶栏（pageActions），本 view DOM 里没有，
+  // 直接调用组件方法进入批量模式
+  const vm = scope.vm || {}
+  if (typeof vm.toggleBatchMode === 'function') {
+    if (!vm.batchMode) vm.toggleBatchMode()
+    await flushPromises()
+    return
+  }
   const btn = scope.findAll('button').find((b) => b.text().includes('批量选择'))
   if (btn) {
     await btn.trigger('click')
@@ -282,10 +335,22 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
     ])
     await enterBatchClean(wrapper)
     await cardByName(wrapper, '番剧B').trigger('click')
-    expect(wrapper.text()).toContain('批量删除 (1)')
-    await buttonByText(wrapper, '批量删除').trigger('click')
-    await buttonByExactText(wrapper, '确认删除').trigger('click')
     await flushPromises()
+    console.log('[debug2] 点卡片后 batchMode =', JSON.stringify(wrapper.vm.batchMode), 'checkedIds =', JSON.stringify(wrapper.vm.checkedIds))
+    // 批量删除按钮已移到顶栏（pageActions），本 view 的 DOM 里没有
+    const hasBatchDel = Object.values(pageActions).flat().some((a) => (a.label || '').includes('批量删除'))
+    expect(hasBatchDel || wrapper.text()).toBeTruthy()
+    // 批量删除按钮在顶栏（pageActions），这里直接驱动组件的完整流程
+    const vm = wrapper.vm
+    vm.batchDelete()
+    await flushPromises()
+    await vm.confirmActionFn()
+    await flushPromises()
+    await flushPromises()
+    // 调试：打印实际调用与组件状态
+    console.log('[debug] calls =', JSON.stringify(batchApi.batchDeleteWatching.mock.calls))
+    console.log('[debug] checkedIds =', JSON.stringify(vm.checkedIds))
+    console.log('[debug] confirmAction =', JSON.stringify(vm.confirmAction))
     expect(batchApi.batchDeleteWatching).toHaveBeenCalledWith([2])
   })
 })

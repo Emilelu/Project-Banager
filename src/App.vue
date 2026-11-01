@@ -191,6 +191,20 @@
             </transition>
           </div>
         </transition>
+        <!-- 页面操作按钮：由各 view 通过 setPageActions 写入，统一显示在顶栏。
+             用户要求把工具栏按钮从页面内移到这里，正文区只留搜索/筛选等内容控件。
+             顶栏空间有限，按钮以图标形态渲染，文案走 v-tip 气泡。 -->
+        <transition-group name="sel-anim" tag="div" class="flex items-center gap-1.5 mr-auto ml-4">
+          <button v-for="a in topbarActions" :key="a.key" @click="a.onClick()"
+            class="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
+            :class="a.danger
+              ? 'text-danger hover:bg-danger/10'
+              : 'text-gray-500 hover:bg-primary/10 hover:text-primary'"
+            :aria-label="a.label" v-tip="a.label">
+            <AppIcon scale="sm" :name="a.icon" />
+          </button>
+        </transition-group>
+
         <div class="flex items-center gap-3">
           <!-- 壁纸开关与深浅切换已按要求移到侧边栏左下角（替代原「导入/导出」按钮位置），
                顶栏不再保留这两个入口，避免同一功能两处重复。 -->
@@ -416,7 +430,7 @@ import { useAppearance } from './composables/useAppearance'
 import { useDialogFocus } from './composables/useDialogFocus'
 import { useI18n } from './composables/useI18n'
 // 顶栏计数徽章共享状态：各页写入，顶栏读取（见 usePageStats.js）
-import { pageStats, pageSelection } from './composables/usePageStats'
+import { pageStats, pageSelection, usePageActions } from './composables/usePageStats'
 import logoUrl from './assets/logo.webp'
 
 const route = useRoute()
@@ -1250,6 +1264,8 @@ const currentIcon = computed(() => {
  */
 const topbarStats = computed(() => pageStats[route.path] || [])
 
+/** 当前页在顶栏显示的操作按钮（由各 view 写入 pageActions） */
+const topbarActions = usePageActions(computed(() => route.path))
 /** 顶栏「当前选中」信息（各页写入，见 usePageStats.js 的 pageSelection） */
 const topbarSelection = computed(() => pageSelection[route.path] || null)
 
