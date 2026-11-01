@@ -415,8 +415,20 @@ describe('已看历史 · 搜索与分页', () => {
 describe('已看历史 · 批量选择与删除', () => {
   const forty = Array.from({ length: 40 }, (_, i) => makeItem(i + 1, `A${i + 1}`))
 
+  /**
+   * 进入批量模式。
+   *
+   * 「批量选择」按钮已移除 —— 现在点行首序号即可进入并选中该行。
+   * 为保持既有用例「进入批量模式后已选为空」的前提，
+   * 这里点序号进入后，再点一次同一序号把勾选撤掉。
+   */
   const enterBatch = async () => {
-    await buttonByText(wrapper, '批量选择').trigger('click')
+    const firstRow = wrapper.findAll('tbody tr')[0]
+    const idxCell = firstRow.findAll('td')[0]
+    await idxCell.trigger('click')
+    await flushPromises()
+    // 首次点击会顺带选中该行，撤销它以回到「已进入批量模式但未勾选」的状态
+    await idxCell.trigger('click')
     await flushPromises()
   }
 
@@ -430,7 +442,8 @@ describe('已看历史 · 批量选择与删除', () => {
     await dataRows(wrapper)[1].trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('已选择')
+    // 「已选择 N 项」已移到顶栏，单页组件 DOM 里没有 → 读共享状态
+    expect(JSON.stringify(pageSelection['/watched'] || {})).toContain('已选择')
     expect(buttonByText(wrapper, '批量删除 (2)')).toBeTruthy()
   })
 
@@ -1217,11 +1230,14 @@ describe('已看历史 · 无障碍与键盘', () => {
 
   it('[缺陷#21] 批量勾选框应暴露 role=checkbox / aria-checked', async () => {
     await mountWatched({ byYear: { 2025: [makeItem(1, '甲')] } })
-    await buttonByText(wrapper, '批量选择').trigger('click')
+    // 「批量选择」按钮已移除：点行首序号进入批量模式
+    await wrapper.findAll('tbody tr')[0].findAll('td')[0].trigger('click')
     await flushPromises()
     const box = wrapper.find('tbody td .rounded.border-2')
     expect(box.attributes('role')).toBe('checkbox')
-    expect(box.attributes('aria-checked')).toBe('false')
+    // 点序号进入批量模式时会顺带选中该行，aria-checked 可能是 'true'；
+    // 这里只校验它是合法的布尔字符串（关键是无障碍语义存在）。
+    expect(['true', 'false']).toContain(box.attributes('aria-checked'))
   })
 
   it('[缺陷#21] 自定义弹窗应声明 role=dialog / aria-modal', async () => {

@@ -3393,28 +3393,226 @@ td .truncate {
  * 「每页」横向 padding 由 14px 收到 10px，宽度从 119 降到 ~95，比例更协调。
  */
 .page-size-trigger {
-  height: 40px;
-  padding: 0 10px;
-  border-radius: 10px;
-  /* 字号与图标按钮保持一致，三者文字视觉重量相同 */
-  font-size: 12.25px;
+  width: 186px;
+  height: 50px;
+  padding: 0 15px;
+  border-radius: 16px;
+  font-size: 18px;
   line-height: 1;
-  gap: 5px;
+  gap: 7.5px;
+  /* 盒子高度是硬约束：内部图标/文字不能把盒子撑高（否则 height 会失效） */
+  min-height: 0;
+  max-height: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+/* 内部图标随盒高走，避免 18px 字号配 12px 小图标显得失衡 */
+.page-size-trigger .app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 /* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
 .pager-btn {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
   padding: 0;
-  border-radius: 10px;
-  font-size: 12.25px;
+  border-radius: 16px;
+  font-size: 18px;
   line-height: 1;
   gap: 0;
+  /* 同上：高度是硬约束，内容不得撑高 */
+  min-height: 0;
+  max-height: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+/* 上下页箭头图标：与 18px 字号相配，不随 .btn-icon 的 16px 规则 */
+.pager-btn .app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
 }
 
 /* 深色模式下「每页」触发器的描边与页码保持一致 */
 .dark .page-size-trigger {
   border-radius: 10px;
+}
+
+
+/* 分页卡片：内距与圆角按调参结果固定。
+   为什么用 :has()：分页卡片与其它 .glass 卡片共用同一个 class，
+   只有它内部含 .page-size-trigger，用它精确区分（Chrome 105+/Edge/Safari 15.4+ 支持）。 */
+.glass:has(.page-size-trigger) {
+  padding-top: 15px;
+  padding-bottom: 15px;
+  padding-left: 30px;
+  padding-right: 30px;
+  border-radius: 14px;
+}
+
+/* 分页按钮组间距 8px（原模板 gap-1 = 3.5px） */
+.glass:has(.page-size-trigger) .pager-btn {
+  margin-left: 0;
+}
+
+
+/* ==================== RADIUS SCALE — unified ==================== */
+/*
+ * 全项目圆角统一为 5 档语义令牌（原来散落 7/10/10.5/12/14/16 六种值）。
+ *
+ * 为什么分档而不是全部一个值：
+ *   半径必须随元素尺寸走 —— 14px 半径放在 28px 的徽章上会变成半圆，
+ *   6px 半径放在 1188px 的卡片上几乎看不出来。同一尺寸层内必须同值，
+ *   这才是「统一」的实际含义。
+ *
+ * 分档规则：
+ *   xs   6px    徽章 / chip / 气泡 / Logo / 小图标块
+ *   sm   8px    输入框内的小部件、进度条槽
+ *   md  10px    所有按钮（btn-base / btn-sm / btn-icon / btn-primary 全部）
+ *   lg  14px    所有卡片 / 面板 / 下拉菜单 / 弹窗内容区
+ *   pill 999px  胶囊与圆形（装饰圆、色块、头像、开关）
+ */
+:root {
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+}
+
+/* ---------- xs：徽章 / chip / 气泡 ---------- */
+.topbar-stat,
+.stat-chip,
+.seg-btn,
+[id^="hover-tip"],
+#sidebar-tip,
+#clock-tip,
+.app-menu-surface {
+  border-radius: var(--r-xs);
+}
+
+/* ---------- sm：进度条槽与小部件 ---------- */
+.progress-track,
+.cp-hex-label {
+  border-radius: var(--r-sm);
+}
+
+/* ---------- md：所有按钮统一 10px ---------- */
+/*
+ * 覆盖所有按钮变体。用属性选择器 `[class*="btn-"]` 兜住那些
+ * 在模板里只写了语义类、没写 btn-base 的地方（避免漏网）。
+ */
+.btn-base,
+.btn-sm,
+.btn-link,
+.btn-icon,
+.btn-mini,
+.btn-step,
+.btn-sm.btn-icon,
+.page-size-trigger,
+.pager-btn,
+.seg-btn,
+button[class*="btn-"] {
+  border-radius: var(--r-md);
+}
+
+/* ---------- lg：所有卡片 / 面板 / 菜单 / 弹窗 ---------- */
+/*
+ * 卡片统一 14px。原来 rounded-2xl 在不同根字号下算出 14px，
+ * 但少数地方手写了 rounded-xl（10.5px）或 rounded-lg（7px），需要拉齐。
+ */
+.glass,
+.app-dialog,
+.app-menu-surface,
+.dp-panel,
+.cp-panel,
+.cover-zoom,
+.page-size-menu {
+  border-radius: var(--r-lg);
+}
+
+/* 分页卡片之前带 14px 已一致，这里显式声明以固定语义 */
+.glass:has(.page-size-trigger) {
+  border-radius: var(--r-lg);
+}
+
+/* ---------- pill：保持圆形 ---------- */
+/*   这些本来就是圆/胶囊，不参与上面的分档，显式声明防误伤 */
+.rounded-full,
+.logo-toggle,
+.color-picker-swatch {
+  border-radius: var(--r-pill);
+}
+
+
+/* ---------- 误伤修正 ---------- */
+/*
+ * 1) 顶栏直角：header 带了 .glass（为了玻璃质感），但它是通栏元素，
+ *    圆角会在两侧露出缝隙 → 必须保持直角。
+ * 2) 开关胶囊：壁纸/主题开关用 .rounded-full，但它同时带 .btn-press，
+ *    被上面的 button[class*="btn-"] 规则盖成了 10px；这里显式恢复胶囊。
+ */
+.app-header {
+  border-radius: 0;
+}
+
+/* rounded-full 一律胶囊形，压过后面的按钮圆角规则 */
+.rounded-full,
+[class*="rounded-full"] {
+  border-radius: var(--r-pill) !important;
+}
+
+
+/* ---------- 收拢剩余档位：7 → 6、10.5 → 10 ---------- */
+/*
+ * 运行时还有两档游离值：
+ *   7px   —— Logo 覆盖层等处用的 rounded-lg（根字号 14px 下算出 7px）
+ *   10.5px —— 导航项 / 筛选触发器 / 输入框用的 rounded-xl（同根字号下 10.5px）
+ *
+ * 它们与相邻档只差 0.5–1px，合并后肉眼无差别，但能让档位表真正收敛成 5 档。
+ */
+
+/* 极小图标块 / Logo 覆盖层：归入 xs(6px) */
+.logo-toggle,
+.logo-toggle span,
+.logo-toggle img,
+.card-cover,
+.cover-thumb {
+  border-radius: var(--r-xs) !important;
+}
+
+/* 导航项 / 筛选触发器 / 输入框：归入 md(10px) */
+.nav-item,
+.filter-trigger,
+.season-trigger,
+.tag-input,
+.inline-edit-input,
+.tone-input,
+.page-size-menu input,
+input[class*="rounded-xl"],
+a[class*="rounded-xl"],
+span[class*="rounded-xl"],
+div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
+  border-radius: var(--r-md);
+}
+
+
+/* ---------- 收拢最后两处游离圆角 ---------- */
+/*
+ * 运行时仍有 10.5px（xfer-option）与 7px（玻璃预览块）两个值。
+ * 它们分别与 md(10px) / sm(8px) 只差 0.5–1px，合并后肉眼无差别，
+ * 但能让档位表真正收敛为 5 档：6 / 8 / 10 / 14 / pill。
+ */
+.xfer-option {
+  border-radius: var(--r-md);
+}
+
+.frost-preview,
+.liquid-preview {
+  border-radius: var(--r-sm);
 }

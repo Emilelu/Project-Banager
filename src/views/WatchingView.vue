@@ -46,7 +46,7 @@
 
         <div key="sep-1" class="toolbar-sep"></div>
         <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
-          <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
+          <AppIcon scale="sm" name="checkbox" />{{ batchMode ? tt('watching.cancelBatchSelect') : tt('watching.batchSelect') }}
         </button>
         <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length===0" @click="batchDelete"
           class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
@@ -55,6 +55,10 @@
         <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
           <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
         </button>
+          <!-- 反选：在当前页已选/未选之间翻转，方便「删掉除某几条外的全部」 -->
+          <button v-if="batchMode" key="invert" @click="invertSelection" class="btn-base btn-neutral">
+            <AppIcon scale="sm" name="swap" />{{ tt('watching.invertSelection') }}
+          </button>
         <button key="clear" @click="openClearDialog" class="btn-base btn-neutral">
           <AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}
         </button>
@@ -63,12 +67,7 @@
           <AppIcon scale="sm" name="timeSort" /> {{ timeSortAsc ? tt('watching.timeAsc') : tt('watching.timeDesc') }}
         </button>
         </transition-group>
-      <transition name="sel-anim">
-          <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
-            {{ tt('watching.selectedCount', { count: checkedIds.length }) }}
-          </div>
-      </transition>
+      <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支），此处不再需要 transition -->
 
     </div>
 
@@ -685,6 +684,23 @@ const toggleSelectAll = () => {
   }
 }
 
+
+/**
+ * 反选：把已选的取消、未选的选中。
+ *
+ * 追番页是周历卡片视图、不分页，所以作用于 watchingList 全量
+ * （另两页表格有分页，那边作用于当前页）。
+ */
+const invertSelection = () => {
+  const allIds = watchingList.value.map(i => i.id)
+  const cur = new Set(checkedIds.value)
+  for (const id of allIds) {
+    if (cur.has(id)) cur.delete(id)
+    else cur.add(id)
+  }
+  checkedIds.value = [...cur]
+}
+
 const batchDelete = () => {
   if (checkedIds.value.length === 0) return
   confirmTarget.value = String(checkedIds.value.length)
@@ -1208,10 +1224,21 @@ watch(
 const ROUTE_KEY = '/watching'
 
 /** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
+/**
+ * 顶栏「当前选中 / 已选择 N 项」同步（含批量选中分支）。
+ */
 watch(
-  selected,
-  (sel) => {
-    if (!sel || batchMode.value) {
+  [selected, batchMode, () => checkedIds.value.length],
+  () => {
+    if (batchMode.value) {
+      const n = checkedIds.value.length
+      setPageSelection(ROUTE_KEY, n > 0
+        ? { name: tt('watching.selectedCount', { count: n }), dot: 'danger', items: [] }
+        : null)
+      return
+    }
+    const sel = selected.value
+    if (!sel) {
       setPageSelection(ROUTE_KEY, null)
       return
     }

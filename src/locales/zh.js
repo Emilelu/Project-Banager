@@ -166,6 +166,8 @@ export default {
   'watching.moveToWatched': '移至已看',
   'watching.delete': '删除',
   'watching.batchSelect': '批量选择',
+  'watching.cancelBatchSelect': '取消批量选择',
+  'watching.invertSelection': '反选',
   'watching.clearList': '清空列表',
   'watching.timeAsc': '时间 早→晚',
   'watching.timeDesc': '时间 晚→早',

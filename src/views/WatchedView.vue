@@ -101,15 +101,17 @@
           </div>
 
           <div key="sep-1" class="toolbar-sep"></div>
-          <button key="batch" @click="toggleBatchMode" class="btn-base" :class="batchMode ? 'btn-primary' : 'btn-neutral'">
-            <AppIcon scale="sm" name="checkbox" />{{ tt('watching.batchSelect') }}
-          </button>
+          <!-- 「批量选择」按钮已移除：点击行首序号即可选中该行。 -->
           <button v-if="batchMode" key="batch-del" :disabled="checkedIds.length===0" @click="batchDelete"
             class="btn-base btn-danger disabled:opacity-40 disabled:cursor-not-allowed">
             <AppIcon scale="sm" name="trash" />{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}
           </button>
           <button v-if="batchMode" key="sel-all" @click="toggleSelectAll" class="btn-base btn-neutral">
             <AppIcon scale="sm" name="checkbox" />{{ isAllChecked ? tt('watching.unselectAll') : tt('watching.selectAll') }}
+          </button>
+          <!-- 反选：在当前页已选/未选之间翻转，方便「删掉除某几条外的全部」 -->
+          <button v-if="batchMode" key="invert" @click="invertSelection" class="btn-base btn-neutral">
+            <AppIcon scale="sm" name="swap" />{{ tt('watching.invertSelection') }}
           </button>
           <button key="clear" @click="openClearDialog" class="btn-base btn-neutral"><AppIcon scale="sm" name="clear" />{{ tt('watching.clearList') }}</button>
           <div key="sep-2" class="toolbar-sep"></div>
@@ -118,10 +120,7 @@
           <button v-if="selectedYear && selectedYear !== '__unclassified__'" key="del-year" @click="openDeleteYearDialog" class="btn-base btn-danger"><AppIcon scale="sm" name="trash" />{{ tt('watched.deleteYear') }}</button>
         </transition-group>
       </div>
-      <div v-if="batchMode && checkedIds.length > 0" class="mt-2 text-sm text-danger flex items-center gap-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-danger"></span>
-        {{ tt('watching.selectedCount', { count: checkedIds.length }) }}
-      </div>
+      <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
 
     </div>
 
@@ -137,7 +136,7 @@
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
               <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
-                class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
+                class="w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all mx-auto"
                 :class="isAllChecked?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="isAllChecked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
@@ -181,12 +180,18 @@
               <div role="checkbox" tabindex="0" :aria-checked="checkedIds.includes(item.id) ? 'true' : 'false'"
                 :aria-label="tt('card.checkLabel', { name: item.name })"
                 @keydown.enter.prevent="toggleCheck(item.id)" @keydown.space.prevent="toggleCheck(item.id)"
-                class="w-4 h-4 rounded border-2 flex items-center justify-center transition-all mx-auto"
+                class="w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all mx-auto"
                 :class="checkedIds.includes(item.id)?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="checkedIds.includes(item.id)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
               </div>
             </td>
-            <td class="text-center px-2 py-2.5 text-xs text-gray-400 font-mono">{{ idx+1 }}</td>
+            <!-- 序号：点击即切换该行选中态（无需先点「批量选择」）。
+                 用 idx+1 显示、item.id 记录 —— 序号随翻页/排序变化，id 不变。 -->
+            <td class="text-center px-2 py-2.5 cursor-pointer select-none"
+              @click.stop="toggleCheckFromIndex(item)" @dblclick.stop>
+              <span class="text-xs font-mono tabular-nums transition-colors"
+                :class="checkedIds.includes(item.id) ? 'text-primary font-bold' : 'text-gray-400 hover:text-primary'">{{ (currentPage - 1) * pageSize + idx + 1 }}</span>
+            </td>
             <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'name')"
               @dblclick.stop="onFieldDblclick(item, 'name')"
               @keydown="onCellKeydown($event, item, 'name')">
@@ -278,7 +283,9 @@
             <div v-if="showPageSizeMenu" class="fixed inset-0 z-40" @click="showPageSizeMenu=false"></div>
           </div>
         </div>
-        <div class="flex items-center gap-1">
+        <!-- 分页按钮组：间距 8px（调参结果，原 gap-1 = 3.5px 偏挤）。
+             用 gap-[8px] 而非 gap-2：本工程根字号 14px，gap-2 = 0.5rem = 7px，差 1px -->
+        <div class="flex items-center gap-[8px]">
           <button :disabled="currentPage<=1" @click="currentPage--"
             class="btn-base btn-icon pager-btn" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
             :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
@@ -353,22 +360,25 @@
       </transition>
       <transition name="modal">
         <div v-if="showClearDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog" ref="clearDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-clear-title">
+          <div class="relative glass rounded-2xl shadow-2xl w-[33rem] border border-white/40 pointer-events-auto app-dialog" ref="clearDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-clear-title">
+            <!-- 正文与图二（批量删除确认）保持同一结构：只放图标 + 标题 + 说明，
+                 动作按钮统一收进底部栏 —— 原来两个横向大长条按钮显得过重，
+                 且与其它确认弹窗的按钮位置不一致。 -->
             <div class="px-6 py-5 text-center">
               <div class="text-4xl mb-3" aria-hidden="true"><AppIcon scale="sm" name="clear" /></div>
               <h3 id="watched-clear-title" class="text-lg font-bold text-gray-800 mb-2">{{ tt('clearScope.title') }}</h3>
-              <p class="text-sm text-gray-500 mb-4">{{ tt('clearScope.hint') }}</p>
-              <div class="flex flex-col gap-3">
-                <button @click="doClearYear" class="btn-base btn-toned">
-                  {{ tt('clearScope.clearYear', { year: selectedYear }) }}
-                </button>
-                <button @click="doClearAll" class="btn-base btn-danger">
-                  {{ tt('clearScope.clearAll') }}
-                </button>
-              </div>
+              <p class="text-sm text-gray-500">{{ tt('clearScope.hint') }}</p>
             </div>
-            <div class="px-6 py-4 border-t border-white/20 flex justify-center">
-              <button @click="showClearDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+            <!-- 三个按钮并排一行（不换行）：cancel 固定宽度，两个动作按钮等分剩余空间。
+                 原来用 flex-wrap 时最长那个会被挤到第二行，视觉不整齐。 -->
+            <div class="px-6 py-4 border-t border-white/20 flex items-center justify-center gap-2.5 flex-nowrap">
+              <button @click="showClearDialog=false" class="btn-base btn-neutral shrink-0">{{ tt('common.cancel') }}</button>
+              <button @click="doClearYear" class="btn-base btn-toned flex-auto whitespace-nowrap">
+                {{ tt('clearScope.clearYear', { year: selectedYear }) }}
+              </button>
+              <button @click="doClearAll" class="btn-base btn-danger flex-auto whitespace-nowrap">
+                {{ tt('clearScope.clearAll') }}
+              </button>
             </div>
           </div>
         </div>
@@ -769,6 +779,15 @@ const batchMode = ref(false)
 const checkedIds = ref([])
 const isAllChecked = computed(() => paginatedList.value.length > 0 && paginatedList.value.every(item => checkedIds.value.includes(item.id)))
 
+/**
+ * 点击行首序号 → 切换该行选中态（首次点击顺带打开批量模式）。
+ * 参数是整条 item 而非 idx：内部始终用 item.id，因为序号会随翻页/排序变化。
+ */
+const toggleCheckFromIndex = (item) => {
+  if (!batchMode.value) batchMode.value = true
+  toggleCheck(item.id)
+}
+
 const toggleBatchMode = () => {
   batchMode.value = !batchMode.value
   checkedIds.value = []
@@ -797,6 +816,22 @@ const toggleSelectAll = () => {
   checkedIds.value = isAllChecked.value
     ? checkedIds.value.filter(id => !pageIds.includes(id))
     : [...new Set([...checkedIds.value, ...pageIds])]
+}
+
+
+/**
+ * 反选：把当前页已选的取消、未选的选中。
+ * 只作用于**当前页**（与 toggleSelectAll 一致），不跨页翻转 ——
+ * 跨页翻转会让用户看不到哪些被选中，容易误删。
+ */
+const invertSelection = () => {
+  const pageIds = paginatedList.value.map(i => i.id)
+  const cur = new Set(checkedIds.value)
+  for (const id of pageIds) {
+    if (cur.has(id)) cur.delete(id)
+    else cur.add(id)
+  }
+  checkedIds.value = [...cur]
 }
 
 const batchDelete = () => {
@@ -1410,10 +1445,21 @@ function hideCoverZoom() {
 const ROUTE_KEY = '/watched'
 
 /** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
+/**
+ * 顶栏「当前选中 / 已选择 N 项」同步（含批量选中分支）。
+ */
 watch(
-  selected,
-  (sel) => {
-    if (!sel || batchMode.value) {
+  [selected, batchMode, () => checkedIds.value.length],
+  () => {
+    if (batchMode.value) {
+      const n = checkedIds.value.length
+      setPageSelection(ROUTE_KEY, n > 0
+        ? { name: tt('watching.selectedCount', { count: n }), dot: 'danger', items: [] }
+        : null)
+      return
+    }
+    const sel = selected.value
+    if (!sel) {
       setPageSelection(ROUTE_KEY, null)
       return
     }

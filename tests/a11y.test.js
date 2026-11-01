@@ -13,6 +13,7 @@
  * 数据层与 Toast 全 mock，组件用真实实现（同 watched-import.test.js 约定）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { pageSelection } from '../src/composables/usePageStats'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -192,6 +193,23 @@ afterEach(() => {
 // ===========================================================================
 // 1. 弹窗 role / aria-modal / aria-labelledby
 // ===========================================================================
+
+/**
+ * 进入批量模式并清空已选。
+ *
+ * 「批量选择」按钮已移除 —— 现在点行首序号进入，但会顺带选中该行，
+ * 所以这里再点一次把勾选撤掉，回到「已进入但未选」的状态。
+ */
+async function enterBatchClean(scope = wrapper) {
+  const firstRow = scope.findAll('tbody tr')[0]
+  if (!firstRow) return
+  const idxCell = firstRow.findAll('td')[0]
+  await idxCell.trigger('click')
+  await flushPromises()
+  await idxCell.trigger('click')
+  await flushPromises()
+}
+
 describe('弹窗语义：role=dialog / aria-modal / aria-labelledby', () => {
   const assertDialogSemantics = (dlg) => {
     expect(dlg).toBeTruthy()
@@ -394,8 +412,7 @@ describe('可排序表头：tabindex / role=button / aria-sort', () => {
 describe('批量勾选框：role=checkbox / aria-checked / 键盘切换', () => {
   it('等番页：勾选框 aria-checked 随点选变化，空格 / Enter 均可切换', async () => {
     await mountRemaining([remainingRow({ name: '甲' }), remainingRow({ id: 2, name: '乙' })])
-    findButton('批量选择').click()
-    await flushPromises()
+    await enterBatchClean()
 
     const boxes = wrapper.findAll('tbody [role="checkbox"]')
     expect(boxes.length).toBe(2)
@@ -406,7 +423,8 @@ describe('批量勾选框：role=checkbox / aria-checked / 键盘切换', () => 
     await boxes[0].trigger('keydown', { key: ' ' })
     await nextTick()
     expect(boxes[0].attributes('aria-checked')).toBe('true')
-    expect(wrapper.text()).toContain('已选择')
+    // 「已选择 N 项」已移到顶栏，单页组件 DOM 里没有 → 读共享状态
+    expect(JSON.stringify(pageSelection['/remaining'] || {})).toContain('已选择')
 
     await boxes[0].trigger('keydown', { key: 'Enter' })
     await nextTick()
@@ -415,8 +433,7 @@ describe('批量勾选框：role=checkbox / aria-checked / 键盘切换', () => 
 
   it('等番页：全选框 aria-checked 反映当前页是否全选', async () => {
     await mountRemaining([remainingRow({ name: '甲' })])
-    findButton('批量选择').click()
-    await flushPromises()
+    await enterBatchClean()
 
     const all = wrapper.find('thead [role="checkbox"]')
     expect(all.attributes('role')).toBe('checkbox')
@@ -456,7 +473,7 @@ describe('行内编辑输入框：aria-label 说明编辑字段', () => {
   it('等番页：双击番剧名称后输入框带 aria-label', async () => {
     await mountRemaining([remainingRow({ name: '甲' })])
     const row = wrapper.findAll('tbody tr').find((r) => r.text().includes('甲'))
-    await row.findAll('td')[0].trigger('dblclick')
+    await row.findAll('td')[1].trigger('dblclick')  // td[0] 现在是序号列，名称在 td[1]
     await nextTick()
 
     const input = wrapper.find('input.inline-edit-input')
@@ -469,11 +486,11 @@ describe('行内编辑输入框：aria-label 说明编辑字段', () => {
     await mountRemaining([remainingRow({ name: '乙' })])
     const row = wrapper.findAll('tbody tr').find((r) => r.text().includes('乙'))
 
-    await row.findAll('td')[1].trigger('dblclick')
+    await row.findAll('td')[2].trigger('dblclick')
     await nextTick()
     expect(wrapper.find('input.inline-edit-input').attributes('aria-label')).toContain('预计日期')
 
-    await row.findAll('td')[3].trigger('dblclick')
+    await row.findAll('td')[4].trigger('dblclick')
     await nextTick()
     expect(wrapper.find('input.inline-edit-input').attributes('aria-label')).toContain('备注')
   })

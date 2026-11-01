@@ -169,6 +169,8 @@ export default {
   'watching.moveToWatched': '視聴履歴へ移動',
   'watching.delete': '削除',
   'watching.batchSelect': 'まとめて選択',
+  'watching.cancelBatchSelect': '一括選択を解除',
+  'watching.invertSelection': '選択を反転',
   'watching.clearList': 'リストをクリア',
   'watching.timeAsc': '時間 早→遅',
   'watching.timeDesc': '時間 遅→早',

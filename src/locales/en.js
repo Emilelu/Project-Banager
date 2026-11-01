@@ -169,6 +169,8 @@ export default {
   'watching.moveToWatched': 'Move to History',
   'watching.delete': 'Delete',
   'watching.batchSelect': 'Batch Select',
+  'watching.cancelBatchSelect': 'Cancel batch select',
+  'watching.invertSelection': 'Invert selection',
   'watching.clearList': 'Clear List',
   'watching.timeAsc': 'Time early → late',
   'watching.timeDesc': 'Time late → early',

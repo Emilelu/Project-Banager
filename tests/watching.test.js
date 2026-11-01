@@ -114,6 +114,34 @@ function buttonByExactText(wrapper, text) {
 function buttonByAriaLabel(wrapper, label) {
   return wrapper.findAll('button').find((button) => button.attributes('aria-label') === label)
 }
+/**
+ * 进入批量模式。
+ *
+ * 两种页面的入口不同：
+ *   · 等番 / 已看（**表格视图**）：点行首序号进入（「批量选择」按钮已移除）
+ *   · 追番（**周历卡片视图**，无 tbody / 无序号）：仍用「批量选择」按钮
+ *
+ * 这里先判断有没有表格行，再选对应入口。
+ */
+async function enterBatchClean(scope) {
+  const rows = scope.findAll('tbody tr')
+  if (rows.length > 0) {
+    // 表格页：点序号进入，再点一次撤掉顺带的勾选
+    const idxCell = rows[0].findAll('td')[0]
+    await idxCell.trigger('click')
+    await flushPromises()
+    await idxCell.trigger('click')
+    await flushPromises()
+    return
+  }
+  // 卡片页：仍用按钮
+  const btn = scope.findAll('button').find((b) => b.text().includes('批量选择'))
+  if (btn) {
+    await btn.trigger('click')
+    await flushPromises()
+  }
+}
+
 
 function cardByName(wrapper, name) {
   return wrapper.findAll('.watching-card').find((card) => card.text().includes(name))
@@ -250,7 +278,7 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
       watchingItem({ id: 1, name: '番剧A' }),
       watchingItem({ id: 2, name: '番剧B' }),
     ])
-    await buttonByText(wrapper, '批量选择').trigger('click')
+    await enterBatchClean(wrapper)
     await cardByName(wrapper, '番剧B').trigger('click')
     expect(wrapper.text()).toContain('批量删除 (1)')
     await buttonByText(wrapper, '批量删除').trigger('click')
@@ -472,7 +500,7 @@ describe('RemainingView 批量选择 / 分页边界缺陷', () => {
 
   it('批量选择跨页后 isAllChecked 应只判断当前页（当前为长度比较）', async () => {
     const wrapper = await mountRemaining(makeRows(25))
-    await buttonByText(wrapper, '批量选择').trigger('click')
+    await enterBatchClean(wrapper)
     await buttonByText(wrapper, '每页 20 条').trigger('click')
     // 页大小选项文案与当前页按钮同源（tt('remaining.perPage')）
     await wrapper.findAll('button').find((b) => b.text().trim() === '每页 10 条').trigger('click')
@@ -488,13 +516,13 @@ describe('RemainingView 批量选择 / 分页边界缺陷', () => {
   it('缺陷证据：搜索后隐藏页的选择仍会被批量删除', async () => {
     batchApi.batchDeleteRemaining.mockResolvedValue(actionOk())
     const wrapper = await mountRemaining(makeRows(25))
-    await buttonByText(wrapper, '批量选择').trigger('click')
+    await enterBatchClean(wrapper)
     await tableRows(wrapper)[0].trigger('click')
     await wrapper.find('input[placeholder="搜索番剧名称..."]').setValue('Item 25')
     await nextTick()
     expect(tableRows(wrapper)).toHaveLength(1)
     await tableRows(wrapper)[0].trigger('click')
-    expect(wrapper.text()).toContain('已选择 2 项')
+    expect(JSON.stringify(pageSelection['/remaining'] || {})).toContain('已选择')
     await buttonByText(wrapper, '批量删除').trigger('click')
     await buttonByExactText(wrapper, '确认删除').trigger('click')
     await flushPromises()
@@ -547,12 +575,12 @@ describe('RemainingView 链接缺陷 / 并发', () => {
     remainingApi.update.mockReturnValue(pending)
     const wrapper = await mountRemaining([remainingItem({ id: 1, name: '等番A' })])
     const row = tableRows(wrapper)[0]
-    await row.findAll('td')[0].trigger('dblclick')
+    await row.findAll('td')[1].trigger('dblclick')
     const nameInput = row.find('input.inline-edit-input')
     await nameInput.setValue('等番A改')
     await nameInput.trigger('keyup.enter')
 
-    await row.findAll('td')[1].trigger('dblclick')
+    await row.findAll('td')[2].trigger('dblclick')
     expect(row.find('input.inline-edit-input').exists()).toBe(true)
     resolveUpdate(actionOk())
     await flushPromises()

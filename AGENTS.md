@@ -34,6 +34,50 @@ PowerShell 5.1 的很多文件操作走 ACP，会**把 UTF-8 源码里的中文�
 
 ### 已做的防护
 - `.gitattributes`：`* text=auto eol=lf`，源码统一 UTF-8 + LF；二进制文件（xlsx/db/wasm/png）声明为 binary。
+
+---
+
+## ⚠️ PowerShell 转义：第二个致命坑（已根治）
+
+### 症状
+
+`node -e "..."` 写短脚本时，只要内容含下列任一字符就会**静默被 PowerShell 改写**：
+
+| 字符 | PowerShell 的处理 | 结果 |
+|---|---|---|
+| `` ` `` 反引号 | 当作转义符 | `` `hello` `` → `\hello\` |
+| `$` | 当变量展开 | `${name}` → 空 |
+| `"` | 当字符串边界 | 引号提前闭合 |
+| `&&` `\|\|` | 当语句分隔符 | `a && b` → `a`，后面报错 |
+| `<` `>` | 当重定向 | 内容被写进文件 |
+| `@` `!` | 当数组/否定符 | 语法错 |
+
+**这不是 Node 的问题**，是 PowerShell 在传给 node **之前**就解析了一遍。
+无论怎么加引号转义，只要内容带元字符或非 ASCII，总有场景会挂 ——
+本会话曾因此反复失败十余次（`node -e` 里写模板串、正则、`||` 表达式全部报
+`Expected ',', got '<eof>'` / `Missing closing ')'`）。
+
+### 根治方法：内容只走文件，不走命令行
+
+新增 **`scripts/run.mjs`**：命令行只接受一个**纯 ASCII 文件路径**（不含任何元字符），
+JS 代码本身从文件读取 → PowerShell 无内容可破坏。
+
+```bash
+# 推荐：用 write 工具把代码写到 tmp/x.mjs，然后
+node scripts/run.mjs tmp/x.mjs              # 执行
+node scripts/run.mjs --clean tmp/x.mjs      # 执行后自动删除
+node scripts/run.mjs --check src/db/index.js  # 只做语法检查
+node scripts/run.mjs --stdin                # 从 stdin 读代码执行
+node scripts/run.mjs --safe "console.log(1)"  # 内联执行（严格校验，含元字符直接拒绝）
+```
+
+**铁律**：需要写带反引号 / 中文 / 正则 / `$` / `&&` / `||` 的脚本时，
+**永远用 `write` 工具写到 `tmp/` 下的 `.mjs` 文件**，再用 `scripts/run.mjs` 执行。
+不要写 `node -e "..."`，不要用 PowerShell 的 here-string。
+
+`--safe` 模式会主动检测元字符与非法定字符并**拒绝执行**（而不是让你以为跑通了、
+实际是改过的代码在跑），避免静默错误。
+
 - `scripts/text.js`：安全文本工具 + 体检器，写回前会拒绝含 U+FFFD 的内容。
 - PowerShell profile 已配置默认 UTF-8（`Read-Utf8` / `Write-Utf8` 辅助函数）。
 
