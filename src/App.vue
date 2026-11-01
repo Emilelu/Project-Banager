@@ -17,7 +17,7 @@
            悬浮时 logo 淡出、面板图标淡入（同一位置、同一尺寸，无位移跳动），
            这样既省掉了独立按钮占用的垂直空间，交互入口也更容易发现。 -->
       <div class="relative z-10 border-b border-white/10 h-14 flex items-center"
-        :class="sidebarCollapsed ? 'px-2' : 'px-4'">
+        :class="sidebarCollapsed ? 'px-2 justify-center' : 'px-4'">
         <div class="flex items-center gap-3" :class="sidebarCollapsed ? 'justify-center' : ''">
           <button type="button" @click="toggleSidebar"
             class="relative w-8 h-8 rounded-lg shrink-0 overflow-hidden group cursor-pointer
@@ -175,6 +175,20 @@
               <span v-for="(s, i) in topbarStats" :key="i" class="topbar-stat"
                 :class="s.tone === 'neutral' ? 'is-neutral' : ''">{{ s.text }}</span>
             </div>
+
+            <!-- 当前选中：原本在卡片里独占一行，用户要求移到顶栏标题右侧。
+                 复用 .topbar-stat 徽章样式，前面加一个状态圆点。
+                 不放进上面的 title-swap transition 里 —— 它随选中项变化，
+                 但页面标题不变时不该整块重放动画。 -->
+            <transition name="sel-anim">
+              <div v-if="topbarSelection" class="flex items-center gap-2 min-w-0">
+                <span class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                  :class="topbarSelection.dot === 'danger' ? 'bg-danger' : 'bg-primary'"></span>
+                <span class="text-xs text-gray-500 shrink-0">{{ topbarSelection.name }}</span>
+                <span v-for="(s, i) in topbarSelection.items" :key="i" class="topbar-stat"
+                  :class="s.tone === 'neutral' ? 'is-neutral' : ''">{{ s.text }}</span>
+              </div>
+            </transition>
           </div>
         </transition>
         <div class="flex items-center gap-3">
@@ -402,7 +416,7 @@ import { useAppearance } from './composables/useAppearance'
 import { useDialogFocus } from './composables/useDialogFocus'
 import { useI18n } from './composables/useI18n'
 // 顶栏计数徽章共享状态：各页写入，顶栏读取（见 usePageStats.js）
-import { pageStats } from './composables/usePageStats'
+import { pageStats, pageSelection } from './composables/usePageStats'
 import logoUrl from './assets/logo.webp'
 
 const route = useRoute()
@@ -1203,6 +1217,9 @@ const currentIcon = computed(() => {
  * 顶栏页面标题旁边，避免每个 div 都占一行标题。
  */
 const topbarStats = computed(() => pageStats[route.path] || [])
+
+/** 顶栏「当前选中」信息（各页写入，见 usePageStats.js 的 pageSelection） */
+const topbarSelection = computed(() => pageSelection[route.path] || null)
 
 let timer = null
 /** 首屏入场动画开关：main 挂载时置 true，动画结束即置 false（只播一次） */

@@ -68,13 +68,6 @@
         {{ tt('watching.selectedCount', { count: checkedIds.length }) }}
       </div>
 
-      <transition name="sel-anim">
-          <div v-if="selected && !batchMode" class="mt-2 text-sm text-gray-500 flex items-center gap-2 selectable-text">
-          <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
-          {{ tt('watching.currentSelected') }} <span class="font-bold gradient-text">{{ selected.name }}</span>
-        </div>
-
-      </transition>
       <!-- 拖动提示已移到页面右上角的「帮助」弹窗中，此处不再占位 -->
     </div>
 
@@ -181,16 +174,15 @@
                    把名称顶到下一行（行高随有无封面跳变）。无封面时整块不渲染（不占位），
                    加载失败的行由 rowCoverFailed[id] 记住后不再渲染（不出现裂图）。 -->
               <div v-else class="name-with-tags">
-                <!-- 封面槽位：**始终占位**，有无封面都保留同宽空间，
-                     这样每行名称都从同一水平位置开始，与表头图标对齐。
-                     无封面 / 加载失败时是空的占位块（不可见但有宽度）。
+                <!-- 封面缩略图：只有**真的有封面**时才渲染。
+                     无封面时不留空槽位 —— 用户明确要求「没有封面的行，名称起始位置要和表头图标对齐」。
+                     留空槽会把名称推后约 26px（缩略图 21px + gap 5px），反而更偏右。
                      悬浮时浮出放大预览（见 showCoverZoom）。 -->
                 <img v-if="item.cover_url && !rowCoverFailed[item.id]" :src="item.cover_url"
                   class="cover-thumb cover-thumb--row" alt="" loading="lazy" decoding="async"
                   @error="markRowCoverFailed(item.id)"
                   @mouseenter="showCoverZoom($event, item.cover_url)"
                   @mouseleave="hideCoverZoom" />
-                <span v-else class="cover-thumb cover-thumb--row cover-slot" aria-hidden="true"></span>
                 <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
@@ -548,7 +540,7 @@ import { remainingApi, batchApi } from '../db/api'
 import { compareDateKey, todayStr, validateDate, normalizeDate } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
-import { setPageStats } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection } from '../composables/usePageStats'
 import { defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -1409,7 +1401,29 @@ function hideCoverZoom() {
   coverZoomEl = null
 }
 
+const ROUTE_KEY = '/remaining'
+
+/** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
+watch(
+  selected,
+  (sel) => {
+    if (!sel || batchMode.value) {
+      setPageSelection(ROUTE_KEY, null)
+      return
+    }
+    setPageSelection(ROUTE_KEY, {
+      name: tt('watching.currentSelected'),
+      dot: 'primary',
+      items: [
+        { text: sel.name },
+        ...(sel.expected_date ? [{ text: String(sel.expected_date), tone: 'neutral' }] : []),
+      ],
+    })
+  },
+  { immediate: true, deep: true },)
+
 onUnmounted(() => {
+  clearPageSelection(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })
@@ -1511,13 +1525,6 @@ const unpinLeavingGroup = (el) => {
   align-self: center;
 }
 
-/* 无封面时的等宽占位：与 .cover-thumb--row 几何完全一致，只是不可见。
-   保证每行名称都与表头图标对齐（有无封面都不位移）。 */
-.cover-slot {
-  background: transparent;
-  border-color: transparent;
-  pointer-events: none;
-}
 
 /* 封面放大预览：挂到 body 的固定浮层，与侧栏气泡同一套动效语言 */
 :global(.cover-zoom) {

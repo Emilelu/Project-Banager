@@ -1206,12 +1206,12 @@ class BangumiDatabase {
 
   moveWatchingToRemaining(watchingId) {
     try {
-      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, tags, sort_order FROM watching WHERE id = ?', [watchingId])
       if (!row) return { success: false, error: '未找到记录' }
       this.beginBatch()
       this._run(
-        'INSERT INTO remaining (name, expected_date, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [row.name, '', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, row.sort_order]
+        'INSERT INTO remaining (name, expected_date, cover_url, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.name, '', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, String(row.tags || ''), row.sort_order]
       )
       const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
       if (!removed) throw new Error('源记录删除失败')
@@ -1229,13 +1229,13 @@ class BangumiDatabase {
   moveWatchingToWatched(watchingId, watchDate) {
     try {
       const normalizedDate = this._normalizeDate(watchDate)
-      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, tags, sort_order FROM watching WHERE id = ?', [watchingId])
       if (!row) return { success: false, error: '未找到记录' }
       // 从追番移入已看时清空链接：追番页的链接是追更地址，已看记录不再需要它。
       this.beginBatch()
       this._run(
-        'INSERT INTO watched (name, watch_date, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [row.name, normalizedDate, String(row.cover_url || ''), '', '', row.notes, row.sort_order]
+        'INSERT INTO watched (name, watch_date, cover_url, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.name, normalizedDate, String(row.cover_url || ''), '', '', row.notes, String(row.tags || ''), row.sort_order]
       )
       this._ensureYearLabel(normalizedDate)
       const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
@@ -1271,12 +1271,16 @@ class BangumiDatabase {
 
   moveRemainingToWatching(remainingId, { day_of_week = '', time_slot = '' } = {}) {
     try {
-      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM remaining WHERE id = ?', [remainingId])
+      /*
+       * 必须把 tags 一起搬走：漏了它的话，用户从「等番」移到「追番」后标签会静默丢失
+       * （编辑弹窗里标签变空，但用户没改过它）。cover_url/notes/url 同理。
+       */
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, tags, sort_order FROM remaining WHERE id = ?', [remainingId])
       if (!row) return { success: false, error: '未找到记录' }
       this.beginBatch()
       this._run(
-        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [row.name, day_of_week, time_slot, '0', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, row.sort_order]
+        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.name, day_of_week, time_slot, '0', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, String(row.tags || ''), row.sort_order]
       )
       const removed = this._run('DELETE FROM remaining WHERE id = ?', [remainingId])
       if (!removed) throw new Error('源记录删除失败')

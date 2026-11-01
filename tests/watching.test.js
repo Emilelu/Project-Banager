@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { pageStats } from '../src/composables/usePageStats'
+import { pageStats, pageSelection } from '../src/composables/usePageStats'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -175,13 +175,13 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
     await card.find('button.btn-mini-plus').trigger('click')
     await flushPromises()
     expect(watchingApi.increment).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toMatch(/当前选中:[\s\S]*e2/)
+    expect(JSON.stringify(pageSelection)).toMatch(/e2/)
     expect(card.text()).toContain('2')
 
     await card.find('button.btn-mini-minus').trigger('click')
     await flushPromises()
     expect(watchingApi.decrement).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toMatch(/当前选中:[\s\S]*e1/)
+    expect(JSON.stringify(pageSelection)).toMatch(/e1/)
   })
 
   it('双击集数内联编辑会规范化并更新本地卡片', async () => {
@@ -309,9 +309,11 @@ describe('WatchingView 缺陷复现（it.fails 保留）', () => {
     await input.setValue('5')
     await input.trigger('keyup.enter')
     await flushPromises()
+    await nextTick()
 
-    const selectedHint = wrapper.findAll('div').find((el) => el.text().trim().startsWith('当前选中:'))
-    expect(selectedHint.text()).toMatch(/e5/)
+    const selectedHint = pageSelection['/watching'] ? JSON.stringify(pageSelection['/watching']) : null
+    // 「当前选中」信息已移到顶栏，测试挂载单页组件时读共享状态
+    expect(selectedHint).toMatch(/e5/)
 
     // 新增后应默认选中刚添加的番剧，让用户能立刻 +1 集
     const rowsAfterAdd = await wrapper.findAll('.watching-card')

@@ -44,3 +44,38 @@ export function clearPageStats(key) {
 export function usePageStats(keyRef) {
   return computed(() => (keyRef?.value ? pageStats[keyRef.value] || [] : []))
 }
+
+/* ==================== 当前选中信息 ==================== */
+
+/**
+ * 各页「当前选中」信息（显示在顶栏标题右侧，替代卡片内一整行）。
+ *
+ * 结构：
+ *   { name: '第 1 个高亮字段', items: [{ text, tone }], dot: 'primary'|'danger' }
+ * items 与计数徽章的 text/tone 同构，渲染时复用 .topbar-stat 样式块。
+ */
+export const pageSelection = reactive({
+  '/watching': null,
+  '/remaining': null,
+  '/watched': null,
+})
+
+/**
+ * 写入某页的选中信息；传 null 表示该页当前没有选中项。
+ * @param {string} key 路由 path
+ * @param {null | { name: string, items: Array<{text:string, tone?:string}>, dot?: string }} sel
+ */
+export function setPageSelection(key, sel) {
+  if (!pageSelection[key] && pageSelection[key] !== null) return
+  pageSelection[key] = sel
+}
+
+/** 清空某页选中信息（页面卸载时用） */
+export function clearPageSelection(key) {
+  if (key in pageSelection) pageSelection[key] = null
+}
+
+/** 按当前路由取选中信息 */
+export function usePageSelection(keyRef) {
+  return computed(() => (keyRef?.value ? pageSelection[keyRef.value] || null : null))
+}

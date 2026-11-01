@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { pageStats } from '../src/composables/usePageStats'
+import { pageStats, pageSelection } from '../src/composables/usePageStats'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import * as XLSX from 'xlsx'
@@ -532,12 +532,12 @@ describe('已看历史 · 批量选择与删除', () => {
     await flushPromises()
     await dataRows(wrapper)[0].trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('当前选中')
+    expect(pageSelection['/watched']).not.toBeNull()
 
     await selectYear(wrapper, '2024')
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('当前选中')
+    expect(pageSelection['/watched']).toBeNull()
   })
 })
 

@@ -70,16 +70,6 @@
           </div>
       </transition>
 
-      <transition name="sel-anim">
-          <div v-if="selected && !batchMode" class="mt-3 text-sm text-gray-500 flex items-center gap-2 selectable-text">
-          <span class="inline-block w-2 h-2 rounded-full bg-primary"></span>
-          {{ tt('watching.currentSelected') }} <span class="font-bold gradient-text">{{ selected.name }}</span>
-          <span class="text-primary font-bold">e{{ selected.current_episode }}</span>
-          <span v-if="selected.day_of_week">{{ dayLabel(selected.day_of_week) }}</span>
-          <span v-if="selected.time_slot">{{ selected.time_slot }}</span>
-        </div>
-
-      </transition>
     </div>
 
     <!-- 周历视图（独立卡片：卡片标题行 + 周历本体） -->
@@ -481,7 +471,14 @@
         <div v-if="showConfirmDialog" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <div class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto app-dialog" ref="confirmDialogRef" role="dialog" aria-modal="true" aria-labelledby="watching-confirm-title" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
-              <div class="text-4xl mb-3" aria-hidden="true">{{ confirmAction==='clear'?'clear':confirmAction==='batchDelete'?'trash':confirmAction==='delete'?'trash':'log' }}</div>
+              <!-- 确认弹窗大图标：与等番/已看两页同一写法（AppIcon scale=xl + flex 居中）。
+                   历史缺陷：这里曾直接输出图标名字符串（{{ 'trash' }}），
+                   导致弹窗顶部显示大号文字 "trash" / "clear"，图标完全丢失。
+                   是 emoji → SVG 迁移时唯一漏改的一处（另外两页都已正确）。 -->
+              <div class="mb-3 flex justify-center" aria-hidden="true">
+                <AppIcon scale="xl" class="text-danger"
+                  :name="confirmAction==='clear' ? 'clear' : (confirmAction==='batchDelete'||confirmAction==='delete') ? 'trash' : 'log'" />
+              </div>
               <h3 id="watching-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear' ? tt('confirm.clearTitle') : confirmAction==='batchDelete' ? tt('confirm.batchDeleteTitleShort') : confirmAction==='delete' ? tt('confirm.deleteTitle') : tt('watching.moveToRemaining') }}</h3>
               <p class="text-sm text-gray-500">
                 <template v-if="confirmAction==='clear'">{{ tt('confirm.clearWatchingMessage') }}</template>
@@ -509,7 +506,7 @@ import { validateDate, todayStr } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl, defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { showToast } from '../composables/useToast'
-import { setPageStats } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection } from '../composables/usePageStats'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
@@ -1208,7 +1205,31 @@ watch(
   { immediate: true },
 )
 
+const ROUTE_KEY = '/watching'
+
+/** 当前选中信息同步到顶栏（用户要求从卡片内移走，省掉一整行） */
+watch(
+  selected,
+  (sel) => {
+    if (!sel || batchMode.value) {
+      setPageSelection(ROUTE_KEY, null)
+      return
+    }
+    setPageSelection(ROUTE_KEY, {
+      name: tt('watching.currentSelected'),
+      dot: 'primary',
+      items: [
+        { text: sel.name },
+        { text: 'e' + (sel.current_episode || '0') },
+        ...(sel.day_of_week ? [{ text: dayLabel(sel.day_of_week), tone: 'neutral' }] : []),
+        ...(sel.time_slot ? [{ text: String(sel.time_slot), tone: 'neutral' }] : []),
+      ],
+    })
+  },
+  { immediate: true, deep: true },)
+
 onUnmounted(() => {
+  clearPageSelection(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })
