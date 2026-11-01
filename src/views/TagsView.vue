@@ -24,7 +24,10 @@
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div class="flex items-center gap-2">
           <AppIcon scale="md" name="bookmark" class="text-primary" />
-          <h3 class="text-base font-bold gradient-text border-b border-dashed border-gray-400/50 cursor-help" v-tip="tt('tags.builtinHint')">{{ tt('tags.manageTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
+          <!-- 与其它页的 tooltip 标题保持同一几何：inline-flex + gap-1，
+               让 info 图标与文字之间有 3.5px 间隙（原 block 布局下图标紧贴文字）。 -->
+          <h3 class="text-base font-bold gradient-text cursor-help inline-flex items-center gap-1"
+            v-tip="tt('tags.builtinHint')">{{ tt('tags.manageTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
           <span class="tag-meta text-xs text-gray-400">{{ tt('tags.totalCount', { count: tags.length }) }}</span>
         </div>
       </div>

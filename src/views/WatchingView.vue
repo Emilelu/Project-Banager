@@ -136,7 +136,7 @@
         <AppIcon scale="md" name="log" class="text-primary" />
         <!-- 「未分配更新星期，选中后『编辑』选择星期即可入列」是在解释「怎么操作」，
              属于控件用法说明 → 改为标题上的悬浮气泡；卡片标题行的下间距由 mb-1 收到 mb-3 之外不再多占一行。 -->
-        <h3 class="card-head-title gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+        <h3 class="card-head-title gradient-text inline-flex items-center gap-1 cursor-help"
           v-tip="tt('watching.unscheduledHint')">{{ tt('watching.unscheduled') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
         <span class="stat-chip">{{ tt('watching.unscheduledCount', { count: unscheduledItems.length }) }}</span>
       </div>
@@ -228,7 +228,7 @@
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <!-- 「支持 01、02 补零格式」原为标签右侧外显小字，改为标签自身的悬浮气泡：
                        文案 key 原样保留，只是渲染位置从段落移到气泡；视觉上用虚线底 + info 图标提示可悬浮。 -->
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('showDialog.episodeHint')">{{ tt('showDialog.episode') }}<AppIcon scale="xs" name="info" class="text-gray-400" /><span v-if="formTotalEpisodes > 0" class="text-primary"> / {{ formTotalEpisodes }}</span></span>
                 </label>
                 <div class="flex items-center gap-2">
@@ -260,7 +260,7 @@
                      · 加载失败换成占位图标（.is-failed 的虚线描边做弱提示），绝不出现浏览器裂图。
                        URL 每变一次就把失败标记复位（见脚本里的 watch），换了链接即可重试。 -->
                 <label v-tip="tt('showDialog.coverUrlHint')"
-                  class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
+                  class="block text-sm font-medium text-gray-700 mb-1 cursor-help w-fit">
                 {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="text-gray-400" />
               </label>
                 <div class="flex items-center gap-2">
@@ -335,7 +335,7 @@
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <!-- 输入框下方那段长解释（「用 {episode} 代表当前集数…补零格式按原样替换」）
                        整段移入标签气泡；原占的一行随之收回，纵向节奏不变。 -->
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('showDialog.episodeTokenDetail')">{{ tt('showDialog.urlParams') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                   <button type="button" @click="insertEpisodeToken" class="btn-base btn-sm btn-link">{{ tt('showDialog.insertEpisode') }}</button>
                 </label>
@@ -378,7 +378,7 @@
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <!-- 日期格式说明移入标签气泡（虚线 + info 图标提示可悬浮），原灰字一行收回 -->
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('record.dateFormatsHint')">{{ tt('moveWatched.date') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                   <button type="button" @click="dateManualInput=!dateManualInput" class="btn-base btn-sm btn-link">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>

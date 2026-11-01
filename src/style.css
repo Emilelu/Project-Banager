@@ -3376,3 +3376,45 @@ td .truncate {
   padding: 0;
   border-radius: 10px;
 }
+
+
+/* ==================== PAGER GEOMETRY — unified ==================== */
+/*
+ * 分页栏三个元素的几何统一（用户明确要求）：
+ *   · 「每页 XX 条」—— 收缩左右内边距、拉高高度，做成视觉协调的长方形
+ *   · 「上一页 / 页码 / 下一页」—— 高度与「每页 XX 条」一致，且保持正方形
+ *
+ * 实测修复前：
+ *   每页 20 条   119×34  宽高比 3.49（明显过扁）  圆角 12px
+ *   上一页/页码   34×34  正方形                   圆角 10px
+ * → 「每页」比页码按钮扁得多，且圆角两套。
+ *
+ * 统一到高度 36px：三者同高、同圆角 10px；
+ * 「每页」横向 padding 由 14px 收到 10px，宽度从 119 降到 ~95，比例更协调。
+ */
+.page-size-trigger {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+  /* 字号与图标按钮保持一致，三者文字视觉重量相同 */
+  font-size: 12.25px;
+  line-height: 1;
+  gap: 5px;
+}
+
+/* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
+.pager-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 12.25px;
+  line-height: 1;
+  gap: 0;
+}
+
+/* 深色模式下「每页」触发器的描边与页码保持一致 */
+.dark .page-size-trigger {
+  border-radius: 10px;
+}

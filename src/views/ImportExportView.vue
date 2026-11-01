@@ -6,7 +6,7 @@
         <AppIcon scale="md" name="upload" class="text-primary" />
         <!-- 「点击下方按钮选择文件。支持 Excel / CSV …会按文件类型自动识别…」是**卡片用法说明**，
              改为标题上的悬浮气泡；卡片正文直接从按钮开始，少两行灰字。 -->
-        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 cursor-help"
           v-tip="tm('transfer.importHint')">{{ tm('transfer.importTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
 
@@ -21,7 +21,7 @@
           <AppIcon scale="sm" name="upload" />
           {{ importing ? tm('transfer.importing') : tm('transfer.importBtn') }}
         </button>
-        <span class="xfer-muted inline-flex items-center gap-1 cursor-help border-b border-dashed border-gray-400/50"
+        <span class="xfer-muted inline-flex items-center gap-1 cursor-help"
           v-tip="tm('transfer.supportedFormats')" :aria-label="tm('transfer.supportedFormats')"
           data-test="supported-formats">
           <AppIcon scale="xs" name="info" class="text-gray-400" />
@@ -111,7 +111,7 @@
       <div class="flex items-center gap-2 mb-3">
         <AppIcon scale="md" name="download" class="text-primary" />
         <!-- 「选择需要导出的格式，文件会直接下载。」是导出选项的用法说明 → 标题气泡 -->
-        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+        <h2 class="text-base font-bold gradient-text inline-flex items-center gap-1 cursor-help"
           v-tip="tm('transfer.exportHint')">{{ tm('transfer.exportTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
 

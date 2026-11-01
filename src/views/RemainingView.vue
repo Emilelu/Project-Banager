@@ -79,13 +79,13 @@
       @drop="onTableDrop"
       @dragleave="onTableDragLeave">
       <!-- 需求 B：表格卡片**不再**自带「☰ 番剧名称 / 共 N 条」标题行。
-           下面紧跟着的 <thead> 已经是完整的列名（番剧名称/预计日期/链接/备注），
+           下面紧跟着的 <thead class="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-t-2xl"> 已经是完整的列名（番剧名称/预计日期/链接/备注），
            再叠一个伪标题只是重复占一行高度；「共 N 条」这个计数已上提到本页
            顶部第一张卡片的标题行右侧（见文件开头的 .card-head + .stat-chip），
            同时也有 setPageStats('/remaining', …) 供 App.vue 顶栏使用。 -->
       <table class="w-full">
         <thead>
-          <tr class="bg-gradient-to-r from-primary/10 to-secondary/10 text-sm font-bold border-b border-white/20">
+          <tr class="text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
               <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
@@ -105,7 +105,7 @@
               <!-- 日期列的格式说明（原空态副说明「支持: 年月(2025/07)、完整日期…」）
                    改为列头文字的悬浮气泡：说明归到它解释的那一列，空态只留主文案。 -->
               <AppIcon scale="sm" name="calendar" /> <span
-                class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                class="inline-flex items-center gap-1 cursor-help"
                 v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span> <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='expected_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.colUrl') }}</th>
@@ -221,7 +221,8 @@
                  用户「双击行空白处打开编辑弹窗」就无处可点。这里补一个占位格：
                  无内容、不可编辑、aria-hidden，只负责吃掉行尾留白并让 dblclick 冒泡到 tr。
                  加在末尾不影响既有列索引断言（测试取 td[0..3]）。 -->
-            <td class="px-1 py-2.5 w-0" aria-hidden="true"></td>
+            <!-- 占位格必须真正 0 宽：px-1 的左右内距会撑出 7px，把备注列挤窄、右侧露底 -->
+              <td class="p-0 py-2.5 w-0" aria-hidden="true"></td>
           </tr>
         </tbody>
       </table>
@@ -234,7 +235,7 @@
     <!-- 分页（独立卡片：正文直接是翻页控件。
          需求 B：去掉「共 N 条」卡片标题行 —— 该计数已上提到顶部第一张卡片标题行右侧，
          这里再写一遍属于同一页面内第三次重复，且平白多占一整行高度。 -->
-    <div v-if="sortedRemainingList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
+    <div v-if="sortedRemainingList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-2">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2 text-sm text-gray-600">
           <!-- 手动排序下提供恢复入口，与「每页条数」触发器同几何同配色 -->
@@ -275,16 +276,16 @@
         </div>
         <div class="flex items-center gap-1">
           <button :disabled="currentPage<=1" @click="currentPage--"
-            class="btn-base btn-icon" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
+            class="btn-base btn-icon pager-btn" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
             :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
             <AppIcon scale="sm" name="caretLeft" /></button>
           <template v-for="p in displayPages" :key="p">
             <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
             <button v-else @click="currentPage=p"
-              class="btn-base btn-sm" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
+          class="btn-base btn-icon pager-btn" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
           <button :disabled="currentPage>=totalPages" @click="currentPage++"
-            class="btn-base btn-icon" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'"
+            class="btn-base btn-icon pager-btn" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'"
             :aria-label="tt('watched.nextPage')" v-tip="tt('watched.nextPage')">
             <AppIcon scale="sm" name="caretRight" /></button>
         </div>
@@ -366,7 +367,7 @@
               </div>
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                   <button type="button" @click="dateManualInput = !dateManualInput"
                     class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
@@ -391,7 +392,7 @@
                      加载失败换成占位图标（.is-failed 的虚线描边做弱提示），绝不出现浏览器裂图；
                      URL 一变就复位失败标记（见脚本里的 watch），改对链接即可恢复预览。 -->
                 <label v-tip="tt('showDialog.coverUrlHint')"
-                  class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
+                  class="block text-sm font-medium text-gray-700 mb-1 cursor-help w-fit">
                 {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="text-gray-400" />
               </label>
                 <div class="flex items-center gap-2">
@@ -418,7 +419,7 @@
               <div v-if="form.url">
                 <!-- 「等番没有集数，动态参数会原样拼到链接后面…」是控件用法说明 → 标签气泡 -->
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('showDialog.episodeTokenHint')">{{ tt('showDialog.urlParams') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                 </label>
                 <input v-model="form.url_params" type="text" :placeholder="tt('showDialog.urlParamsPlaceholder')"
@@ -516,7 +517,7 @@
               <!-- 原标签「番剧名称（一行一部）」把填写要求写在标签里：标签只留字段名，
                    「（一行一部）」等格式要求移入气泡；多行示例仍留在 placeholder。 -->
               <label class="block text-sm font-medium text-gray-700 mb-1">
-                <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                <span class="inline-flex items-center gap-1 cursor-help"
                   v-tip="tt('remaining.batchAddHint')">{{ tt('showDialog.name') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
               </label>
               <textarea v-model="batchAddText" rows="8" :placeholder="tt('remaining.batchAddPlaceholder')"

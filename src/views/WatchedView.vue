@@ -128,12 +128,12 @@
     <!-- 列表视图 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
       <!-- 需求 B：表格卡片**不再**自带「☰ 作品名称 / 共 N 条」标题行 ——
-           下面的 <thead> 已经列出完整列名（#/作品名称/日期/链接/备注），
+           下面的 <thead class="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-t-2xl"> 已经列出完整列名（#/作品名称/日期/链接/备注），
            再叠一个同名伪标题既重复又白占一行；「共 N 条」计数已上提到本页
            顶部第一张卡片的标题行（.stat-chip）与顶栏（setPageStats）。 -->
       <table class="w-full">
         <thead>
-          <tr class="bg-gradient-to-r from-primary/10 to-secondary/10 text-sm font-bold border-b border-white/20">
+          <tr class="text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
               <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
@@ -252,7 +252,7 @@
     <!-- 分页（独立卡片：正文直接是翻页控件。
          需求 B：去掉「共 N 条」卡片标题行 —— 计数已上提到本页顶部第一张卡片的
          标题行右侧，此处再写一遍即为同一页面内的第三次重复。 -->
-    <div v-if="filteredList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
+    <div v-if="filteredList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-2">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2 text-sm text-gray-600">
           <div class="relative inline-block">
@@ -280,16 +280,16 @@
         </div>
         <div class="flex items-center gap-1">
           <button :disabled="currentPage<=1" @click="currentPage--"
-            class="btn-base btn-icon" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
+            class="btn-base btn-icon pager-btn" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
             :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
             <AppIcon scale="sm" name="caretLeft" /></button>
           <template v-for="p in displayPages" :key="p">
             <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
             <button v-else @click="currentPage=p"
-              class="btn-base btn-sm" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
+          class="btn-base btn-icon pager-btn" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
           <button :disabled="currentPage>=totalPages" @click="currentPage++"
-            class="btn-base btn-icon" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'"
+            class="btn-base btn-icon pager-btn" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'"
             :aria-label="tt('watched.nextPage')" v-tip="tt('watched.nextPage')">
             <AppIcon scale="sm" name="caretRight" /></button>
         </div>
@@ -397,7 +397,7 @@
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <!-- 「支持的日期格式」这类用法说明改为标签气泡（虚线 + info 图标提示可悬浮），
                        输入框只留 placeholder 里的示例；校验错误与精度提示仍外显（见下）。 -->
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('record.dateFormatsHint')">{{ tt('moveWatched.date') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                   <button type="button" @click="dateManualInput=!dateManualInput" class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>
@@ -462,7 +462,7 @@
                      加载失败换成占位图标（.is-failed 的虚线描边做弱提示），绝不出现浏览器裂图；
                      URL 一变就复位失败标记（见脚本里的 watch），改对链接即可恢复预览。 -->
                 <label v-tip="tt('showDialog.coverUrlHint')"
-                  class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
+                  class="block text-sm font-medium text-gray-700 mb-1 cursor-help w-fit">
                 {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="text-gray-400" />
               </label>
                 <div class="flex items-center gap-2">
@@ -489,7 +489,7 @@
               <div v-if="form.url">
                 <!-- 「等番没有集数，动态参数会原样拼到链接后面…」属控件用法说明 → 标签气泡 -->
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                  <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('showDialog.episodeTokenHint')">{{ tt('showDialog.urlParams') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
                 </label>
                 <input v-model="form.url_params" type="text" :placeholder="tt('record.urlParamsPlaceholder')"
@@ -531,7 +531,7 @@
             <div class="px-6 py-5">
               <!-- 「支持单个年份(2025)或年份范围(2014~2017)」原为标签下的灰字，改为标签气泡 -->
               <label class="block text-sm font-medium text-gray-700 mb-1">
-                <span class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
+                <span class="inline-flex items-center gap-1 cursor-help"
                   v-tip="tt('watched.yearLabelHint')">{{ tt('watched.yearLabel') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
               </label>
               <input v-model="yearForm.year_label" type="text" :placeholder="tt('watched.yearLabelPlaceholder')"
