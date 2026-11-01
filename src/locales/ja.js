@@ -432,6 +432,8 @@ export default {
   'theme.noCorsDetail': 'CORS プロキシ未設定：この画像ソースはクロスオリジンを許可しないため、色の抽出・ダウンロード・プレビューの一致がいずれも利用できません。Cloudflare Worker をデプロイすると全て復旧します。',
   'theme.resetMaskBlurHint': '初期値に戻す（マスク 25%、ぼかし 5px）',
   'color.pick': '色を選択',
+  'color.hex': '16 進数の色値',
+  'color.presets': 'よく使う色',
   'theme.customPrimary': 'カスタムメイン色',
   'theme.customSecondary': 'カスタムサブ色',
   'theme.bgOffHint': '有効にするとランダムなアニメ壁紙 API から背景を取得します。マスクとぼかしでページの可読性を保ちます。',

@@ -137,7 +137,7 @@
               <template v-if="state.bgEnabled">
                 <div class="flex items-center gap-2 flex-wrap">
                   <select v-model="state.bgProvider" :aria-label="tt('theme.backgroundSource')"
-                    class="tone-input flex-1 min-w-0 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
+                    class="tone-input flex-1 min-w-[8rem] max-w-[16rem] px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
                     <option value="alcy">{{ tt('theme.providerAlcy') }}</option>
                     <option value="dmoe">{{ tt('theme.providerDmoe') }}</option>
                     <option value="loliapi">{{ tt('theme.providerLoliapi') }}</option>
@@ -151,6 +151,20 @@
                     class="btn-base btn-toned shrink-0">
                     <AppIcon scale="sm" name="refresh" />{{ tt('theme.changeOne') }}
                   </button>
+                  <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
+                       后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。深色模式由
+                       style.css 的 .dark .seg-btn.* 规则反转（半透明白底 + 亮色描边 + 白字）。 -->
+                  <button @click="setAutoSwitch(true)"
+                    class="btn-base btn-sm btn-neutral"
+                    :class="state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
+                    <AppIcon scale="sm" name="refresh" />{{ tt('theme.autoChange') }}
+                  </button>
+                  <button @click="setAutoSwitch(false)"
+                    v-tip="tt('theme.autoSwitchHint')"
+                    class="btn-base btn-sm btn-neutral"
+                    :class="!state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
+                    <AppIcon scale="sm" name="bookmark" />{{ tt('theme.fixCurrent') }}
+                  </button>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
                   :aria-label="tt('theme.customUrlHint')" v-tip="tt('theme.customUrlHint')" class="tone-input w-full mt-3 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
@@ -158,22 +172,6 @@
                   <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
                        点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
                        不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
-                  <div v-if="state.bgProvider !== 'custom'" class="mt-3 flex items-center gap-2.5 flex-wrap">
-                    <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
-                         后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。深色模式由
-                         style.css 的 .dark .seg-btn.* 规则反转（半透明白底 + 亮色描边 + 白字）。 -->
-                    <button @click="setAutoSwitch(true)"
-                      class="btn-base btn-sm btn-neutral"
-                      :class="state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
-                      <AppIcon scale="sm" name="refresh" />{{ tt('theme.autoChange') }}
-                    </button>
-                    <button @click="setAutoSwitch(false)"
-                      v-tip="tt('theme.autoSwitchHint')"
-                      class="btn-base btn-sm btn-neutral"
-                      :class="!state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
-                      <AppIcon scale="sm" name="bookmark" />{{ tt('theme.fixCurrent') }}
-                    </button>
-                  </div>
                 <div v-if="state.bgUrl" class="mt-4">
                   <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
                        这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
@@ -406,7 +404,14 @@ onUnmounted(resetPreview)
 // 记录进入页面时的图源，用于判断是否切换了图源并立即应用。
 // 弹窗版靠 watch(props.show) 重置；页面版在挂载时记录一次即可。
 const providerAtOpen = ref(state.bgProvider)
-onMounted(() => { providerAtOpen.value = state.bgProvider })
+onMounted(() => {
+  providerAtOpen.value = state.bgProvider
+  // 首次进入 / 切走再切回来：主动构建一次预览。
+  // （watch 只在地址**变化**时触发，而第二次进入时地址已稳定 → 不触发；
+  //   离开时 onUnmounted 又会清空 previewSrc，所以必须在这里补一次。）
+  const url = state.bgEnabled ? state.bgBlobUrl || state.bgUrl : ''
+  if (url && !previewSrc.value) buildPreview(url)
+})
 
 const presets = [
   { key: 'preset.sakura', p: [263, 67, 55], s: [329, 81, 60] },

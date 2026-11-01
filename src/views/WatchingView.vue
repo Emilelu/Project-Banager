@@ -271,7 +271,7 @@
                        URL 每变一次就把失败标记复位（见脚本里的 watch），换了链接即可重试。 -->
                 <label v-tip="tt('showDialog.coverUrlHint')"
                   class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
-                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="inline-block ml-1 text-gray-400" />
+                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="text-gray-400" />
               </label>
                 <div class="flex items-center gap-2">
                   <input v-model="form.cover_url" type="text" data-cover-input

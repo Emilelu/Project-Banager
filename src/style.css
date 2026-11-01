@@ -155,6 +155,27 @@ body.with-bg.bg-focus::before {
   transform: scale(1.13);
 }
 
+/* ==================== MODAL FOCUS BLUR — instant ==================== */
+/*
+ * 打开弹窗/菜单时，背景模糊必须**立刻到位**，不要慢慢加深。
+ *
+ * 基础规则 body.with-bg::before 上有一条 filter/transform 0.8s 的过渡，
+ * 那是给「壁纸入场淡入」用的（不可改）。但它同时让 bg-focus 的模糊变成 0.8s 渐变，
+ * 观感是「弹窗已经弹出来了，背景还在慢慢糊」。
+ *
+ * 这里只把 filter / transform 的过渡时长归零；opacity（壁纸淡入）保持原样，
+ * 所以既满足「聚焦态立刻生效」，又不破坏壁纸入场动画。
+ */
+body.with-bg.bg-focus::before,
+body.with-bg.bg-custom.bg-focus::before {
+  transition: opacity 0.4s ease, filter 0s, transform 0s;
+}
+/* 退出聚焦态同样立即恢复（否则关闭弹窗后背景要 0.8s 才清晰） */
+body.with-bg::before {
+  transition: opacity 0.4s ease, filter 0s, transform 0s;
+}
+
+
 /* 自定义壁纸（通常是大图直链）：弹窗聚焦降级——不再叠加额外模糊
    （避免全屏大图每帧重栅格化造成卡顿），仅轻微缩放；其余壁纸保持原聚焦效果 */
 body.with-bg.bg-custom.bg-focus::before {
@@ -2592,6 +2613,23 @@ body[data-glass='liquid'] .sidebar-bg {
   transition-timing-function: var(--ease-spring);
 }
 
+/* ==================== TABLE CELL ALIGN — td.editable-cell ==================== */
+/*
+ * 表格里 td.editable-cell 的左内距被 @apply 的 px-1 压到 3.5px，
+ * 而 -mx-1 的负 margin 在 table-cell 上不生效（table 的盒模型不参与 margin 折叠），
+ * 于是每列内容比表头图标统一偏左 7px。
+ *
+ * 用 padding-left 补回 th 的 px-3（10.5px），让「表头图标」与「该列首元素」同一条竖线。
+ * 只作用于 table 内的 td，不影响 WatchingCard 里的同名类（那里 -mx-1 是正常生效的）。
+ *
+ * 右内距不动：右侧本来就没有对齐需求，且补了会挤压 ellipsis 宽度。
+ */
+table td.editable-cell {
+  /* 与表头 th 的 px-3 同值（0.65625rem = 10.5px），保证列首元素与表头图标同一条竖线 */
+  padding-left: 0.65625rem;
+}
+
+
 .editable-cell:hover {
   background: rgb(var(--c-primary)/0.08);
 }
@@ -3306,4 +3344,41 @@ td .truncate {
   border-color: rgb(255 255 255 / 0.18);
   background: rgb(255 255 255 / 0.08);
   color: #cbd5e1;
+}
+
+
+/* ==================== BUTTON UNIFIED SIZE ==================== */
+/*
+ * 用户要求：全项目按钮统一成「大按钮」，不再有看起来像缩小版的按钮。
+ *
+ * 历史上演化出 4 个尺寸档：
+ *   .btn-base 34px / 12.25px（标准）
+ *   .btn-sm   28→30px / 10.5→11.5px（分页栏、弹窗次要操作）  <- 用户说太小
+ *   .btn-link 28→30px（纯文字按钮）                        <- 同样偏小
+ *   .btn-mini / .btn-step                                  <- 正方形小控件，保留
+ *
+ * 统一：**文字按钮**全部采用 .btn-base 的几何（34px / 12.25px / 12px 圆角）。
+ * 只保留两类有意为之的例外：纯图标方块（34×34）、正方形步进控件。
+ *
+ * 放在文件末尾 → 级联最后生效，压过前面散落的档位定义，不需要 !important。
+ */
+.btn-sm,
+.btn-link {
+  height: 34px;
+  padding: 0 1rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  gap: 0.375rem;
+}
+/* 纯文字按钮不需要内边距那么大，但高度/字号保持不变 */
+.btn-link {
+  padding: 0 0.5rem;
+}
+/* 小图标方块同步放大到标准档，避免与文字按钮并排时显得矮一截 */
+.btn-sm.btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
 }

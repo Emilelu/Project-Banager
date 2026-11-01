@@ -5,9 +5,6 @@
       <!-- 需求 B：本页两个计数（本年 N 部 / 总计 N 部）就放在**顶部第一张卡片标题行的右侧**。
            表格卡片与分页卡片里那些重复的「共 N 条」标题行已全部删除。
            .topbar-stat 与 App.vue 顶栏徽章同一套样式（更紧凑），两处观感一致。 -->
-      <div class="card-head mb-3 flex-wrap">
-        <AppIcon scale="md" name="book" class="text-primary" />
-      </div>
       <div class="toolbar-enter toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-4">
           <div class="flex items-center gap-2">
@@ -213,9 +210,16 @@
                    把名称顶到下一行（行高随有无封面跳变）。无封面时整块不渲染（不占位），
                    加载失败的行由 rowCoverFailed[id] 记住后不再渲染（不出现裂图）。 -->
               <div v-else class="name-with-tags">
+                <!-- 封面槽位：**始终占位**，有无封面都保留同宽空间，
+                     这样每行名称都从同一水平位置开始，与表头图标对齐。
+                     无封面 / 加载失败时是空的占位块（不可见但有宽度）。
+                     悬浮时浮出放大预览（见 showCoverZoom）。 -->
                 <img v-if="item.cover_url && !rowCoverFailed[item.id]" :src="item.cover_url"
                   class="cover-thumb cover-thumb--row" alt="" loading="lazy" decoding="async"
-                  @error="markRowCoverFailed(item.id)" />
+                  @error="markRowCoverFailed(item.id)"
+                  @mouseenter="showCoverZoom($event, item.cover_url)"
+                  @mouseleave="hideCoverZoom" />
+                <span v-else class="cover-thumb cover-thumb--row cover-slot" aria-hidden="true"></span>
                 <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
@@ -464,7 +468,7 @@
                      URL 一变就复位失败标记（见脚本里的 watch），改对链接即可恢复预览。 -->
                 <label v-tip="tt('showDialog.coverUrlHint')"
                   class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
-                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="inline-block ml-1 text-gray-400" />
+                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="text-gray-400" />
               </label>
                 <div class="flex items-center gap-2">
                   <input v-model="form.cover_url" type="text" data-cover-input
@@ -1351,6 +1355,63 @@ watch(
   { immediate: true },
 )
 
+
+/** 封面放大预览节点（单例，只在悬浮期间存在） */
+let coverZoomEl = null
+
+/**
+ * 鼠标移入封面缩略图 → 在右侧浮出放大版。
+ *
+ * 为什么挂到 body：卡片的 .glass 带 backdrop-filter，会成为 position:fixed 的
+ * 包含块，直接写在页面里会被按卡片坐标定位（项目已踩过这个坑）。
+ */
+function showCoverZoom(e, url) {
+  if (!url) return
+  hideCoverZoom()
+
+  const el = document.createElement('div')
+  el.className = 'cover-zoom'
+  const img = document.createElement('img')
+  img.src = url
+  img.alt = ''
+  img.decoding = 'async'
+  el.appendChild(img)
+  document.body.appendChild(el)
+  coverZoomEl = el
+
+  // 尺寸：160×224（5:7 海报比例）
+  const W = 160
+  const H = 224
+  const GAP = 10
+  const MARGIN = 8
+
+  const r = e.currentTarget.getBoundingClientRect()
+  let left = r.right + GAP
+  // 右侧放不下 → 翻到左侧
+  if (left + W > window.innerWidth - MARGIN) left = r.left - W - GAP
+  if (left < MARGIN) left = MARGIN
+  // 纵向以缩略图中心为基准，夹进视口
+  let top = r.top + r.height / 2 - H / 2
+  top = Math.max(MARGIN, Math.min(top, window.innerHeight - H - MARGIN))
+
+  el.style.left = left + 'px'
+  el.style.top = top + 'px'
+  el.style.opacity = '0'
+  el.style.transform = 'scale(0.96)'
+  requestAnimationFrame(() => {
+    if (!coverZoomEl) return
+    el.style.opacity = '1'
+    el.style.transform = 'scale(1)'
+  })
+}
+
+/** 鼠标移出 → 销毁预览 */
+function hideCoverZoom() {
+  if (!coverZoomEl) return
+  coverZoomEl.remove()
+  coverZoomEl = null
+}
+
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
@@ -1436,6 +1497,9 @@ const unpinLeavingGroup = (el) => {
   flex-wrap: nowrap;
   overflow: hidden;
 }
+/* 行首元素（封面 / 占位槽）与表头图标对齐：由 style.css 里
+   table td.editable-cell 的 padding-left 统一负责，此处不再单独补偿。 */
+
 .name-with-tags > .text-sm {
   flex: 0 1 auto;
   min-width: 0;
@@ -1452,5 +1516,39 @@ const unpinLeavingGroup = (el) => {
 .name-with-tags > .cover-thumb--row {
   flex: 0 0 auto;
   align-self: center;
+}
+
+/* 无封面时的等宽占位：与 .cover-thumb--row 几何完全一致，只是不可见。
+   保证每行名称都与表头图标对齐（有无封面都不位移）。 */
+.cover-slot {
+  background: transparent;
+  border-color: transparent;
+  pointer-events: none;
+}
+
+/* 封面放大预览：挂到 body 的固定浮层，与侧栏气泡同一套动效语言 */
+:global(.cover-zoom) {
+  position: fixed;
+  z-index: 140;
+  width: 160px;
+  height: 224px;
+  border-radius: 0.625rem;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgb(255 255 255 / 0.9);
+  border: 1px solid rgb(255 255 255 / 0.5);
+  box-shadow: 0 16px 48px rgba(31, 38, 135, 0.28), 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+}
+:global(.cover-zoom img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+:global(.dark .cover-zoom) {
+  background: rgb(26 20 48 / 0.9);
+  border-color: rgb(255 255 255 / 0.14);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 </style>

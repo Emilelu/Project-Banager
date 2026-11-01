@@ -32,7 +32,9 @@
       <p v-if="tags.length === 0" class="tag-meta text-sm text-gray-400 text-center py-10">{{ tt('tags.empty') }}</p>
       <div v-else class="grid gap-2 sm:grid-cols-2">
         <div v-for="tag in tags" :key="tag.id"
-          class="tag-row flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/50 border border-primary/10">
+          class="tag-row flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/50 border border-primary/10"
+            @dblclick="onRowDblclick($event, tag)"
+            @contextmenu.prevent="onRowContextMenu($event, tag)">
         <!-- 颜色块（点击改色） -->
           <ColorPicker :value="tag.color" size="1.5rem" :aria-label="tt('tags.color')" @input="updateColor(tag, $event)" />
 
@@ -123,6 +125,27 @@ const createTag = async () => {
   } catch (e) {
     error.value = e?.message || tt('tags.createFailed')
   }
+}
+
+/**
+ * 双击 / 右键标签行 → 直接进入改名。
+ *
+ * 为什么要判断 target：颜色块（ColorPicker）和右侧操作按钮自己有交互，
+ * 双击/右键它们不应触发改名。用 closest 检测这几类容器即可。
+ */
+const isTagRowControl = (e) =>
+  !!e.target?.closest?.('.tag-action, .color-picker-wrapper, input, button, a')
+
+const onRowDblclick = (e, tag) => {
+  if (isTagRowControl(e)) return
+  if (editingId.value === tag.id) return
+  startRename(tag)
+}
+
+const onRowContextMenu = (e, tag) => {
+  if (isTagRowControl(e)) return
+  if (editingId.value === tag.id) return
+  startRename(tag)
 }
 
 const startRename = async (tag) => {

@@ -429,6 +429,8 @@ export default {
   'theme.noCorsDetail': '未配置跨域代理：当前图源不返回跨域许可，取色、下载与「预览一致」均不可用 —— 部署 Cloudflare Worker 后即可全部恢复。',
   'theme.resetMaskBlurHint': '恢复默认（遮罩 25%、模糊 5px）',
   'color.pick': '选择颜色',
+  'color.hex': '十六进制色值',
+  'color.presets': '常用颜色',
   'theme.customPrimary': '自定义主色',
   'theme.customSecondary': '自定义副色',
   'theme.bgOffHint': '开启后从随机二次元壁纸接口获取背景，遮罩与模糊保证页面可读。',

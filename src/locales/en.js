@@ -432,6 +432,8 @@ export default {
   'theme.noCorsDetail': 'No CORS proxy configured: this source returns no cross-origin permission, so color sampling, download and preview consistency are unavailable. Deploy the Cloudflare Worker to restore all of them.',
   'theme.resetMaskBlurHint': 'Reset to defaults (mask 25%, blur 5px)',
   'color.pick': 'Pick a color',
+  'color.hex': 'Hex colour value',
+  'color.presets': 'Preset colours',
   'theme.customPrimary': 'Custom primary color',
   'theme.customSecondary': 'Custom secondary color',
   'theme.bgOffHint': 'Once enabled, a background is fetched from a random anime wallpaper API; the mask and blur keep the page readable.',
