@@ -128,6 +128,14 @@ const buttonByText = (scope, text) =>
 const buttonByExact = (scope, text) =>
   scope.findAll('button').find((b) => b.text().trim() === text)
 
+/**
+ * 按 aria-label 查找按钮。
+ * 分页「上一页 / 下一页」已改成图标按钮（无文字内容），
+ * 只能靠 aria-label 定位 —— 这也是保留 aria-label 的价值。
+ */
+const buttonByAriaLabel = (scope, label) =>
+  scope.findAll('button').find((b) => b.attributes('aria-label') === label)
+
 const buttonByContains = buttonByText
 
 /**
@@ -345,7 +353,7 @@ describe('已看历史 · 搜索与分页', () => {
     await selectYear(wrapper, '2025')
     await flushPromises()
 
-    await buttonByText(wrapper, '下一页').trigger('click')
+    await buttonByAriaLabel(wrapper, '下一页').trigger('click')
     await flushPromises()
 
     expect(dataRows(wrapper)).toHaveLength(5)
@@ -358,7 +366,7 @@ describe('已看历史 · 搜索与分页', () => {
     await selectYear(wrapper, '2025')
     await flushPromises()
 
-    await buttonByText(wrapper, '下一页').trigger('click')
+    await buttonByAriaLabel(wrapper, '下一页').trigger('click')
     await flushPromises()
     expect(dataRows(wrapper)[0].text()).toContain('21')
 
@@ -482,7 +490,7 @@ describe('已看历史 · 批量选择与删除', () => {
     await buttonByExact(wrapper, '全选').trigger('click')
     await flushPromises()
     // 翻到第 2 页：本页 20 条一条都没勾
-    await buttonByText(wrapper, '下一页').trigger('click')
+    await buttonByAriaLabel(wrapper, '下一页').trigger('click')
     await flushPromises()
 
     // isAllChecked 用 checkedIds.length === paginatedList.length 判断，

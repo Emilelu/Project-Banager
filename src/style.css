@@ -2612,7 +2612,16 @@ body[data-glass='liquid'] .sidebar-bg {
 table td.editable-cell {
   /* 与表头 th 的 px-3 同值（0.65625rem = 10.5px），保证列首元素与表头图标同一条竖线 */
   padding-left: 0.65625rem;
+  /*
+   * 去掉 .editable-cell 的 rounded：
+   * 那个圆角是给**卡片内**的行内编辑高亮用的（悬浮/编辑时出现一块圆角底色）。
+   * 但作用在 td 上时，每个单元格都会变成一个带圆角的独立色块 ——
+   * 悬浮/选中时表格里就出现一堆「异常圆角」，与表格的直角边框完全不协调。
+   * 表格里用直角，高亮改由 .editable-cell:hover 的整格底色表达。
+   */
+  border-radius: 0;
 }
+
 
 
 .editable-cell:hover {

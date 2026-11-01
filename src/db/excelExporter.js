@@ -100,13 +100,27 @@ function buildWatchingSheet(rows) {
   return aoa
 }
 
-/** 等番：A=Name, B=Time，两列 */
+/** 等番：A=Name, B=Time, C=Tags, D=Notes */
 function buildRemainingSheet(rows) {
-  // 第三列 Tags：逗号分隔。导入器只认前两列（Name/Time），多出的列会被忽略，
-  // 因此加这一列不会破坏「导出→导入」往返。
-  const aoa = [['Name', 'Time', 'Tags']]
+  /*
+   * 第 3 列起是「扩展列」，导入器按**表头名**识别（见 excelImporter 的 tagsCol/notesCol）：
+   *   · Tags  → 写回 tags
+   *   · Notes → 写回 notes
+   *
+   * 历史缺陷：导出器把第 3 列写成 Tags，而导入器固定 `row[2]` 当 notes ——
+   * 往返后标签被读成备注、真备注丢失（静默数据损坏）。现在两端都按表头对齐。
+   *
+   * 「只有前两列是模板必需列」这一点仍然成立：老模板没有 Tags/Notes 列头时，
+   * 导入器会退回旧行为，所以加了这两列不会破坏对旧文件的兼容。
+   */
+  const aoa = [['Name', 'Time', 'Tags', 'Notes']]
   for (const r of rows) {
-    aoa.push([String(r.name ?? ''), dateCell(r.expected_date), String(r.tags ?? '')])
+    aoa.push([
+      String(r.name ?? ''),
+      dateCell(r.expected_date),
+      String(r.tags ?? ''),
+      String(r.notes ?? ''),
+    ])
   }
   return aoa
 }

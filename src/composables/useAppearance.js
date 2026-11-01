@@ -849,24 +849,24 @@ let focusObserverStarted = false;
 let bootFocusPending = false;
 
 function hasFullscreenDialog() {
-  // 触发壁纸聚焦（加深模糊 + 放大）的浮层类型：
-  //   · 全屏弹窗    body > .fixed.inset-0.z-50     （添加/编辑/确认对话框）
-  //   · 下拉菜单    body > .fixed.inset-0.z-40      （每页条数、时间下拉）
-  //   · 年份/标签菜单 body > .fixed.inset-0.z-[100] · 右键菜单 z-[199]
+  // 只有**真正的全屏对话框**才触发壁纸聚焦（加深模糊 + 缩放）。
   //
-  // 为什么要把菜单也算进来：用户明确要求「打开菜单的背景模糊要立刻出现」。
-  // 原实现只认 z-50 的对话框，菜单（z-40 / z-[100] / z-[199]）打开时背景毫无变化，
-  // 观感上「菜单像是浮在没变暗的桌面上」。
+  // 判据：对话框的遮罩层带半透明黑底（bg-black/30 + backdrop-blur-[8px]），
+  // 而右键菜单 / 下拉菜单的遮罩层是**完全透明的点击捕获层**
+  // （只有 fixed inset-0 z-*，没有任何背景色）。
   //
-  // 用 z 值的数值区间判断而不是逐个列举具体 class：菜单的 z 值随场景变化
-  // （z-40 / z-[100] / z-[199]），列举会漏。凡是 body 直挂的全屏 fixed 遮罩都算。
-  const overlays = document.querySelectorAll('body > .fixed.inset-0');
+  // 用「是否有背景色」区分比用 z 值可靠：
+  //   · 对话框  z-50 + bg-black/30
+  //   · 菜单    z-40 / z-[100] / z-[199]，背景 transparent
+  //
+  // 用户要求：打开弹窗时壁纸才缩放，打开右键菜单/下拉菜单时不要缩放。
+  const overlays = document.querySelectorAll("body > .fixed.inset-0");
   for (const el of overlays) {
-    const z = Number(getComputedStyle(el).zIndex);
-    // z >= 40 的全屏遮罩都视为「打开了浮层」（主内容区最高到 z-30 左右）
-    if (Number.isFinite(z) && z >= 40) return true;
+    const bg = getComputedStyle(el).backgroundColor;
+    // transparent / rgba(0,0,0,0) 表示透明遮罩 → 是菜单，不算对话框
+    if (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") return true;
   }
-  return !!document.querySelector("body > .fixed.inset-0.z-50");
+  return false;
 }
 
 // 弹窗是否处于「关闭过渡」中：Vue 的 <transition name="modal|modal-overlay"> 在 v-if 置 false 时

@@ -96,7 +96,7 @@
             :class="[
               sidebarCollapsed
                 ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
-                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs btn-press',
+                : 'w-full justify-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press',
               { 'opacity-50': !bgActive }
             ]"
             :aria-pressed="appearance.state.bgEnabled ? 'true' : 'false'"
@@ -116,7 +116,7 @@
             :class="[
               sidebarCollapsed
                 ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
-                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-xs btn-press'
+                : 'w-full justify-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press'
             ]"
             :aria-label="themeLabel"
             @mouseenter="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"

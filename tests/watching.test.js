@@ -107,6 +107,14 @@ function buttonByExactText(wrapper, text) {
   return wrapper.findAll('button').find((button) => button.text().trim() === text)
 }
 
+/**
+ * 按 aria-label 查找按钮。
+ * 分页「上一页 / 下一页」已改成图标按钮（无文字），只能靠 aria-label 定位。
+ */
+function buttonByAriaLabel(wrapper, label) {
+  return wrapper.findAll('button').find((button) => button.attributes('aria-label') === label)
+}
+
 function cardByName(wrapper, name) {
   return wrapper.findAll('.watching-card').find((card) => card.text().includes(name))
 }
@@ -401,7 +409,7 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
     await flushPromises()
     expect(tableRows(wrapper)).toHaveLength(20)
 
-    await buttonByExactText(wrapper, '下一页').trigger('click')
+    await buttonByAriaLabel(wrapper, '下一页').trigger('click')
     await nextTick()
     expect(tableRows(wrapper)).toHaveLength(1)
     await tableRows(wrapper)[0].trigger('click')
@@ -412,7 +420,7 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
     expect(remainingApi.delete).toHaveBeenCalledWith(21)
     expect(tableRows(wrapper)).toHaveLength(20)
     expect(topbarStatText()).toContain('共 20 条')
-    expect(buttonByExactText(wrapper, '上一页').attributes('disabled')).toBeDefined()
+    expect(buttonByAriaLabel(wrapper, '上一页').attributes('disabled')).toBeDefined()
   })
 
   it('移至追番会传递选择的星期和时间', async () => {
@@ -470,7 +478,7 @@ describe('RemainingView 批量选择 / 分页边界缺陷', () => {
     await wrapper.find('thead th').trigger('click')
     expect(buttonByExactText(wrapper, '取消全选')).toBeTruthy()
 
-    await buttonByExactText(wrapper, '下一页').trigger('click')
+    await buttonByAriaLabel(wrapper, '下一页').trigger('click')
     await nextTick()
     expect(buttonByExactText(wrapper, '全选')).toBeTruthy()
   })

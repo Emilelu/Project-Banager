@@ -266,6 +266,23 @@ function importRemaining(db, workbook) {
     const sheet = workbook.Sheets[sheetName]
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 })
 
+    /*
+     * 按**表头名字**定位 Tags / Notes 列，而不是写死列号。
+     *
+     * 历史上这里是 `const notes = row[2]`，而导出器把第 3 列写成 Tags ——
+     * 于是「导出 → 导入」往返时，标签被读成备注、真正的备注丢失，
+     * 属于静默数据损坏。改为按表头识别后：
+     *   · 新导出的文件：第 3 列是 Tags，能被正确写回 tags
+     *   · 老模板（无 Tags/Notes 列头）：退回「第 3 列当备注」的旧行为，保持兼容
+     */
+    const headerRow = data[0] || []
+    const findCol = (action) => {
+      const hit = headerRow.findIndex((c) => action(String(c ?? '').trim().toLowerCase()))
+      return hit
+    }
+    const tagsCol = findCol((c) => c === 'tags' || c === '标签')
+    const notesCol = findCol((c) => c === 'notes' || c === '备注' || c === 'note')
+
     for (let i = 1; i < data.length; i++) {
       const row = data[i]
       if (!row || !row[0]) continue
@@ -288,11 +305,15 @@ function importRemaining(db, workbook) {
         }
       }
 
-      const notes = row[2] ? String(row[2]).trim() : ''
+      // 按表头定位：有 Tags/Notes 列头就各取各的；没有则退回「第 3 列当备注」
+      const tags = tagsCol >= 0 && row[tagsCol] ? String(row[tagsCol]).trim() : ''
+      const notes = notesCol >= 0
+        ? (row[notesCol] ? String(row[notesCol]).trim() : '')
+        : (tagsCol >= 0 ? '' : (row[2] ? String(row[2]).trim() : ''))
       const url = getHyperlink(sheet, i, 0)
 
       try {
-        const result = db.addRemaining({ name, expected_date: expectedDate, url, notes, sort_order: nextSortOrder() })
+        const result = db.addRemaining({ name, expected_date: expectedDate, url, notes, tags, sort_order: nextSortOrder() })
         if (result.success) {
           importedCount++
         } else {

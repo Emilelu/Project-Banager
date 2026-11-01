@@ -104,7 +104,7 @@
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition"
               tabindex="0" role="button" :aria-sort="sortField==='name'?(sortOrder==='asc'?'ascending':'descending'):'none'"
               @click="toggleSort('name')" @keydown.enter.prevent="toggleSort('name')" @keydown.space.prevent="toggleSort('name')">
-              <AppIcon scale="sm" name="sparkle" /> {{ tt('remaining.colName') }} <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='name'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
+              <AppIcon scale="sm" name="sparkle" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.colName') }} <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='name'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition whitespace-nowrap"
               tabindex="0" role="button" :aria-sort="sortField==='expected_date'?(sortOrder==='asc'?'ascending':'descending'):'none'"
@@ -115,8 +115,8 @@
                 class="inline-flex items-center gap-1 border-b border-dashed border-gray-400/50 cursor-help"
                 v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span> <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='expected_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
             </th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="link" /> {{ tt('remaining.colUrl') }}</th>
-            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="note" /> {{ tt('remaining.colNotes') }}</th>
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.colUrl') }}</th>
+            <th class="text-left px-3 py-2.5 text-primary-dark font-bold whitespace-nowrap"><AppIcon scale="sm" name="note" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.colNotes') }}</th>
           </tr>
         </thead>
         <tbody ref="tbodyRef">
@@ -283,14 +283,18 @@
         </div>
         <div class="flex items-center gap-1">
           <button :disabled="currentPage<=1" @click="currentPage--"
-            class="btn-base btn-sm" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'">{{ tt('watched.prevPage') }}</button>
+            class="btn-base btn-icon" :class="currentPage<=1 ? 'btn-neutral' : 'btn-toned'"
+            :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
+            <AppIcon scale="sm" name="caretLeft" /></button>
           <template v-for="p in displayPages" :key="p">
             <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
             <button v-else @click="currentPage=p"
               class="btn-base btn-sm" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
           <button :disabled="currentPage>=totalPages" @click="currentPage++"
-            class="btn-base btn-sm" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'">{{ tt('watched.nextPage') }}</button>
+            class="btn-base btn-icon" :class="currentPage>=totalPages ? 'btn-neutral' : 'btn-toned'"
+            :aria-label="tt('watched.nextPage')" v-tip="tt('watched.nextPage')">
+            <AppIcon scale="sm" name="caretRight" /></button>
         </div>
       </div>
     </div>
@@ -303,18 +307,15 @@
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
         <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
           <button @click="ctxEdit"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" />
-            {{ tt('common.edit') }}</button>
+            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
           <button @click="ctxOpenUrl"
             class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"
-            :class="{ 'opacity-40': !contextMenu.item?.url }"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
+            :class="{ 'opacity-40': !contextMenu.item?.url }"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('card.openLink') }}</button>
           <button @click="ctxMoveToWatching"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="tv" />
-            {{ tt('remaining.moveToWatching') }}</button>
+            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="tv" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.moveToWatching') }}</button>
           <div class="border-t border-white/20 my-1"></div>
           <button @click="ctxDelete"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" />
-            {{ tt('common.delete') }}</button>
+            class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
         </div>
       </div>
       </transition>

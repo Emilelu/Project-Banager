@@ -122,6 +122,10 @@ export const ICONS = {
   sortAsc: { paths: ['M8 18V6', 'M4.5 9.5 8 6l3.5 3.5', 'M14 7h6', 'M14 12h4.5', 'M14 17h3'] },
   caretDown: { paths: ['M6.5 9.5 12 15l5.5-5.5'] },
   caretUp: { paths: ['M6.5 14.5 12 9l5.5 5.5'] },
+  // 左右 caret：分页「上一页 / 下一页」用图标表达（替代文字）。
+  // V 形折线与 caretUp/caretDown 同一视觉重量，旋转 90° 的等价形态。
+  caretLeft: { paths: ['M14.5 6.5 9 12l5.5 5.5'] },
+  caretRight: { paths: ['M9.5 6.5 15 12l-5.5 5.5'] },
   filter: { paths: ['M4 5.5h16l-6.2 7.4v5.6l-3.6 2v-7.6Z'] },
   listCheck: {
     // 批量选择
