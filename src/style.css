@@ -1142,6 +1142,14 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 }
 .sel-anim-leave-active {
   transition: opacity 0.22s var(--ease-exit), transform 0.22s var(--ease-exit);
+  /*
+   * 必须脱离文档流：leave 动画期间元素若仍占位（0.22s），
+   * 工具栏会临时变高 → 卡片变高 → main 的 scrollHeight 变大，
+   * 一旦越过临界点就冒出竖向滚动条，动画结束又消失（表现为「闪一下」）。
+   * absolute 让离场元素不再撑高布局；父级 sel-anim-wrap 是 flex 容器，
+   * 元素离场后仍从原处淡出，不会跳到角落。
+   */
+  position: absolute;
 }
 .sel-anim-enter-from,
 .sel-anim-leave-to {
@@ -3646,3 +3654,130 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
   width: 12px !important;
   height: 12px !important;
 }
+
+
+/* ==================== UNIFIED MENU PANEL ==================== */
+/*
+ * 全站下拉菜单的唯一视觉规范，基准取自「查看新番」季节菜单（用户指定）。
+ *
+ * 为什么单独建一个类而不是散着写：
+ *   各菜单原来各自拼 `app-menu-surface rounded-xl border ...`，
+ *   宽度、内边距、圆角、阴影都有细微差别，视觉上不统一；
+ *   而且新写的菜单很容易漏掉某一项（例如漏 backdrop-filter 就不模糊了）。
+ *
+ * 统一后的面板规格：
+ *   圆角 14px（--r-lg）
+ *   背景 rgba(255,255,255,.82) + blur(20px) saturate(1.7)（毛玻璃）
+ *   边框 1px solid rgba(255,255,255,.4)
+ *   阴影 0 12px 40px rgba(31,38,135,.18), 0 2px 8px rgba(0,0,0,.08)
+ *   纵向内边距 3.5px（py-1）
+ */
+.app-menu-panel {
+  /*
+   * flex column：子元素默认 align-items: stretch 会自动撑满菜单宽度。
+   * 这样菜单项**不需要**写 width:100% —— 那会与「父宽由内容决定」形成
+   * 循环依赖，浏览器解出偏大的宽度（实测：内容只需 131px 却撑到 348px）。
+   */
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(1.7);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  /* 独立合成层：祖先若带 opacity/filter 会让 backdrop-filter 失效 */
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* 统一字号 0.875rem = 12.25px（= Tailwind text-sm，对齐「查看新番」季节菜单）。
+     注意本工程根字号是 14px 而非浏览器默认 16px，
+     所以 text-sm 实际是 12.25px，不是 14px —— 直接写 14px 会偏大。
+     原来各菜单混用 text-xs(10.5px) / text-sm(12.25px)，视觉不齐。 */
+  font-size: 0.875rem;
+  padding-top: 3.5px;
+  padding-bottom: 3.5px;
+}
+
+/* 深色模式：与全站菜单反转一致（半透明深底 + 亮边框） */
+.dark .app-menu-panel {
+  background: rgba(24, 18, 44, 0.86);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 菜单项统一：严格对齐「查看新番」季节菜单的实测几何。
+   基准：padding 7px 14px（px-4）/ 字号 0.875rem / 行高 17.5px / 高 31.5px。
+   注意季节菜单用的是**裸 <a>**（无 role），所以除了 role 选择器，
+   还要覆盖「面板内的直接子级可点条目」，否则它们会漏网。 */
+.app-menu-panel [role="menuitem"],
+.app-menu-panel [role="menuitemradio"],
+.app-menu-panel [role="menuitemcheckbox"],
+.app-menu-panel > a,
+.app-menu-panel > button,
+.app-menu-panel > div > a,
+.app-menu-panel > div > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  font-size: 0.875rem;
+  line-height: 17.5px;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+.app-menu-panel [role="menuitem"]:hover,
+.app-menu-panel [role="menuitemradio"]:hover,
+.app-menu-panel [role="menuitemcheckbox"]:hover {
+  background: rgb(var(--c-primary) / 0.1);
+}
+
+/* 选中项：主题色 + 加粗（与季节菜单当前项的观感一致） */
+.app-menu-panel [aria-checked="true"],
+.app-menu-panel .is-active {
+  color: rgb(var(--c-primary));
+  font-weight: 700;
+}
+
+/* 分隔线统一 */
+.app-menu-panel hr,
+.app-menu-panel .menu-sep {
+  margin: 3.5px 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+.dark .app-menu-panel hr,
+.dark .app-menu-panel .menu-sep {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+
+/* AppSelect 菜单项：整行可点、左对齐、与 .app-menu-panel 的行高一致 */
+.app-select-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  color: #374151;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+.app-select-item:hover {
+  background: rgb(var(--c-primary) / 0.1);
+}
+.app-select-item[aria-selected="true"] {
+  color: rgb(var(--c-primary));
+  font-weight: 700;
+}
+.dark .app-select-item {
+  color: #e5e7eb;
+}
+
+

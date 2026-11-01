@@ -181,46 +181,18 @@
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.day') }}</label>
-                  <select v-model="form.day_of_week"
-                    class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80">
-                    <option value="">{{ tt('showDialog.chooseDay') }}</option>
-                    <option v-for="day in weekDays" :key="day" :value="day">{{ dayLabel(day) }}</option>
-                  </select>
+                  <AppSelect v-model="form.day_of_week"
+                    :options="weekDayOptions"
+                    :placeholder="tt('showDialog.chooseDay')"
+                    :aria-label="tt('showDialog.day')"
+                    trigger-class="w-full" />
                 </div>
                 <div>
                   <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                     <span>{{ tt('showDialog.time') }}</span>
-                    <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="btn-base btn-sm btn-link">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
                   </label>
-                  <div v-if="!formShowTimePicker" class="relative">
-                    <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">
-                      <span class="text-sm font-mono" :class="formTime?'text-gray-800':'text-gray-400'">{{ formTime || tt('showDialog.clickToPickTime') }}</span>
-                      <svg class="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 left-0 w-[20rem] glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
-                      <div class="grid grid-cols-8 gap-1.5">
-                        <button v-for="h in 24" :key="'fh'+h" @click="formSelectTimeHour(h-1)"
-                          class="btn-base btn-sm"
-                          :class="parseInt(formTime?.split(':')[0])===h-1 ? 'btn-primary font-bold' : 'btn-neutral'">
-                          {{ String(h-1).padStart(2,'0') }}:00
-                        </button>
-                      </div>
-                      <div class="border-t border-white/20 my-2"></div>
-                      <div class="grid grid-cols-8 gap-1.5">
-                        <button v-for="m in 12" :key="'fm'+m" @click="formSelectTimeMinute((m-1)*5)"
-                          class="btn-base btn-sm"
-                          :class="parseInt(formTime?.split(':')[1])===(m-1)*5 ? 'btn-primary font-bold' : 'btn-neutral'">
-                          :{{ String((m-1)*5).padStart(2,'0') }}
-                        </button>
-                      </div>
-                    </div>
-                    <div v-if="formShowTimeDropdown" class="fixed inset-0 z-40" @click="formShowTimeDropdown=false"></div>
-                  </div>
-                  <div v-else class="flex items-center gap-2">
-                    <input v-model="formTime" type="text" placeholder="HH:mm"
-                      class="flex-1 min-w-0 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                    <button @click="formTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
-                  </div>
+                  <!-- 钟表盘选择器：点表盘可直接选时/分（原为 24+12 按钮网格） -->
+                  <ClockPicker v-model="formTime" :aria-label="tt('showDialog.time')" />
                 </div>
               </div>
               <div>
@@ -397,39 +369,9 @@
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <span>{{ tt('moveWatched.time') }}</span>
-                  <button type="button" @click="showTimePicker=!showTimePicker" class="btn-base btn-sm btn-link">{{ showTimePicker ? tt('showDialog.manualInput') : tt('showDialog.clockPicker') }}</button>
                 </label>
-                <!-- 时钟选择器 -->
-                <div v-if="!showTimePicker" class="relative">
-                  <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="showTimeDropdown=!showTimeDropdown">
-                    <span class="text-sm font-mono" :class="moveTime?'text-gray-800':'text-gray-400'">{{ moveTime || tt('showDialog.clickToPickTime') }}</span>
-                    <svg class="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                  </div>
-                  <div v-if="showTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 w-full glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
-                    <div class="grid grid-cols-6 gap-1">
-                      <button v-for="h in 24" :key="'h'+h" @click="selectTimeHour(h-1)"
-                        class="btn-base btn-sm"
-                        :class="parseInt(moveTime?.split(':')[0])===h-1 ? 'btn-primary font-bold' : 'btn-neutral'">
-                        {{ String(h-1).padStart(2,'0') }}:00
-                      </button>
-                    </div>
-                    <div class="border-t border-white/20 my-2"></div>
-                    <div class="grid grid-cols-6 gap-1">
-                      <button v-for="m in 12" :key="'m'+m" @click="selectTimeMinute((m-1)*5)"
-                        class="btn-base btn-sm"
-                        :class="parseInt(moveTime?.split(':')[1])===(m-1)*5 ? 'btn-primary font-bold' : 'btn-neutral'">
-                        :{{ String((m-1)*5).padStart(2,'0') }}
-                      </button>
-                    </div>
-                  </div>
-                  <div v-if="showTimeDropdown" class="fixed inset-0 z-40" @click="showTimeDropdown=false"></div>
-                </div>
-                <!-- 手动输入 -->
-                <div v-else class="flex items-center gap-2">
-                  <input v-model="moveTime" type="text" placeholder="HH:mm"
-                    class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                  <button @click="moveTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
-                </div>
+                <!-- 钟表盘选择器：点表盘直接选时/分（原为 24+12 按钮网格） -->
+                <ClockPicker v-model="moveTime" :aria-label="tt('moveWatched.time')" />
               </div>
             </div>
             <div class="px-6 py-4 border-t border-white/20 flex justify-end gap-3">
@@ -448,13 +390,13 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
-          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
-          <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
-          <button @click="ctxMoveToRemaining" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
-          <button @click="ctxMoveToWatched" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="check" />{{ tt('watching.moveToWatched') }}</button>
+        <div class="app-dialog app-menu-panel min-w-[10rem] context-menu">
+          <button @click="ctxEdit" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
+          <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
+          <button @click="ctxMoveToRemaining" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
+          <button @click="ctxMoveToWatched" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="check" />{{ tt('watching.moveToWatched') }}</button>
           <div class="border-t border-white/20 my-1"></div>
-          <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
+          <button @click="ctxDelete" class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
         </div>
       </div>
       </transition>
@@ -517,6 +459,12 @@ const { tt } = useI18n()
 const { errorText } = useErrorText()
 
 const weekDays = ['周一','周二','周三','周四','周五','周六','周日']
+
+/** AppSelect 用的星期选项（含空占位，与原 <select> 的 chooseDay 一致） */
+const weekDayOptions = computed(() => [
+  { value: '', label: tt('showDialog.chooseDay') },
+  ...weekDays.map((d) => ({ value: d, label: dayLabel(d) })),
+])
 // 星期表头装饰图标：统一走 AppIcon（与顶栏同一套线条规范）
 // 月=月亮 火=火焰 水=水滴 木=叶子 金=星 土=云 日=太阳
 const dayIcons = ['moon', 'flame', 'droplet', 'leaf', 'star', 'cloud', 'sun']
@@ -637,6 +585,12 @@ const onDocClick = (e) => {
   }
   if (e.target.closest('.watching-card, button, input, select, textarea, a, .app-dialog, .context-menu, .selectable-text')) return
   selected.value = null
+  // 点周历空白 / 页面其它区域 → 清空批量勾选并退出批量模式（用户要求）
+  if ((batchMode.value || checkedIds.value.length > 0)
+      && !e.target.closest('.watching-card, button, input, select, textarea, a, .app-dialog, .context-menu, .app-menu-panel, .sel-anim-wrap')) {
+    checkedIds.value = []
+    batchMode.value = false
+  }
 }
 
 const selectTimeHour = (h) => {

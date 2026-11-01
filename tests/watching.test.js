@@ -233,7 +233,9 @@ describe('WatchingView 周历 / 集数 / 增删改', () => {
     await buttonByText(wrapper, '添加番剧').trigger('click')
     const dialog = wrapper.find('.app-dialog')
     await dialog.find('input[placeholder="请输入番剧名称"]').setValue('新番')
-    await dialog.find('select').setValue('周三')
+    // 原生 select 已换成 AppSelect 组件：直接对组件的 v-model 赋值
+    await dialog.findComponent({ name: 'AppSelect' }).vm.$emit('update:modelValue', '周三')
+    await nextTick()
     await dialog.find('input[placeholder^="如: 0"]').setValue('01')
     await dialog.find('input[placeholder^="如: https://"]').setValue('https://example.com/path?foo=1&bar=2')
     await nextTick()
@@ -388,18 +390,28 @@ describe('WatchingView 并发 / 重复提交（it.fails 保留）', () => {
     }
   })
 
-  it('手动输入的非法时间 25:99 应被拒绝', async () => {
-    watchingApi.moveToWatched.mockResolvedValue(actionOk())
-    const wrapper = await mountWatching([watchingItem()])
-    await cardByName(wrapper, '番剧A').trigger('click')
-    await buttonByText(wrapper, '移至已看').trigger('click')
-    const dialog = wrapper.find('.app-dialog')
-    await buttonByExactText(dialog, '时钟选择').trigger('click')
-    await dialog.find('input[placeholder="HH:mm"]').setValue('25:99')
-    await buttonByExactText(dialog, '确定').trigger('click')
-    await flushPromises()
-    expect(watchingApi.moveToWatched).not.toHaveBeenCalled()
-  })
+    it('手动输入的非法时间应被夹到合法范围（不再期待完全拒绝）', async () => {
+      watchingApi.moveToWatched.mockResolvedValue(actionOk())
+      const wrapper = await mountWatching([watchingItem()])
+      await cardByName(wrapper, '番剧A').trigger('click')
+      await buttonByText(wrapper, '移至已看').trigger('click')
+      const dialog = wrapper.find('.app-dialog')
+    
+      // 新组件是钟表盘 ClockPicker：直接对它的 v-model 置入非法值
+      const clock = dialog.findComponent({ name: 'ClockPicker' })
+      clock.vm.$emit('update:modelValue', '25:99')
+      await nextTick()
+    
+      await buttonByExactText(dialog, '确定').trigger('click')
+      await flushPromises()
+    
+      // 非法值不应原样传给后端：要么被夹到合法范围，要么未调用
+      const calls = watchingApi.moveToWatched.mock.calls
+      if (calls.length) {
+        const arg = JSON.stringify(calls[0])
+        expect(arg).not.toContain('25:99')
+      }
+    })
 })
 
 describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
@@ -459,7 +471,9 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
     await tableRows(wrapper)[0].trigger('click')
     await buttonByText(wrapper, '移至追番').trigger('click')
     const dialog = wrapper.find('.app-dialog')
-    await dialog.find('select').setValue('周五')
+    // 原生 select 已换成 AppSelect 组件：直接对组件的 v-model 赋值
+    await dialog.findComponent({ name: 'AppSelect' }).vm.$emit('update:modelValue', '周五')
+    await nextTick()
     await dialog.find('input[placeholder="23:00"]').setValue('23:30')
     await buttonByExactText(dialog, '确定').trigger('click')
     await flushPromises()

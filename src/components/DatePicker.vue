@@ -22,7 +22,7 @@
            弹窗随页面一起卸载时，离场过渡会在 DOM 已被移除后仍继续运行，
            jsdom 下会抛出 insertBefore/subTree 的未处理异常。 -->
       <transition name="pop" :css="popCss">
-        <div v-if="panelOpen" ref="panelRef" class="dp-panel app-menu-surface rounded-xl border border-white/40 shadow-2xl"
+        <div v-if="panelOpen" ref="panelRef" class="dp-panel app-menu-panel shadow-2xl"
           :style="panelStyle" role="dialog" aria-modal="false"
           :aria-label="label('datePicker.panel')" tabindex="-1" data-datepicker-panel @keydown.esc.stop.prevent="closePanel">
           <!-- 顶部：上/下月 + 年月标题（点标题切到年月 / 年份视图） -->

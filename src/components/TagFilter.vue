@@ -24,13 +24,13 @@
                  再按 Tab 就跑到下一个工具栏按钮，菜单项永远摸不到）
                · Esc 关闭后焦点回到触发按钮（由 onKeydown 处理） -->
           <div v-if="open" ref="menuRef" role="menu" :aria-label="tt('tags.filterLabel')"
-            class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[12rem] max-h-[60vh] overflow-y-auto"
+            class="fixed z-[110] app-menu-panel min-w-[12rem] max-h-[60vh] overflow-y-auto"
             style="--pop-origin-y: top; --pop-from-y: -6px"
             :style="menuStyle"
             @keydown="onMenuKeydown">
             <!-- 清空筛选 -->
             <button v-if="selected.length" type="button" @click="clearAll"
-              class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-500 hover:bg-primary/10 transition whitespace-nowrap">
+              class="flex items-center gap-2 px-3 py-2 text-xs text-left text-gray-500 hover:bg-primary/10 transition whitespace-nowrap">
               <AppIcon scale="xs" name="undo" />{{ tt('tags.clearFilter') }}
             </button>
             <div v-if="selected.length" class="border-t border-gray-200/60 my-1"></div>
@@ -39,7 +39,7 @@
             <button v-for="tag in allTags" :key="tag.name" type="button" role="menuitemcheckbox"
               :aria-checked="selected.includes(tag.name) ? 'true' : 'false'"
               @click="toggleTag(tag.name)"
-              class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+              class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
               :class="selected.includes(tag.name) ? 'font-semibold text-gray-800' : 'text-gray-600'">
               <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: tag.color || 'rgb(var(--c-primary))' }"></span>
               <span class="flex-1">{{ tagLabel(tag, tt) }}</span>

@@ -5,6 +5,8 @@ import TagSelector from './components/TagSelector.vue'
 import TagFilter from './components/TagFilter.vue'
 import ColorPicker from './components/ColorPicker.vue'
 import ItemTags from './components/ItemTags.vue'
+import AppSelect from './components/AppSelect.vue'
+import ClockPicker from './components/ClockPicker.vue'
 import router from './router'
 import './style.css'
 import { initAppearance } from './composables/useAppearance'
@@ -31,6 +33,7 @@ window.addEventListener('error', (e) =>
 window.addEventListener('unhandledrejection', (e) =>
   console.error('[boot] unhandledrejection:', e.reason),
 )
+
 
 /**
  * 兜底拦截「Shift / 三击 / Ctrl+A 触发文本选区」。
@@ -90,10 +93,13 @@ async function boot() {
   app.component('TagFilter', TagFilter)
   app.component('ColorPicker', ColorPicker)
   app.component('ItemTags', ItemTags)
+  app.component('AppSelect', AppSelect)
+  app.component('ClockPicker', ClockPicker)
   // 全站悬浮气泡指令：替代原生 title（样式与侧边栏气泡一致，见 useHoverTip.js）
   app.directive('tip', vTip)
   app.use(router)
   app.mount('#app')
+
   console.log('[boot] mounted')
 
   // 外观初始化（玻璃/配色/壁纸/取色）移到挂载后异步执行，不再阻塞首帧

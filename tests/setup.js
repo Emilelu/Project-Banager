@@ -22,7 +22,9 @@ import TagSelector from '../src/components/TagSelector.vue'
 import TagFilter from '../src/components/TagFilter.vue'
 import ColorPicker from '../src/components/ColorPicker.vue'
 import ItemTags from '../src/components/ItemTags.vue'
-config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter, ColorPicker, ItemTags }
+import AppSelect from '../src/components/AppSelect.vue'
+import ClockPicker from '../src/components/ClockPicker.vue'
+config.global.components = { ...(config.global.components || {}), AppIcon, TagSelector, TagFilter, ColorPicker, ItemTags, AppSelect, ClockPicker }
 
 // 同理注册全局悬浮气泡指令 v-tip：
 // 视图模板里已把原生 title 换成 v-tip，测试不注册会刷屏

@@ -26,7 +26,7 @@
                 <div v-if="showYearMenu" class="fixed inset-0 z-[100]" @click="showYearMenu = false"></div>
                 <transition name="pop">
                   <div v-if="showYearMenu" ref="yearMenuRef" role="menu"
-                    class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[10rem] max-h-[60vh] overflow-y-auto"
+                    class="fixed z-[110] app-menu-panel min-w-[10rem] max-h-[60vh] overflow-y-auto"
                     style="--pop-origin-y: top; --pop-from-y: -6px"
                     :style="yearMenuStyle"
                     :aria-label="tt('watched.yearSelect')">
@@ -34,7 +34,7 @@
                     <button type="button" role="menuitemradio"
                       :aria-checked="selectedYear === '__all__' ? 'true' : 'false'"
                       @click="pickYear('__all__')"
-                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
                       :class="selectedYear === '__all__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
                       <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-primary"></span>
                       <span class="flex-1">{{ tt('watched.allYears') }}</span>
@@ -47,7 +47,7 @@
                     <button v-for="y in sortedYears" :key="y.year_label" type="button" role="menuitemradio"
                       :aria-checked="selectedYear === y.year_label ? 'true' : 'false'"
                       @click="pickYear(y.year_label)"
-                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
                       :class="selectedYear === y.year_label ? 'font-semibold text-gray-800' : 'text-gray-600'">
                       <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-sakura"></span>
                       <span class="flex-1">{{ y.year_label }}</span>
@@ -61,7 +61,7 @@
                     <button type="button" role="menuitemradio"
                       :aria-checked="selectedYear === '__unclassified__' ? 'true' : 'false'"
                       @click="pickYear('__unclassified__')"
-                      class="w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition hover:bg-primary/10 whitespace-nowrap"
+                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
                       :class="selectedYear === '__unclassified__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
                       <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-warning"></span>
                       <span class="flex-1">{{ tt('watched.unclassified') }}</span>
@@ -273,10 +273,10 @@
                语言菜单正是 fixed z-[110] 才正常。 -->
          <Teleport to="body">
          <div v-if="showPageSizeMenu" role="menu"
-                class="page-size-menu app-menu-surface fixed z-[110] rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem]"
+                class="page-size-menu app-menu-panel fixed z-[110] min-w-[12rem]"
                 :style="pageSizeMenuStyle">
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
-                  class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition whitespace-nowrap" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
+                  class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition whitespace-nowrap" :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
                 <div class="border-t border-gray-200/60 my-1"></div>
                 <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
                   <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
@@ -316,11 +316,11 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
-          <button @click="ctxEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
-          <button @click="ctxOpenUrl" class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('card.openLink') }}</button>
+        <div class="app-dialog app-menu-panel min-w-[10rem] context-menu">
+          <button @click="ctxEdit" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
+          <button @click="ctxOpenUrl" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('card.openLink') }}</button>
           <div class="border-t border-white/20 my-1"></div>
-          <button @click="ctxDelete" class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
+          <button @click="ctxDelete" class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
         </div>
       </div>
       </transition>
@@ -757,6 +757,14 @@ const pageSizeMenuPos = ref({ left: 0, bottom: 0 })
 const pageSizeMenuStyle = computed(() => ({
   left: pageSizeMenuPos.value.left + 'px',
   bottom: pageSizeMenuPos.value.bottom + 'px',
+  /*
+   * 过渡方向变量：菜单向上展开（底边贴触发器上沿），
+   * 所以缩放原点在 bottom、起始位移向下（+6px）——
+   * 视觉上就是「从下往上长出来」。
+   * 若漏掉这两个变量，CSS 会走默认的 top / -6px，变成「从上往下」，方向相反。
+   */
+  '--pop-origin-y': 'bottom',
+  '--pop-from-y': '6px',
 }))
 
 /**

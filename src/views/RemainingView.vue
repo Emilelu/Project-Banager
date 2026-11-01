@@ -275,11 +275,11 @@
                语言菜单正是 fixed z-[110] 才正常。 -->
          <Teleport to="body">
          <div v-if="showPageSizeMenu" role="menu"
-                class="page-size-menu app-menu-surface fixed z-[110] rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem]"
+                class="page-size-menu app-menu-panel fixed z-[110] min-w-[12rem]"
                 :style="pageSizeMenuStyle">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
-                  class="w-full text-left px-4 py-2 text-sm transition hover:bg-primary/10 whitespace-nowrap"
+                  class="text-left px-4 py-2 text-sm transition hover:bg-primary/10 whitespace-nowrap"
                   :class="pageSize===s?'text-primary font-bold':'text-gray-700'">{{ tt('remaining.perPage', { n: s }) }}</button>
                 <div class="border-t border-gray-200/60 my-1"></div>
                 <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
@@ -318,17 +318,17 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[10rem] context-menu">
+        <div class="app-dialog app-menu-panel min-w-[10rem] context-menu">
           <button @click="ctxEdit"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
+            class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
           <button @click="ctxOpenUrl"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"
+            class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"
             :class="{ 'opacity-40': !contextMenu.item?.url }"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('card.openLink') }}</button>
           <button @click="ctxMoveToWatching"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="tv" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.moveToWatching') }}</button>
+            class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="tv" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.moveToWatching') }}</button>
           <div class="border-t border-white/20 my-1"></div>
           <button @click="ctxDelete"
-            class="w-full text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
+            class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
         </div>
       </div>
       </transition>
@@ -484,11 +484,11 @@
             <div class="px-6 py-5 space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.day') }}</label>
-                <select v-model="moveForm.day_of_week"
-                  class="w-full px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80">
-                  <option value="">{{ tt('showDialog.chooseDay') }}</option>
-                  <option v-for="day in weekDays" :key="day" :value="day">{{ dayLabel(day) }}</option>
-                </select>
+                <AppSelect v-model="moveForm.day_of_week"
+                  :options="weekDayOptions"
+                  :placeholder="tt('showDialog.chooseDay')"
+                  :aria-label="tt('showDialog.day')"
+                  trigger-class="w-full" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.time') }}</label>
@@ -512,7 +512,7 @@
       <div v-if="showSeasonMenu" class="fixed z-[200] season-menu"
         style="--pop-origin-y: top; --pop-from-y: -6px"
         :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="app-dialog app-menu-surface rounded-xl shadow-2xl border border-white/40 py-1 min-w-[11.25rem] context-menu">
+        <div class="app-dialog app-menu-panel min-w-[11.25rem] context-menu">
           <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
             class="block px-4 py-2 text-sm whitespace-nowrap hover:bg-primary/10 transition text-gray-700">{{ s.label }}</a>
         </div>
@@ -572,6 +572,12 @@ const { tt } = useI18n()
 const { errorText } = useErrorText()
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+/** AppSelect 用的星期选项（含空占位，与原 <select> 的 chooseDay 一致） */
+const weekDayOptions = computed(() => [
+  { value: '', label: tt('showDialog.chooseDay') },
+  ...weekDays.map((d) => ({ value: d, label: dayLabel(d) })),
+])
 
 // 星期是数据层的中文标识，展示时按当前语言翻译
 const dayLabel = (cn) => {
@@ -841,6 +847,14 @@ const pageSizeMenuPos = ref({ left: 0, bottom: 0 })
 const pageSizeMenuStyle = computed(() => ({
   left: pageSizeMenuPos.value.left + 'px',
   bottom: pageSizeMenuPos.value.bottom + 'px',
+  /*
+   * 过渡方向变量：菜单向上展开（底边贴触发器上沿），
+   * 所以缩放原点在 bottom、起始位移向下（+6px）——
+   * 视觉上就是「从下往上长出来」。
+   * 若漏掉这两个变量，CSS 会走默认的 top / -6px，变成「从上往下」，方向相反。
+   */
+  '--pop-origin-y': 'bottom',
+  '--pop-from-y': '6px',
 }))
 
 /**

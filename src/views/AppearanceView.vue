@@ -78,11 +78,11 @@
                     <div v-if="showPaletteSourceMenu" class="fixed inset-0 z-[100]"
                       @click="showPaletteSourceMenu = false"></div>
                     <div v-if="showPaletteSourceMenu" role="menu"
-                      class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[13rem]"
+                      class="fixed z-[110] app-menu-panel min-w-[13rem]"
                       :style="paletteSourceMenuStyle">
                       <button @click="pickPaletteMode('auto')" :disabled="noCorsSource" role="menuitemradio"
                         :aria-checked="isPaletteAuto ? 'true' : 'false'"
-                        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                        class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
                         :class="isPaletteAuto ? 'text-primary font-bold' : 'text-gray-700'">
                         <span class="w-4 shrink-0" aria-hidden="true">
                           <svg v-if="isPaletteAuto" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
@@ -94,7 +94,7 @@
                       </button>
                       <button @click="pickPaletteMode('random')" role="menuitemradio"
                         :aria-checked="state.paletteMode === 'random' ? 'true' : 'false'"
-                        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                        class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
                         :class="state.paletteMode === 'random' ? 'text-primary font-bold' : 'text-gray-700'">
                         <span class="w-4 shrink-0" aria-hidden="true">
                           <svg v-if="state.paletteMode === 'random'" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
@@ -160,13 +160,10 @@
               </div>
               <template v-if="state.bgEnabled">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <select v-model="state.bgProvider" :aria-label="tt('theme.backgroundSource')"
-                    class="tone-input flex-1 min-w-[8rem] max-w-[16rem] px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80">
-                    <option value="alcy">{{ tt('theme.providerAlcy') }}</option>
-                    <option value="dmoe">{{ tt('theme.providerDmoe') }}</option>
-                    <option value="loliapi">{{ tt('theme.providerLoliapi') }}</option>
-                    <option value="custom">{{ tt('theme.customUrl') }}</option>
-                  </select>
+                  <AppSelect v-model="state.bgProvider"
+                    :options="providerOptions"
+                    :aria-label="tt('theme.backgroundSource')"
+                    trigger-class="flex-1 min-w-[8rem] max-w-[16rem]" />
                   <!-- 改用主题色渐变（.btn-toned）：原先写死 secondary 渐变，
                        主题色偏粉时「白字压浅粉」对比度不足；.btn-toned 的主色→副色深端
                        已按浅色背景收敛，白字始终可读。 -->
@@ -189,11 +186,11 @@
                     <Teleport to="body">
                       <div v-if="showAutoMenu" class="fixed inset-0 z-[100]" @click="showAutoMenu = false"></div>
                       <div v-if="showAutoMenu" role="menu"
-                        class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[12rem]"
+                        class="fixed z-[110] app-menu-panel min-w-[12rem]"
                         :style="autoMenuStyle">
                         <button @click="pickAutoMode(true)" role="menuitemradio"
                           :aria-checked="state.bgAutoSwitch ? 'true' : 'false'"
-                          class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                          class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
                           :class="state.bgAutoSwitch ? 'text-primary font-bold' : 'text-gray-700'">
                           <span class="w-4 shrink-0" aria-hidden="true">
                             <svg v-if="state.bgAutoSwitch" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
@@ -205,7 +202,7 @@
                         </button>
                         <button @click="pickAutoMode(false)" role="menuitemradio"
                           :aria-checked="!state.bgAutoSwitch ? 'true' : 'false'"
-                          class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                          class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
                           :class="!state.bgAutoSwitch ? 'text-primary font-bold' : 'text-gray-700'">
                           <span class="w-4 shrink-0" aria-hidden="true">
                             <svg v-if="!state.bgAutoSwitch" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
@@ -525,6 +522,52 @@ const pickPaletteMode = (mode) => {
 
 // 遮罩浓度 / 背景模糊属于低频微调项，默认折叠以压缩弹窗高度
 const showTuning = ref(false)
+
+/* 「自动换图 / 固定壁纸」下拉菜单（原来是两个并排按钮）。
+   与「每页条数」「配色来源」菜单同一套：Teleport + fixed + bottom 定位，
+   不需要知道菜单高度 —— 菜单多高都自动向上展开。 */
+
+/** AppSelect 用的图源选项（原来是 4 个原生 <option>） */
+const providerOptions = computed(() => [
+  { value: 'alcy', label: tt('theme.providerAlcy') },
+  { value: 'dmoe', label: tt('theme.providerDmoe') },
+  { value: 'loliapi', label: tt('theme.providerLoliapi') },
+  { value: 'custom', label: tt('theme.customUrl') },
+])
+const showAutoMenu = ref(false)
+const autoMenuPos = ref({ left: 0, bottom: 0 })
+const autoMenuStyle = computed(() => ({
+  left: autoMenuPos.value.left + 'px',
+  bottom: autoMenuPos.value.bottom + 'px',
+}))
+
+/** 触发器上显示当前模式（而不是固定写死文案） */
+const autoModeLabel = computed(() =>
+  state.bgAutoSwitch ? tt('theme.autoChange') : tt('theme.fixCurrent'),
+)
+
+const toggleAutoMenu = (e) => {
+  if (showAutoMenu.value) {
+    showAutoMenu.value = false
+    return
+  }
+  const btn = e && e.currentTarget
+  if (!btn) return
+  const r = btn.getBoundingClientRect()
+  const MENU_W = 200
+  const MARGIN = 8
+  let left = r.left
+  if (left + MENU_W > window.innerWidth - MARGIN) {
+    left = Math.max(MARGIN, window.innerWidth - MENU_W - MARGIN)
+  }
+  autoMenuPos.value = { left: left, bottom: window.innerHeight - r.top + MARGIN }
+  showAutoMenu.value = true
+}
+
+const pickAutoMode = (on) => {
+  setAutoSwitch(!!on)
+  showAutoMenu.value = false
+}
 
 // 「跟随壁纸取色」是否处于可用且选中状态（图源不支持跨域取色时视为不可用）
 const isPaletteAuto = computed(() => state.paletteMode === 'auto' && !noCorsSource.value)
