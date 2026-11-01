@@ -245,7 +245,7 @@ describe('导入边界：XLSX 损坏与格式不匹配', () => {
       expect(res.imported).toBe(0)
       // 必须能说出失败原因（要么是「打不开」，要么是「没有可识别的工作表」）
       expect(res.errors.length).toBeGreaterThan(0)
-      expect(res.errors.join(' ')).toMatch(/打不开|打开文件失败|没有找到可识别/)
+    expect(res.errors.map((e) => (e && e.code) || String(e)).join(' ')).toMatch(/XLSX_|打不开|打开文件失败|没有找到可识别/)
     }
     expect(baselineIntact()).toBe(true)
   })

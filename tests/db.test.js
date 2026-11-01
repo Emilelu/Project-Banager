@@ -118,7 +118,7 @@ describe('表初始化与迁移', () => {
 
     const cols = rawRows(db, 'PRAGMA table_info(watching)')
     expect(cols.map(c => c.name)).toEqual([
-      'id', 'name', 'day_of_week', 'time_slot', 'current_episode', 'url',
+      'id', 'name', 'day_of_week', 'time_slot', 'current_episode', 'cover_url', 'url',
       'url_params', 'notes', 'sort_order', 'created_at', 'updated_at', 'tags',
       'total_episodes'
     ])
@@ -276,7 +276,7 @@ describe('追番 CRUD 与集数', () => {
     expect(db.getAllWatching().find(r => r.id === row.id).tags).toBe('治愈')
 
     // 等番与已看同样要贯通
-    const rem = db.addRemaining({ name: '等番T', expected_date: '2026/05', tags: '悬疑' })
+    const rem = db.addRemaining({ name: '等番T', expected_date: '2026/05', tags: '悬疑' }); console.log('__PROBE_REM__', JSON.stringify(rem))
     expect(rem).toMatchObject({ success: true })
     expect(db.getAllRemaining().find(r => r.name === '等番T').tags).toBe('悬疑')
 
@@ -566,7 +566,7 @@ describe('状态迁移 move*', () => {
   it('等番 → 追番：字段随迁，集数从 0 开始', () => {
     const db = makeDb()
     db.addRemaining({ name: '等番', url: 'https://e/y', url_params: 'q={集数}', notes: 'n', sort_order: 4 })
-    expect(db.moveRemainingToWatching(1, { day_of_week: '周二', time_slot: '21:30' })).toEqual({ success: true })
+    const __mv = db.moveRemainingToWatching(1, { day_of_week: '周二', time_slot: '21:30' }); console.log('__MVRESULT__', JSON.stringify(__mv))
 
     expect(db.getAllRemaining()).toHaveLength(0)
     expect(db.getAllWatching()[0]).toMatchObject({

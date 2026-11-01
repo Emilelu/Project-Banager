@@ -103,3 +103,51 @@ export function useErrorText() {
   }
 }
 
+
+
+/**
+ * 导入器错误 → 字典 key。
+ *
+ * 导入器（src/db/structuredImporter.js / excelImporter.js）内部不做 i18n，
+ * 但它的 errors 数组会**直接显示给用户**。原实现返回中文原文，英/日界面会露中文。
+ * 这里给每个错误一个 code，UI 层按 code 翻译；返回纯字符串（旧行为）仍兼容。
+ */
+const IMPORT_ERRORS = [
+  { code: 'JSON_UNRECOGNIZED', key: 'impErr.jsonUnrecognized' },
+  { code: 'JSON_MISSING_NAME_WATCHING', key: 'impErr.jsonMissingNameWatching' },
+  { code: 'JSON_MISSING_NAME_REMAINING', key: 'impErr.jsonMissingNameRemaining' },
+  { code: 'JSON_MISSING_NAME_WATCHED', key: 'impErr.jsonMissingNameWatched' },
+  { code: 'JSON_NO_RECORDS', key: 'impErr.jsonNoRecords' },
+  { code: 'CSV_NO_SECTION', key: 'impErr.csvNoSection' },
+  { code: 'CSV_SECTION_EMPTY', key: 'impErr.csvSectionEmpty' },
+  { code: 'FILE_EMPTY', key: 'impErr.fileEmpty' },
+  { code: 'MD_NO_SECTION', key: 'impErr.mdNoSection' },
+  { code: 'MD_SECTION_EMPTY', key: 'impErr.mdSectionEmpty' },
+  { code: 'XLSX_NO_DAY_HEADER', key: 'impErr.xlsxNoDayHeader' },
+  { code: 'XLSX_WATCHING_FAILED', key: 'impErr.xlsxWatchingFailed', hasParams: true },
+  { code: 'XLSX_REMAINING_FAILED', key: 'impErr.xlsxRemainingFailed', hasParams: true },
+  { code: 'XLSX_WATCHED_FAILED', key: 'impErr.xlsxWatchedFailed', hasParams: true },
+  { code: 'XLSX_UNEXPECTED', key: 'impErr.xlsxUnexpected', hasParams: true },
+  { code: 'XLSX_NO_SHEET', key: 'impErr.xlsxNoSheet' },
+  { code: 'XLSX_SHEET_EMPTY', key: 'impErr.xlsxSheetEmpty' },
+]
+
+const IMP_BY_CODE = new Map(IMPORT_ERRORS.map((e) => [e.code, e]))
+
+/**
+ * 把导入错误项翻译成当前语言文案。
+ * 接受三种形态：
+ *   · { code, params }  → 按 code 查字典
+ *   · string            → 原样返回（兼容旧行为 / 用户数据相关的消息）
+ * @param {string|{code:string, params?:object}} err
+ * @param {(key: string, params?: object) => string} [translate]
+ */
+export function importErrorText(err, translate = t) {
+  if (!err) return ''
+  if (typeof err === 'string') return err
+  const entry = IMP_BY_CODE.get(err.code)
+  if (!entry) return err.code || ''
+  const text = translate(entry.key, err.params || {})
+  // 字典缺失时回退到 code，避免露出裸 key
+  return text === entry.key ? (err.code || '') : text
+}

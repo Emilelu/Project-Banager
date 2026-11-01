@@ -848,12 +848,14 @@ html:not(.dark) body.adaptive .app-btn-ghost {
  * 与 .btn-mini / .btn-step / .seg-btn 一致，避免小按钮 hover 时"拖沓"。
  */
 .btn-sm {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 9px;
-  font-size: 10.5px;
-  line-height: 14px;
-  gap: 4px;
+  /* 28px/10.5px 太小（分页栏的「每页 N 条」等按钮看起来像缩小版），
+     调到 30px/11.5px：仍是次级档（比 .btn-base 的 34px 小），但可读性正常。 */
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  line-height: 16px;
+  gap: 5px;
   transition: transform 0.25s var(--ease-spring), box-shadow 0.2s var(--ease-spring),
     background-color 0.2s var(--ease-spring), background-image 0.2s var(--ease-spring),
     opacity 0.2s var(--ease-spring), border-color 0.2s var(--ease-spring),
@@ -869,22 +871,22 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 }
 /* 小号纯图标（卡片行内编辑/删除、色块重置换原）：与 .btn-sm 同高 */
 .btn-sm.btn-icon {
-  height: 28px;
-  width: 28px;
+  height: 30px;
+  width: 30px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   gap: 0;
 }
 /* 小号「文字按钮」（没有任何底色，只靠 color 表达层级）：用于「手动输入 / 时钟选择 /
    插入集数 / 自定义颜色」这类弹窗内的次要切换。显式声明透明底，避免继承
    Tailwind bg-* 时忽有忽无；hover 只换文字色 + 极淡主色底，不改变几何。 */
 .btn-link {
-  height: 28px;
-  padding: 0 6px;
-  border-radius: 7px;
-  font-size: 10.5px;
-  line-height: 14px;
-  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 16px;
+  gap: 5px;
   background: transparent;
   border: 1px solid transparent;
   color: rgb(var(--c-primary-dark));
@@ -3246,4 +3248,62 @@ td .truncate {
 #sidebar-tip,
 #clock-tip {
   white-space: nowrap;
+}
+
+
+/* ==================== 封面图缩略图（用户早期需求：番剧封面 / Bangumi 直链） ==================== */
+/*
+ * 三处共用同一套视觉语言：
+ *   · 编辑弹窗「封面图 URL」实时预览 —— 40×56（竖排海报 5:7）
+ *   · 等番 / 已看 表格行 —— 24×32（.cover-thumb--row，尺寸由 self 声明）
+ *   · 追番卡片 —— 由 WatchingCard.vue 的 .card-cover 单独负责（28×40）
+ *
+ * 约定：
+ *   1. 无封面时调用方**整块不渲染**（不占位、不改变行高）。
+ *   2. 加载失败由调用方把 <img> 换成占位图标（.is-failed 的虚线描边只是弱提示），
+ *      本组样式不含任何「破图兜底图片」，因此任何情况下都不会看到浏览器的裂图。
+ *   3. 边框用主题色淡描边：压在浅色玻璃上可辨识；深色玻璃下由 .dark 换成白色淡描边，
+ *      否则原本的深色描边在深紫底上会完全消失，缩略图看着像没边框的浮块。
+ *   4. 一律 rgb(var(--c-primary) / a) 写法 —— rgba(var(--c-primary), a) 是非法语法。
+ */
+.cover-thumb {
+  flex: 0 0 auto;
+  display: block;
+  object-fit: cover;
+  border-radius: 0.375rem;
+  border: 1px solid rgb(var(--c-primary) / 0.28);
+  background: rgb(255 255 255 / 0.55);
+  color: #64748b;
+  overflow: hidden;
+}
+
+/* 弹窗实时预览槽位：有图显示图、无图/失败显示占位图标（尺寸由调用方给 40×56） */
+.cover-thumb--preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-thumb--preview > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 表格行缩略图：靠容器 gap 留白，不再额外加 margin（否则与 .name-with-tags 的 gap 叠加） */
+.cover-thumb--row {
+  width: 1.5rem;
+  height: 2rem;
+}
+
+/* 加载失败：虚线描边是「预期有封面但没取到」的弱提示，不出现破图 */
+.cover-thumb.is-failed {
+  border-style: dashed;
+}
+
+.dark .cover-thumb {
+  border-color: rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.08);
+  color: #cbd5e1;
 }

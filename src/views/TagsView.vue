@@ -6,7 +6,7 @@
         <AppIcon scale="md" name="plus" class="text-primary" />
         <h3 class="text-base font-bold gradient-text">{{ tt('tags.createNew') }}</h3>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap min-h-[3.25rem]">
         <input v-model="newName" type="text" :placeholder="tt('tags.namePlaceholder')" maxlength="20"
           class="tag-input flex-1 min-w-[10rem] px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80"
           @keyup.enter="createTag" />

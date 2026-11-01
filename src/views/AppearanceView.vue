@@ -12,19 +12,19 @@
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <button @click="setGlass('frost')"
-                  class="p-3 rounded-xl border-2 text-left transition-all btn-press"
+                  class="p-2.5 rounded-xl border-2 text-left transition-all btn-press"
                   v-tip="tt('theme.frostedDesc')" :aria-label="tt('theme.frostedDesc')"
                   :class="state.glass === 'frost' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
-                  <div class="h-10 rounded-lg mb-2 frost-preview"></div>
+                  <div class="h-12 rounded-lg mb-2 frost-preview"></div>
                   <!-- 风格卡片的说明（「经典柔和模糊」「高光折射 · 更通透」）原为卡片内第二行灰字，
                        改为整卡气泡：卡片本身就是触发点，悬停/聚焦时信息仍在，卡片同时收紧一行。 -->
                   <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="snowflake" class="text-primary" />{{ tt('theme.frosted') }}</div>
                 </button>
                 <button @click="setGlass('liquid')"
-                  class="p-3 rounded-xl border-2 text-left transition-all btn-press"
+                  class="p-2.5 rounded-xl border-2 text-left transition-all btn-press"
                   v-tip="tt('theme.liquidDesc')" :aria-label="tt('theme.liquidDesc')"
                   :class="state.glass === 'liquid' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
-                  <div class="h-10 rounded-lg mb-2 liquid-preview"></div>
+                  <div class="h-12 rounded-lg mb-2 liquid-preview"></div>
                   <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="droplet" class="text-primary" />{{ tt('theme.liquid') }}</div>
                 </button>
               </div>
@@ -178,7 +178,7 @@
                   <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
                        这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
                        生成中显示骨架，降级失败才回退原图直出 -->
-                  <div class="tone-preview w-full h-28 rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
+                  <div class="tone-preview w-full rounded-xl border border-white/40 overflow-hidden relative bg-white/40">
                     <img v-if="previewSrc" :src="previewSrc" @error="onBgError" @load="bgLoaded = true"
                       loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <img v-else-if="previewFailed" :src="state.bgBlobUrl || state.bgUrl" @error="onBgError" @load="bgLoaded = true"
@@ -598,13 +598,27 @@ watch(() => state.bgProvider, () => { bgLoaded.value = false; bgFailed.value = f
 }
 
 .frost-preview {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(6px);
+  /* 加彩色底衬：透过玻璃能看清「毛玻璃=均匀磨砂」的质感。
+     只有白色底衬时，两块预览在不同壁纸下都会趋同成白框，看不出区别。 */
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)),
+    linear-gradient(120deg,
+      rgb(var(--c-primary) / 0.85) 0%,
+      rgb(var(--c-secondary) / 0.85) 45%,
+      rgb(var(--c-primary-dark) / 0.85) 100%);
+  backdrop-filter: blur(2px);
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .liquid-preview {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.25));
+  /* 液态玻璃：保留 135° 高光渐变，但同样铺彩色底衬，
+     让「通透 + 高饱和折射」与毛玻璃的「均匀磨砂」形成可见对比。 */
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.08)),
+    linear-gradient(120deg,
+      rgb(var(--c-primary) / 0.85) 0%,
+      rgb(var(--c-secondary) / 0.85) 45%,
+      rgb(var(--c-primary-dark) / 0.85) 100%);
   backdrop-filter: blur(6px) saturate(1.6);
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 4px 14px rgba(31, 38, 135, 0.18);
@@ -666,6 +680,13 @@ html:not(.dark) .tone-num {
 }
 
 /* 壁纸预览框：深色下改深底，避免浅底把图片边缘吃掉 */
+.tone-preview {
+  /* 固定宽高比：原来 w-full h-28 在宽卡片里变成 13.5:1 的极扁条，
+     图片 object-cover 后只剩中间一条，看着像空白框。 */
+  aspect-ratio: 2.4 / 1;
+  max-height: 22rem;
+}
+
 .dark .tone-preview {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.14);

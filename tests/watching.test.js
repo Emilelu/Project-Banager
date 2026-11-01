@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+import { pageStats } from '../src/composables/usePageStats'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -124,6 +126,14 @@ afterEach(() => {
 
 
 const topbarText = () => Array.from(document.querySelectorAll('.topbar-stat')).map(s => s.textContent).join('|')
+
+
+/**
+ * 顶栏计数文案。
+ * 计数通过 usePageStats 模块级共享状态传给 App.vue 顶栏；
+ * 本文件挂的是单个 view 组件，DOM 里没有顶栏，所以直接读共享状态。
+ */
+const topbarStatText = () => Object.values(pageStats).flat().map((s) => s.text || '').join('|')
 
 describe('WatchingView 周历 / 集数 / 增删改', () => {
   it('按星期渲染卡片，未排期记录进入未排期区', async () => {
@@ -401,7 +411,7 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
 
     expect(remainingApi.delete).toHaveBeenCalledWith(21)
     expect(tableRows(wrapper)).toHaveLength(20)
-    expect(Array.from(document.querySelectorAll('.topbar-stat')).map(s => s.textContent).join('|')).toContain('共 20 条')
+    expect(topbarStatText()).toContain('共 20 条')
     expect(buttonByExactText(wrapper, '上一页').attributes('disabled')).toBeDefined()
   })
 

@@ -10,7 +10,7 @@
           v-tip="tm('transfer.importHint')">{{ tm('transfer.importTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
 
-      <div class="flex items-center gap-3 flex-wrap">
+      <div class="flex items-center gap-3 flex-wrap min-h-[3.25rem]">
         <!-- 支持格式清单（xlsx · xls · csv …）是「这个按钮接受什么」的说明：
              清单本身移入按钮气泡，按钮旁只留一个 info 图标提示「此处可悬浮」。
              文案 key 未删除，只是渲染位置从正文变成气泡。 -->
@@ -295,6 +295,15 @@ function errText(e) {
   if (!e) return ''
   if (typeof e === 'string') return e
   if (e.code) {
+    // 导入器错误（impErr.*）：kind 参数要翻成「追番 / 等番 / 已看」再传给模板
+    const params = { ...(e.params || {}) }
+    if (params.kind) {
+      params.kindName = tm(`importKind.${params.kind}`)
+      delete params.kind
+    }
+    const text = importErrorText(e, tt)
+    if (text) return text
+    // 兜底：也试 dbErr.*（有些错误来自 db 层）
     const key = `dbErr.${e.code}`
     const translated = tt(key, e.params || {})
     if (translated && translated !== key) return translated

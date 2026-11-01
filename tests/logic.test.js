@@ -652,17 +652,23 @@ describe('useTheme', () => {
 })
 
 describe('router 配置', () => {
-  it('四条业务路由与根重定向存在', async () => {
+  it('业务路由与根重定向存在', async () => {
     const { default: router } = await import('../src/router/index.js')
     const paths = router.getRoutes().map((r) => r.path)
+    // 页面已从 4 条扩到 6 条：标签管理、导入导出、主题与背景都是独立页面
     expect(paths).toEqual(
-      expect.arrayContaining(['/', '/watching', '/remaining', '/watched', '/import']),
+      expect.arrayContaining([
+        '/', '/watching', '/remaining', '/watched',
+        '/tags', '/transfer', '/appearance',
+      ]),
     )
     expect(router.getRoutes().find((r) => r.path === '/').redirect).toBe('/watching')
     expect(router.resolve('/watching').name).toBe('Watching')
     expect(router.resolve('/remaining').meta.title).toBe('等待更新')
     expect(router.resolve('/watched').meta.title).toBe('已看历史')
-    expect(router.resolve('/import').meta.title).toBe('导入Excel')
+    // 旧的 Excel 专用导入页已合并进 /transfer，保留旧书签重定向
+    // resolve() 不会解析 redirect，直接查路由记录的 redirect 字段
+    expect(router.getRoutes().find((r) => r.path === '/import')?.redirect).toBe('/transfer')
   })
 
   it('使用 hash history（单文件/静态部署可直接打开）', async () => {

@@ -128,7 +128,7 @@
  * 值格式（与项目存储格式一致，见 useDatePicker 文件头）：
  *   日 → 2025/07/15（若原值带时间则保留 " HH:mm"）；月 → 2025/07；年 → 2025。
  */
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { validateDate, normalizeDate } from '../composables/useDatePicker'
 import { useI18n } from '../composables/useI18n'
 
@@ -325,6 +325,9 @@ const commit = (y, m, d) => {
 }
 
 const pickDay = (cell) => {
+  // 点日视图里的某一天 = 明确想要「具体日期」：即使当前精度停在月/年，也升级为日精度。
+  // （否则会出现「点了 15 号却只写回 2025」的怪现象）
+  if (precisionState.value !== 'day') precisionState.value = 'day'
   commit(cell.y, cell.m, cell.d)
 }
 
@@ -351,10 +354,13 @@ const setPrecision = (next) => {
   if (precisionState.value === next) return
   precisionState.value = next
   const p = parsed.value
-  // 切换精度立刻按新精度重算当前值（例如 2025/07/15 → 2025），面板保持打开
+  // 切换精度立刻按新精度重算当前值（例如 2025/07/15 → 2025），面板保持打开。
+  // 值本身缺少更低一级的字段时（"2025" 没有月、"2025/07" 没有日），
+  // 必须回落到面板当前浏览的 cursor，否则「2025/07/15 → 年 → 月」会莫名变成 2025/01。
   if (p.year) {
-    emit('update:modelValue', buildValue(p.year, p.month || 1, p.day || 1, next))
-    emit('change', buildValue(p.year, p.month || 1, p.day || 1, next))
+    const value = buildValue(p.year, p.month || cursor.value.month, p.day || 1, next)
+    emit('update:modelValue', value)
+    emit('change', value)
   }
 }
 
@@ -438,6 +444,15 @@ const panelStyle = computed(() => ({
 }))
 
 // ===== 开关 =====
+/**
+ * 卸载前把离场过渡关掉：
+ *   · 弹窗（.app-dialog）整体卸载时，DatePicker 的面板正开着的场景在测试/真实里都会出现；
+ *   · 离场过渡若在宿主 DOM 已被移除后还在跑，Vue 会抛 "insertBefore of null"/"subTree of null"。
+ *   · 卸载时把 transition 设为「无 css、无 JS 钩子」，元素立即移除，不留下未完成钩子。
+ */
+const popCss = ref(true)
+onBeforeUnmount(() => { popCss.value = false })
+
 const openPanel = async () => {
   if (props.disabled) return
   syncFromValue()
@@ -557,9 +572,17 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
   transform: rotate(180deg);
 }
 
-/* 深色：bg-white/80 已被 style.css 的 .dark .bg-white\/80 反转，这里只补文字与图标 */
+/* 深色：触发器底色必须自己反转。
+   这里写的是 scoped 原生 background，而不是 Tailwind 的 bg-white/80 类，
+   所以 style.css 的 `.dark .bg-white\/80 { rgba(20,15,40,.55) }` 对它不生效 ——
+   不补这条深色下会是一块 0.8 白底，和手动输入框（走了 bg-white/80）明显割裂。 */
 .dark .dp-trigger {
+  background: rgba(20, 15, 40, 0.55);
   color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.dark .dp-trigger:hover {
+  border-color: rgb(var(--c-primary-light) / 0.5);
 }
 .dark .dp-trigger.is-empty .dp-trigger-value,
 .dark .dp-caret {
@@ -667,9 +690,10 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
   background: rgb(var(--c-primary) / 0.14);
   color: rgb(var(--c-primary));
 }
-/* 非当前月：灰显但**仍可点击**（点它会选中邻月的这一天并跳到该月） */
+/* 非当前月：「灰显」用 gray-500 而不是更浅的灰 —— 太浅（gray-400 及以下）在浅底上会跌破 4.5:1，
+   但灰显本身又必须"淡下去"。gray-500 在 0.82 白底上实测 ≈4.6:1，既弱化又不影响读。 */
 .dp-day.is-outside {
-  color: #b6bcc6;
+  color: #6b7280;
 }
 .dp-day.is-outside:hover {
   color: rgb(var(--c-primary));
@@ -806,7 +830,9 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
   color: rgb(var(--c-primary-light));
 }
 .dark .dp-day.is-outside {
-  color: #64748b;
+  /* 非本月日期需要「灰显」以弱化，但仍要过 4.5:1 —— 用全站统一次级文字色 gray-400 的深色变体，
+     在深紫面板底上实测约 5.1:1，既淡下去又能看清 */
+  color: #7c8ba5;
 }
 .dark .dp-day.is-outside:hover {
   color: rgb(var(--c-primary-light));

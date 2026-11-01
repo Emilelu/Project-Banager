@@ -8,7 +8,6 @@
           <h3 class="card-head-title gradient-text">{{ tt('watching.monthReminder', { count: currentMonthRemaining.length }) }}</h3>
           <!-- 需求 B：本页计数（共 N 部追番）也在这里给一份 —— 本卡是页面**最顶部**那张，
                计数紧贴页面标题行右侧，与等番/已看两页同一位置同一套 .topbar-stat 样式。 -->
-          <span class="topbar-stat">{{ tt('watched.totalCount', { count: watchingList.length }) }}</span>
         </div>
         <router-link to="/remaining" class="btn-base btn-toned shrink-0">
           <AppIcon scale="sm" name="clock" />{{ tt('watching.viewRemaining') }}
@@ -19,13 +18,6 @@
     <!-- 操作面板 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
         <!-- 标题行：与「标签管理 / 导入 & 导出」同一套卡片标题（图标在前 + gradient-text + 计数 chip） -->
-        <div class="card-head mb-3 flex-wrap">
-          <AppIcon scale="md" name="tv" class="text-primary" />
-          <h3 class="card-head-title gradient-text">{{ tt('nav.watching') }}</h3>
-          <!-- 该卡片在「本月提示」缺席时（本月没有等番）会成为页面第一张卡，
-               所以这里保留一份计数；两者都不会同时缺失，页面上始终恰有一个计数入口。 -->
-          <span :class="currentMonthRemaining.length > 0 ? 'stat-chip is-neutral' : 'topbar-stat'">{{ tt('watched.totalCount', { count: watchingList.length }) }}</span>
-        </div>
         <!-- 按钮配色统一由主题色驱动（.btn-primary/.btn-toned/.btn-neutral/.btn-danger），
              不再为每个按钮写死不同渐变；图标全为 currentColor，天然跟随按钮配色。 -->
         <!-- 整个工具栏是一个 transition-group：
@@ -141,8 +133,8 @@
           <button @click="openAddDialog" class="btn-base btn-primary">
             <AppIcon scale="sm" name="plus" />{{ tt('watching.addShow') }}
           </button>
-          <router-link to="/import" class="btn-base btn-toned">
-            <AppIcon scale="sm" name="upload" />{{ tt('watching.importFromExcel') }}
+          <router-link to="/transfer" class="btn-base btn-toned">
+            <AppIcon scale="sm" name="upload" />{{ tt('transfer.importTitle') }}
           </router-link>
         </div>
       </div>
@@ -268,6 +260,34 @@
                 <p v-if="formProgressPct !== null" class="text-[0.6875rem] text-gray-400 mt-1">
                   {{ tt('showDialog.progressPreview', { pct: formProgressPct }) }}
                 </p>
+              </div>
+              <div>
+                <!-- 封面图 URL（用户早期明确要求过的「番剧封面图，可参考 Bangumi 番组计划」）。
+                     数据层已支持 cover_url，这里只负责录入 + 实时预览：
+                     · 不做 Bangumi API 搜索（跨域 + 需要 UA + 限流，且本应用离线优先），
+                       只让用户粘贴直链；placeholder 给一条真实可访问的示例，方便照抄格式。
+                     · 预览 40×56（竖排海报 5:7）；URL 为空时整块不渲染（不留空槽、不改变弹窗高度）。
+                     · 加载失败换成占位图标（.is-failed 的虚线描边做弱提示），绝不出现浏览器裂图。
+                       URL 每变一次就把失败标记复位（见脚本里的 watch），换了链接即可重试。 -->
+                <label v-tip="tt('showDialog.coverUrlHint')"
+                  class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
+                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="inline-block ml-1 text-gray-400" />
+              </label>
+                <div class="flex items-center gap-2">
+                  <input v-model="form.cover_url" type="text" data-cover-input
+                    :placeholder="tt('showDialog.coverUrlPlaceholder')"
+                    :aria-label="tt('showDialog.coverUrl')"
+                    class="flex-1 min-w-0 px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                  <div v-if="form.cover_url" class="cover-thumb cover-thumb--preview w-10 h-14 shrink-0"
+                    :class="{ 'is-failed': formCoverFailed }" data-cover-preview>
+                    <img v-if="!formCoverFailed" :src="trimmedCoverUrl" alt="" loading="lazy" decoding="async"
+                      @error="formCoverFailed = true" />
+                    <!-- 占位图标用 image（空心相框）而不是 imageOff：
+                         imageOff 会把相框填充成实色，16px 下看起来就是一个纯黑方块，
+                         读不出「图片缺失」的语义。 -->
+                    <AppIcon v-else scale="sm" name="image" />
+                  </div>
+                </div>
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('showDialog.url') }}</label>
@@ -685,7 +705,17 @@ const editing = ref(null)
 const editValue = ref('')
 const dateManualInput = ref(false)
 
-const form = ref({ name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', url:'', url_params:'', notes:'', tags:'' })
+const form = ref({ name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', cover_url:'', url:'', url_params:'', notes:'', tags:'' })
+
+// ========== 封面图预览 ==========
+// 只做「粘贴 URL → 预览」这一件事：不在客户端调用 Bangumi API（跨域 + 需要 UA + 限流），
+// 也就不需要任何网络权限或新增依赖。
+// formCoverFailed 记录「当前这个 URL 加载失败」，URL 一变就复位（见下方 watch），
+// 这样用户把写错的链接改成正确链接时预览能立刻恢复，而不是永远停在占位图标。
+const formCoverFailed = ref(false)
+/** 去掉首尾空白后的封面地址：用户从聊天窗口复制时常带空格/换行，直接塞给 <img> 会 404 */
+const trimmedCoverUrl = computed(() => String(form.value.cover_url ?? '').trim())
+watch(trimmedCoverUrl, () => { formCoverFailed.value = false })
 
 /** 总集数（数字形式，无法解析时为 0） */
 const formTotalEpisodes = computed(() => {
@@ -941,7 +971,8 @@ const focusNameInput = () => { nextTick(() => dialogNameInput.value?.focus()) }
 
 const openAddDialog = () => {
   dialogMode.value = 'add'
-  form.value = { name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', url:'', url_params:'', notes:'', tags:'' }
+  form.value = { name:'', day_of_week:'', time_slot:'', current_episode:'0', total_episodes:'', cover_url:'', url:'', url_params:'', notes:'', tags:'' }
+  formCoverFailed.value = false
   formTime.value = ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
@@ -976,11 +1007,15 @@ const openEditDialog = () => {
     time_slot: '',
     current_episode: String(selected.value.current_episode || '0'),
     total_episodes: String(selected.value.total_episodes || ''),
+    // 编辑路径与新增路径都必须带 cover_url：漏掉它，保存时 update 白名单里
+    // 这个字段会被当成「未提供」，用户改过的封面等于白改。
+    cover_url: selected.value.cover_url || '',
     url: selected.value.url || '',
     url_params: selected.value.url_params || '',
     notes: selected.value.notes || '',
     tags: selected.value.tags || ''
   }
+  formCoverFailed.value = false
   formTime.value = selected.value.time_slot || ''
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
@@ -1013,6 +1048,8 @@ const saveForm = async () => {
   form.value.total_episodes = String(form.value.total_episodes ?? '').replace(/[^\d.]/g, '')
   // 合并时间选择到 time_slot
   form.value.time_slot = formTime.value || ''
+  // 封面地址去空白：从聊天/网页复制来时经常带首尾空格或换行，原样存进库会让 <img> 404
+  form.value.cover_url = trimmedCoverUrl.value
   try {
     if (dialogMode.value === 'add') {
       const res = await watchingApi.add(form.value)

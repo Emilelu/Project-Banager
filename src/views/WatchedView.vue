@@ -7,10 +7,6 @@
            .topbar-stat 与 App.vue 顶栏徽章同一套样式（更紧凑），两处观感一致。 -->
       <div class="card-head mb-3 flex-wrap">
         <AppIcon scale="md" name="book" class="text-primary" />
-        <h3 class="card-head-title gradient-text">{{ tt('nav.watched') }}</h3>
-        <span class="topbar-stat">{{ tt('watched.thisYear', { count: yearCount }) }}</span>
-        <span class="topbar-stat is-neutral">{{ tt('watched.total', { count: totalCount }) }}</span>
-        <span class="topbar-stat is-neutral">{{ tt('watched.totalCount', { count: filteredList.length }) }}</span>
       </div>
       <div class="toolbar-enter toolbar-adaptive flex items-center justify-between gap-4 flex-nowrap">
         <div class="flex items-center gap-4">
@@ -212,8 +208,14 @@
                    不新增 td（既有列索引的测试断言不受影响），也不另起一行
                    —— 否则带标签的行会比无标签的行高、整张表行高参差。
                    名称允许 ellipsis 收缩，标签按自身宽度靠右，整块不撑出 td。
-                   标签 chip 不可点（编辑走弹窗），所以不进 Tab 序。 -->
+                   标签 chip 不可点（编辑走弹窗），所以不进 Tab 序。
+                   封面缩略图（24×32）放在名称**左侧**的同一行：放在 td 里做兄弟节点会独占一行
+                   把名称顶到下一行（行高随有无封面跳变）。无封面时整块不渲染（不占位），
+                   加载失败的行由 rowCoverFailed[id] 记住后不再渲染（不出现裂图）。 -->
               <div v-else class="name-with-tags">
+                <img v-if="item.cover_url && !rowCoverFailed[item.id]" :src="item.cover_url"
+                  class="cover-thumb cover-thumb--row" alt="" loading="lazy" decoding="async"
+                  @error="markRowCoverFailed(item.id)" />
                 <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
@@ -451,6 +453,33 @@
                   <input v-model="formTime" type="text" placeholder="HH:mm"
                     class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
                   <button @click="formTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
+                </div>
+              </div>
+              <div>
+                <!-- 封面图 URL（用户早期要求的「番剧封面图，可参考 Bangumi 番组计划」）。
+                     只做「粘贴直链 → 实时预览」，不在客户端调用 Bangumi API
+                     （跨域 + 需要 UA + 限流，且本应用离线优先）。
+                     预览 40×56（竖排海报 5:7）；URL 为空时整块不渲染。
+                     加载失败换成占位图标（.is-failed 的虚线描边做弱提示），绝不出现浏览器裂图；
+                     URL 一变就复位失败标记（见脚本里的 watch），改对链接即可恢复预览。 -->
+                <label v-tip="tt('showDialog.coverUrlHint')"
+                  class="block text-sm font-medium text-gray-700 mb-1 border-b border-dashed border-gray-400/50 cursor-help w-fit">
+                {{ tt('showDialog.coverUrl') }}<AppIcon scale="xs" name="info" class="inline-block ml-1 text-gray-400" />
+              </label>
+                <div class="flex items-center gap-2">
+                  <input v-model="form.cover_url" type="text" data-cover-input
+                    :placeholder="tt('showDialog.coverUrlPlaceholder')"
+                    :aria-label="tt('showDialog.coverUrl')"
+                    class="flex-1 min-w-0 px-4 py-2.5 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
+                  <div v-if="form.cover_url" class="cover-thumb cover-thumb--preview w-10 h-14 shrink-0"
+                    :class="{ 'is-failed': formCoverFailed }" data-cover-preview>
+                    <img v-if="!formCoverFailed" :src="trimmedCoverUrl" alt="" loading="lazy" decoding="async"
+                      @error="formCoverFailed = true" />
+                    <!-- 占位图标用 image（空心相框）而不是 imageOff：
+                         imageOff 会把相框填充成实色，16px 下看起来就是一个纯黑方块，
+                         读不出「图片缺失」的语义。 -->
+                    <AppIcon v-else scale="sm" name="image" />
+                  </div>
                 </div>
               </div>
               <div>
@@ -803,7 +832,36 @@ const editValue = ref('')
 const dateManualInput = ref(false)
 
 // 新增时的默认观看日期 = 今天（编辑已有记录时仍沿用记录原值）
-const form = ref({ name:'', watch_date: todayStr(), url:'', url_params:'', notes:'', tags:'' })
+const form = ref({ name: '', cover_url:'', watch_date: todayStr(), url:'', url_params:'', notes:'', tags:'' })
+
+// ========== 封面图 ==========
+/**
+ * 两个互不干扰的失败标记：
+ *   · formCoverFailed —— 弹窗实时预览的当前 URL 加载失败（URL 一变就复位，见 watch）
+ *   · rowCoverFailed  —— 表格各行的「哪一条封面 404 了」，按 id 记录：
+ *     记在列表上而不是每行一个组件状态，只影响那一个 id，不误伤别的行。
+ * 两者都只导致「不渲染 <img>」，因此永远不会出现浏览器的裂图图标。
+ */
+const formCoverFailed = ref(false)
+const rowCoverFailed = ref({})
+/** 去掉首尾空白后的封面地址：从聊天/网页复制时常带空格或换行，原样塞给 <img> 会 404 */
+const trimmedCoverUrl = computed(() => String(form.value.cover_url ?? '').trim())
+watch(trimmedCoverUrl, () => { formCoverFailed.value = false })
+/** 记录某行的封面加载失败（只影响该 id，不误伤其它行） */
+const markRowCoverFailed = (id) => { rowCoverFailed.value = { ...rowCoverFailed.value, [id]: true } }
+/**
+ * 清除某行的失败标记：保存成功后调用。
+ * 否则用户把写错的链接改对、保存也成功，行上却仍挂着上一版 URL 的失败标记，
+ * 封面再也不出现 —— 「改了没反应」比一开始就没封面更让人困惑。
+ */
+const clearRowCoverFailed = (id) => {
+  if (!rowCoverFailed.value[id]) return
+  const next = { ...rowCoverFailed.value }
+  delete next[id]
+  rowCoverFailed.value = next
+}
+/** 落库前统一去空白（与预览用的是同一个规则，保证「看到的」与「存下的」一致） */
+const normalizeCoverUrl = (u) => String(u ?? '').trim()
 
 const buildUrl = (item) => {
   if (!item.url) return ''
@@ -1135,8 +1193,7 @@ const openAddDialog = () => {
   // 默认日期：在某个**真实年份**视图下添加时填该年份（保留原有的便利性）；
   // 其余情况（全部 / 未分类）回落为今天。
   form.value = {
-    name:'',
-    watch_date: isRealYear(selectedYear.value) ? selectedYear.value : todayStr(),
+    name:'', cover_url:'', watch_date: isRealYear(selectedYear.value) ? selectedYear.value : todayStr(),
     url:'', url_params:'', notes:'', tags:''
   }
   // 用户要求：已看页「添加记录」的**日期和时间都要默认填充**。
@@ -1147,6 +1204,7 @@ const openAddDialog = () => {
     formTime.value = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
   formDateValidationError.value = ''
+  formCoverFailed.value = false
   formShowTimePicker.value = false
   formShowTimeDropdown.value = false
   showDialog.value = true
@@ -1175,12 +1233,16 @@ const openEditDialog = () => {
   const timePart = parts.length > 1 ? parts.slice(1).join(' ') : ''
   form.value = {
     name: selected.value.name,
+    // 编辑路径同样要回填 cover_url：漏掉它，保存时 update 的字段白名单里
+    // 这个字段就永远不会被带上，用户改封面等于白改。
+    cover_url: selected.value.cover_url || '',
     watch_date: datePart,
     url: selected.value.url || '',
     url_params: selected.value.url_params || '',
     notes: selected.value.notes || '',
     tags: selected.value.tags || ''
   }
+  formCoverFailed.value = false
   formTime.value = timePart
   formDateValidationError.value = ''
   formShowTimePicker.value = false
@@ -1210,14 +1272,21 @@ const saveForm = async () => {
       form.value.watch_date = dateStr + ' ' + formTime.value
     }
   }
+  // 封面地址去空白后再落库：从聊天/网页复制来的链接常带首尾空格或换行
+  form.value.cover_url = normalizeCoverUrl(form.value.cover_url)
   try {
     if (dialogMode.value === 'add') {
       const res = await watchedApi.add(form.value)
       if (res.data.success) { showToast(tt('toast.historyAdded')); showDialog.value=false; await fetchYears(); await fetchData() }
       else showToast(errorText(res.data, tt, 'toast.addFailed'),'error')
     } else {
-      const res = await watchedApi.update(selected.value.id, form.value)
-      if (res.data.success) { showToast(tt('toast.historyUpdated')); showDialog.value=false; selected.value=null; await fetchYears(); await fetchData() }
+      const targetId = selected.value.id
+      const res = await watchedApi.update(targetId, form.value)
+      if (res.data.success) {
+        // 清掉这一行的封面失败标记：用户改对了链接，重新渲染时要能重新尝试
+        clearRowCoverFailed(targetId)
+        showToast(tt('toast.historyUpdated')); showDialog.value=false; selected.value=null; await fetchYears(); await fetchData()
+      }
       else showToast(errorText(res.data, tt, 'toast.updateFailed'),'error')
     }
   } catch { showToast(tt('toast.operationFailed'),'error') }
@@ -1356,7 +1425,9 @@ const unpinLeavingGroup = (el) => {
 /* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。
    名称用 flex:0 1 auto + ellipsis：名称长时先截断名称，标签保持完整；
    标签用 flex:0 0 auto：自己不被压扁，放不下时靠容器的 overflow 裁掉。
-   无标签时只剩名称，行高与其它行完全一致（标签绝不另起一行）。 */
+   无标签时只剩名称，行高与其它行完全一致（标签绝不另起一行）。
+   封面缩略图也在这条 flex 行里、位于名称最左（.cover-thumb--row，几何定义见 style.css）：
+   它是 flex:0 0 auto 的固定块，因此绝不会被名称的省略号逻辑挤压变形。 */
 .name-with-tags {
   display: flex;
   align-items: center;
@@ -1374,5 +1445,12 @@ const unpinLeavingGroup = (el) => {
 }
 .name-with-tags > .item-tags {
   flex: 0 0 auto;
+}
+
+/* 封面缩略图在行内的对齐：与文字基线居中对齐（table cell 默认 vertical-align: middle
+   对 img 不生效，靠 flex 的 align-items:center 解决），并固定不被压缩。 */
+.name-with-tags > .cover-thumb--row {
+  flex: 0 0 auto;
+  align-self: center;
 }
 </style>

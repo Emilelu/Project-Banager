@@ -234,7 +234,7 @@ describe('JSON 回灌', () => {
 
     expect(res).toMatchObject({ imported: 2, failed: 2 })
     expect(res.errors).toHaveLength(2)
-    expect(res.errors.every(e => e.includes('缺少 name'))).toBe(true)
+    expect(res.errors.every(e => e && e.code && /MISSING_NAME/.test(e.code))).toBe(true)
     expect(db.getAllWatching().map(r => r.name)).toEqual(['正常番'])
     expect(db.getAllRemaining()).toHaveLength(0)
     expect(db.getAllWatched().map(r => r.name)).toEqual(['正常已看'])
@@ -246,18 +246,18 @@ describe('JSON 回灌', () => {
     expect(res.imported).toBe(0)
     expect(res.failed).toBeGreaterThan(0)
     expect(res.errors.length).toBeGreaterThan(0)
-    expect(res.errors[0]).toContain('JSON 解析失败')
+    expect(String(res.errors[0].message || res.errors[0])).toContain('JSON 解析失败')
     expect(db.getAllWatching()).toHaveLength(0)
   })
 
   it('空文件 / 顶层不是数组或对象：返回 failed>0 且不抛异常', async () => {
     const empty = await importJson(textFile(''))
     expect(empty.failed).toBeGreaterThan(0)
-    expect(empty.errors[0]).toContain('JSON 解析失败')
+    expect(String(empty.errors[0].message || empty.errors[0])).toContain('JSON 解析失败')
 
     const scalar = await importJson(textFile('123'))
     expect(scalar.failed).toBeGreaterThan(0)
-    expect(scalar.errors[0]).toContain('结构无法识别')
+    expect(String((scalar.errors[0] && scalar.errors[0].code) || scalar.errors[0])).toContain('JSON_UNRECOGNIZED')
   })
 
   it('名称重复：追番/等番计入 failed（UNIQUE），已看允许重名追加', async () => {
@@ -460,7 +460,7 @@ describe('CSV 回灌', () => {
 
     expect(res.imported).toBe(0)
     expect(res.failed).toBeGreaterThan(0)
-    expect(res.errors.join(' ')).toContain('没有找到工作表分段')
+    expect(res.errors.map((e) => (e && e.code) || String(e)).join(' ')).toContain('CSV_NO_SECTION')
     expect(db.getAllRemaining()).toHaveLength(0)
   })
 
@@ -469,7 +469,7 @@ describe('CSV 回灌', () => {
 
     expect(res.imported).toBe(0)
     expect(res.failed).toBeGreaterThan(0)
-    expect(res.errors.join(' ')).toContain('没有找到工作表分段')
+    expect(res.errors.map((e) => (e && e.code) || String(e)).join(' ')).toContain('CSV_NO_SECTION')
   })
 
   it('未知分段（# 其他表）被忽略：不报错、也不产生数据', async () => {

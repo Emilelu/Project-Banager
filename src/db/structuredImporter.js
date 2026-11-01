@@ -173,7 +173,7 @@ export async function importJson(file) {
       watched: Array.isArray(parsed.watched) ? parsed.watched : [],
     }
   } else {
-    result.errors.push('JSON 结构无法识别（既不是数组也不是对象）')
+    result.errors.push({ code: 'JSON_UNRECOGNIZED' })
     result.failed = 1
     return result
   }
@@ -191,7 +191,7 @@ export async function importJson(file) {
   for (const row of groups.watching) {
     await tick()
     const name = usableName(row?.name)
-    if (!name) { result.failed++; result.errors.push('追番记录缺少 name（需要非空名称字符串），已跳过'); continue }
+    if (!name) { result.failed++; result.errors.push({ code: 'JSON_MISSING_NAME_WATCHING' }); continue }
     const res = db.addWatching({
       name,
       day_of_week: String(row.day_of_week ?? ''),
@@ -211,7 +211,7 @@ export async function importJson(file) {
   for (const row of groups.remaining) {
     await tick()
     const name = usableName(row?.name)
-    if (!name) { result.failed++; result.errors.push('等番记录缺少 name（需要非空名称字符串），已跳过'); continue }
+    if (!name) { result.failed++; result.errors.push({ code: 'JSON_MISSING_NAME_REMAINING' }); continue }
     const res = db.addRemaining({
       name,
       expected_date: String(row.expected_date ?? ''),
@@ -228,7 +228,7 @@ export async function importJson(file) {
   for (const row of groups.watched) {
     await tick()
     const name = usableName(row?.name)
-    if (!name) { result.failed++; result.errors.push('已看记录缺少 name（需要非空名称字符串），已跳过'); continue }
+    if (!name) { result.failed++; result.errors.push({ code: 'JSON_MISSING_NAME_WATCHED' }); continue }
     const res = db.addWatched({
       name,
       watch_date: String(row.watch_date ?? ''),
@@ -246,7 +246,7 @@ export async function importJson(file) {
   // 空 JSON 对象 `{}` 是最常见的「选错文件」形态。
   if (result.imported === 0 && result.failed === 0 && result.errors.length === 0) {
     result.failed = 1
-    result.errors.push('JSON 里没有任何可导入的记录（watching / remaining / watched 均为空）')
+    result.errors.push({ code: 'JSON_NO_RECORDS' })
   }
 
   return result
@@ -359,7 +359,7 @@ export async function importCsv(file) {
   if (current) sections.push(current)
 
   if (sections.length === 0) {
-    result.errors.push('CSV 中没有找到工作表分段（导出文件以「# 表名」开头）')
+    result.errors.push({ code: 'CSV_NO_SECTION' })
     result.failed = 1
     return result
   }
@@ -381,7 +381,7 @@ export async function importCsv(file) {
     const knownTable = sections.some((sec) => /追番|Watching|等番|Remaining|已看|Watched/i.test(sec.title))
     if (knownTable) {
       result.failed = 1
-      result.errors.push('找到了工作表分段，但没有解析到任何数据行：请检查表头（星期列 / Name,Time / 年份列）是否符合导出模板')
+      result.errors.push({ code: 'CSV_SECTION_EMPTY' })
     }
   }
 
@@ -585,12 +585,12 @@ export async function importMd(file) {
   // 而不是「成功导入 0 条」——静默成功会让用户以为文件没问题。
   if (!text.trim()) {
     result.failed = 1
-    result.errors.push('文件为空')
+    result.errors.push({ code: 'FILE_EMPTY' })
     return result
   }
   if (!text.split('\n').some((l) => /^##\s/.test(l.trim())) && !/^##\s/.test(text.trim())) {
     result.failed = 1
-    result.errors.push('未找到章节标记（Markdown 需包含「## 正在追番 / ## 等待更新 / ## 已看历史」等段落）')
+    result.errors.push({ code: 'MD_NO_SECTION' })
     return result
   }
 
@@ -682,7 +682,7 @@ export async function importMd(file) {
   // 例：章节标题被翻译/改写成了导出器不认的写法，此时 section 为空，整段被跳过。
   if (result.imported === 0 && result.failed === 0 && result.errors.length === 0) {
     result.failed = 1
-    result.errors.push('找到了章节标记，但没有解析到任何列表项：请确认内容按导出的「- 条目」格式书写')
+    result.errors.push({ code: 'MD_SECTION_EMPTY' })
   }
 
   return result

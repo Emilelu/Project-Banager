@@ -38,24 +38,34 @@
          正在编辑的字段本身是 input，此时不再把外层 div 暴露成按钮（避免 role=button 内套 input）。 -->
     <!-- 名称单元格同时是「名称 + 外链 + 标签」的行容器（card-name-row: flex/nowrap）。
          双击/键盘进入编辑的语义不变（仍是这个 .editable-cell 自身）。 -->
-    <div v-bind="editCellProps('name')" :aria-label="editLabels.name"
-      @keydown="onCellKeydown($event, 'name')"
-      @dblclick.stop="!batchMode && $emit('start-edit', 'name')"
-      class="editable-cell card-name-row" :class="{'ml-5': batchMode}">
-      <input v-if="editing?.id === item.id && editing?.field === 'name'" :value="editValue"
-        :aria-label="editLabels.name"
-        @input="$emit('update:editValue', $event.target.value)"
-        @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
-      <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors card-name-text">{{ item.name }}</span>
-      <a v-if="item.url" :href="itemUrl" target="_blank" rel="noopener" @click.stop
-        :aria-label="openLinkLabel"
-        class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center shrink-0" v-tip="openLinkTip">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-      </a>
-      <!-- 标签排在作品名称右边（不是另起一行）：名称可省略号收缩、标签可收缩，
-           整行 nowrap，因此卡片宽度不变、不会横向溢出。
-           无标签时组件不渲染任何节点，卡片高度与没加标签时完全一致。 -->
-      <ItemTags v-if="item.tags" :tags="item.tags" :max="3" compact class="card-name-tags" />
+    <!-- 名称行 = 封面缩略图 + （名称 + 外链 + 标签）。
+         封面必须是**名称行左侧**的同一行，不能像原先那样作为 .card-name-row 的兄弟节点：
+         卡片根节点是块级盒子，兄弟 img 会独占一行，名称就被顶到第二行，
+         整张卡片高度随「有没有封面」跳变（实测差 40px，周历列里对不齐）。
+         因此这里补一层 flex 包裹：封面 flex:0 0 auto，名称行 flex:1 1 auto 可省略号收缩。
+         无封面时整块 img 不渲染（不占位）；加载失败置 coverFailed 后同样不渲染（不出现破图）。 -->
+    <div class="card-name-wrap" :class="{'ml-5': batchMode}">
+      <img v-if="item.cover_url && !coverFailed" :src="item.cover_url"
+        class="card-cover" :alt="''" loading="lazy" decoding="async" @error="coverFailed = true" />
+      <div v-bind="editCellProps('name')" :aria-label="editLabels.name"
+        @keydown="onCellKeydown($event, 'name')"
+        @dblclick.stop="!batchMode && $emit('start-edit', 'name')"
+        class="editable-cell card-name-row">
+        <input v-if="editing?.id === item.id && editing?.field === 'name'" :value="editValue"
+          :aria-label="editLabels.name"
+          @input="$emit('update:editValue', $event.target.value)"
+          @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
+        <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors card-name-text">{{ item.name }}</span>
+        <a v-if="item.url" :href="itemUrl" target="_blank" rel="noopener" @click.stop
+          :aria-label="openLinkLabel"
+          class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center shrink-0" v-tip="openLinkTip">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+        <!-- 标签排在作品名称右边（不是另起一行）：名称可省略号收缩、标签可收缩，
+             整行 nowrap，因此卡片宽度不变、不会横向溢出。
+             无标签时组件不渲染任何节点，卡片高度与没加标签时完全一致。 -->
+        <ItemTags v-if="item.tags" :tags="item.tags" :max="3" compact class="card-name-tags" />
+      </div>
     </div>
     <div class="flex items-center gap-1 mt-0.5 card-ep-row">
       <span class="text-sm font-bold text-gray-800 shrink-0 card-ep-label" aria-hidden="true">e</span>
@@ -122,7 +132,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { buildItemUrl } from '../composables/useEpisode'
 import { useI18n } from '../composables/useI18n'
 
@@ -157,6 +167,16 @@ const emit = defineEmits([
  *
  * ⚠️ 不缓存任何**视觉**相关的东西（进度条、配色类），那部分仍按原逻辑逐次渲染。
  */
+/**
+ * 封面图加载失败标记：失败后隐藏图片本身（模板侧 v-if 直接不渲染），
+ * 于是不会出现浏览器的裂图图标，也不会留下一个空占位改变卡片高度。
+ * 每个卡片组件实例各自持有一个标记，与 item 无关。
+ * 封面地址一变就复位：否则用户把写错的链接改对之后，卡片上仍挂着旧标记，
+ * 封面永远不再出现（「改了没反应」）。用 watch 而不是 computed 是为了只在变化时写一次。
+ */
+const coverFailed = ref(false)
+watch(() => props.item?.cover_url, () => { coverFailed.value = false })
+
 const name = computed(() => props.item?.name ?? '')
 const episodeText = computed(() => String(props.item?.current_episode ?? ''))
 const timeSlot = computed(() => props.item?.time_slot || '')
@@ -286,6 +306,22 @@ const onCardKeydown = (e) => {
 </script>
 
 <style scoped>
+/* 名称行外壳 = 封面缩略图 + 名称行（flex/nowrap）。
+   封面与名称必须在同一行：直接把 <img> 放在卡片根下会独占一行，
+   名称被顶下去，卡片高度随「有无封面」跳变（实测差 40px）。
+   无封面时外壳里只剩 `.card-name-row`，几何与加封面之前完全一致。 */
+.card-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.card-name-wrap > .card-name-row {
+  flex: 1 1 auto;
+}
+
 /* 作品名称行：名称 + 外链图标 + 标签 chips 同一行，**永不换行**。
    列宽只有约 1/7 屏（960 宽约 100px、1440 宽约 169px）。
    收缩优先级：名称先截断（ellipsis），标签随后收缩（chip 内部 ellipsis）。
@@ -315,5 +351,23 @@ const onCardKeydown = (e) => {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 55%;
+}
+
+/* 封面缩略图：28×40（竖排海报 5:7），压在名称行左侧。
+   无封面时模板不渲染 <img>（不占位）；@error 后置 coverFailed 同样不渲染，
+   因此任何情况下都不会出现裂图。边框沿用 style.css 的 .cover-thumb 规范：
+   浅色玻璃上用主题色淡描边，深色玻璃上换成白色淡描边（见下一条 .dark）。 */
+.card-cover {
+  width: 1.75rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 0.375rem;
+  flex: 0 0 auto;
+  border: 1px solid rgb(var(--c-primary) / 0.28);
+  background: rgb(255 255 255 / 0.55);
+}
+.dark .card-cover {
+  border-color: rgb(255 255 255 / 0.18);
+  background: rgb(255 255 255 / 0.08);
 }
 </style>

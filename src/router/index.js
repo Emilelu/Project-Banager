@@ -24,10 +24,10 @@ const routes = [
     meta: { title: '已看历史', icon: 'book' }
   },
   {
+    // 历史遗留：旧的 Excel 专用导入页已合并进 /transfer，
+    // 旧书签与外部链接统一重定向，避免两个入口功能不对称。
     path: '/import',
-    name: 'Import',
-    component: () => import('../views/ImportView.vue'),
-    meta: { title: '导入Excel', icon: 'upload' }
+    redirect: '/transfer',
   },
   // 以下两项原为顶栏按钮弹出的弹窗，按要求改为侧边导航中的独立页面
   {

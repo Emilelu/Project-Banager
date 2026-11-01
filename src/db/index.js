@@ -15,7 +15,7 @@ const DB_KEY = 'bangumi_db'
  * getWatchedByYear / getAllWatched 共用同一份，避免两条路径漏列
  * （历史上 getWatchedByYear 就漏过 tags，导致按年查出来的行没有标签）。
  */
-const WATCHED_COLS = 'id, name, watch_date, url, url_params, notes, tags, sort_order'
+const WATCHED_COLS = 'id, name, cover_url, watch_date, url, url_params, notes, tags, sort_order'
 
 // ========== 错误与字段规范化（边界安全） ==========
 //
@@ -269,6 +269,7 @@ class BangumiDatabase {
         day_of_week TEXT,
         time_slot TEXT,
         current_episode TEXT DEFAULT '0',
+        cover_url TEXT DEFAULT '',
         url TEXT,
         url_params TEXT,
         notes TEXT,
@@ -283,6 +284,7 @@ class BangumiDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
         expected_date TEXT,
+        cover_url TEXT DEFAULT '',
         url TEXT,
         url_params TEXT,
         notes TEXT,
@@ -297,6 +299,7 @@ class BangumiDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         watch_date TEXT,
+        cover_url TEXT DEFAULT '',
         url TEXT,
         url_params TEXT,
         notes TEXT,
@@ -335,6 +338,10 @@ class BangumiDatabase {
     structuralChange = this._migrateAddColumn('watching', 'sort_order', 'REAL DEFAULT 0') || structuralChange
     structuralChange = this._migrateAddColumn('remaining', 'sort_order', 'REAL DEFAULT 0') || structuralChange
     structuralChange = this._migrateAddColumn('watched', 'sort_order', 'REAL DEFAULT 0') || structuralChange
+    // 封面图 URL（用户早期要求的「番剧封面图」功能）
+    structuralChange = this._migrateAddColumn('watching', 'cover_url', "TEXT DEFAULT ''") || structuralChange
+    structuralChange = this._migrateAddColumn('remaining', 'cover_url', "TEXT DEFAULT ''") || structuralChange
+    structuralChange = this._migrateAddColumn('watched', 'cover_url', "TEXT DEFAULT ''") || structuralChange
     structuralChange = this._migrateAddColumn('watched', 'watch_date', 'TEXT') || structuralChange
     structuralChange = this._migrateAddColumn('watching', 'url', 'TEXT') || structuralChange
     structuralChange = this._migrateAddColumn('remaining', 'url', 'TEXT') || structuralChange
@@ -567,6 +574,7 @@ class BangumiDatabase {
           day_of_week TEXT,
           time_slot TEXT,
           current_episode TEXT DEFAULT '0',
+          cover_url TEXT DEFAULT '',
           url TEXT,
           url_params TEXT,
           notes TEXT,
@@ -581,11 +589,12 @@ class BangumiDatabase {
       // 否则迁移后表里缺字段，后续 addWatching 的 INSERT 会因列不存在而失败。
       // 旧表没有这些列时由 col() 兜底为空串。
       this.db.run(`
-        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, total_episodes, sort_order, created_at, updated_at)
+        INSERT INTO watching (id, name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, tags, total_episodes, sort_order, created_at, updated_at)
         SELECT id, name,
           ${col('day_of_week', "''")},
           ${col('time_slot', "''")},
           CAST(${col('current_episode', "'0'")} AS TEXT),
+          ${col('cover_url', "''")},
           ${col('url', 'NULL')},
           ${col('url_params', 'NULL')},
           ${col('notes', 'NULL')},
@@ -717,13 +726,13 @@ class BangumiDatabase {
 
   // ========== 追番表操作 ==========
 
-  addWatching({ name, day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', tags = '', total_episodes = '', sort_order = 0 } = {}) {
+  addWatching({ name, cover_url = '', day_of_week = '', time_slot = '', current_episode = '0', url = '', url_params = '', notes = '', tags = '', total_episodes = '', sort_order = 0 } = {}) {
     const cleanName = normalizeName(name)
     if (!cleanName) return { success: false, error: '番剧名称不能为空' }
     try {
       this._run(
-        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, tags, total_episodes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [cleanName, day_of_week, time_slot, current_episode, url, url_params, notes, tags, String(total_episodes ?? ''), normalizeSortOrder(sort_order)]
+        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, tags, total_episodes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [cleanName, day_of_week, time_slot, String(current_episode ?? '0'), String(cover_url || ''), url, url_params, notes, tags, String(total_episodes ?? ''), normalizeSortOrder(sort_order)]
       )
       // name 上有 UNIQUE 约束，按名称回查 id 比依赖 rowid 时序更可靠
       const row = this._get('SELECT id FROM watching WHERE name = ?', [cleanName])
@@ -740,19 +749,19 @@ class BangumiDatabase {
 
   getAllWatching() {
     return this._all(
-      'SELECT id, name, day_of_week, time_slot, current_episode, total_episodes, url, url_params, notes, tags, sort_order FROM watching ORDER BY sort_order, id'
+      'SELECT id, name, day_of_week, time_slot, current_episode, total_episodes, cover_url, url, url_params, notes, tags, sort_order FROM watching ORDER BY sort_order, id'
     )
   }
 
   getWatchingByDay(day) {
     return this._all(
-      'SELECT id, name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order FROM watching WHERE day_of_week = ? ORDER BY sort_order, time_slot',
+      'SELECT id, name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, sort_order FROM watching WHERE day_of_week = ? ORDER BY sort_order, time_slot',
       [day]
     )
   }
 
   updateWatching(id, fields) {
-    const allowedFields = ['name', 'day_of_week', 'time_slot', 'current_episode', 'total_episodes', 'url', 'url_params', 'notes', 'tags', 'sort_order']
+    const allowedFields = ['name', 'day_of_week', 'time_slot', 'current_episode', 'total_episodes', 'cover_url', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
@@ -820,14 +829,14 @@ class BangumiDatabase {
 
   // ========== 等番表操作 ==========
 
-  addRemaining({ name, expected_date = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
+  addRemaining({ name, expected_date = '', cover_url = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
     const cleanName = normalizeName(name)
     if (!cleanName) return { success: false, error: '等番名称不能为空' }
     try {
       const normalizedDate = this._normalizeDate(expected_date)
       this._run(
-        'INSERT INTO remaining (name, expected_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [cleanName, normalizedDate, url, url_params, notes, tags, normalizeSortOrder(sort_order)]
+        'INSERT INTO remaining (name, expected_date, cover_url, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [cleanName, normalizedDate, String(cover_url || ''), url, url_params, notes, tags, normalizeSortOrder(sort_order)]
       )
       const row = this._get('SELECT id FROM remaining WHERE name = ?', [cleanName])
       return { success: true, id: row ? Number(row.id) : null }
@@ -841,12 +850,12 @@ class BangumiDatabase {
 
   getAllRemaining() {
     return this._all(
-      'SELECT id, name, expected_date, url, url_params, notes, tags, sort_order FROM remaining ORDER BY sort_order, id'
+      'SELECT id, name, expected_date, cover_url, url, url_params, notes, tags, sort_order FROM remaining ORDER BY sort_order, id'
     )
   }
 
   updateRemaining(id, fields) {
-    const allowedFields = ['name', 'expected_date', 'url', 'url_params', 'notes', 'tags', 'sort_order']
+    const allowedFields = ['name', 'expected_date', 'cover_url', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
@@ -884,15 +893,15 @@ class BangumiDatabase {
 
   // ========== 已看表操作 ==========
 
-  addWatched({ name, watch_date, url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
+  addWatched({ name, watch_date, cover_url = '', url = '', url_params = '', notes = '', tags = '', sort_order = 0 } = {}) {
     const cleanName = normalizeName(name)
     if (!cleanName) return { success: false, error: '作品名称不能为空' }
     try {
       const normalizedDate = this._normalizeDate(watch_date)
       this.beginBatch()
       this._run(
-        'INSERT INTO watched (name, watch_date, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [cleanName, normalizedDate, url, url_params, notes, tags, normalizeSortOrder(sort_order)]
+        'INSERT INTO watched (name, watch_date, cover_url, url, url_params, notes, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [cleanName, normalizedDate, String(cover_url || ''), url, url_params, notes, tags, normalizeSortOrder(sort_order)]
       )
       this._ensureYearLabel(normalizedDate)
       // watched 表 name 无 UNIQUE，用最新一行的 id（新插入必然 sort_order/id 最大）
@@ -1002,7 +1011,7 @@ class BangumiDatabase {
   }
 
   updateWatched(id, fields) {
-    const allowedFields = ['name', 'watch_date', 'url', 'url_params', 'notes', 'tags', 'sort_order']
+    const allowedFields = ['name', 'watch_date', 'cover_url', 'url', 'url_params', 'notes', 'tags', 'sort_order']
     const updateFields = {}
     for (const key of allowedFields) {
       if (fields[key] !== undefined) {
@@ -1197,12 +1206,12 @@ class BangumiDatabase {
 
   moveWatchingToRemaining(watchingId) {
     try {
-      const row = this._get('SELECT name, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
       if (!row) return { success: false, error: '未找到记录' }
       this.beginBatch()
       this._run(
-        'INSERT INTO remaining (name, expected_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [row.name, '', row.url || '', row.url_params || '', row.notes, row.sort_order]
+        'INSERT INTO remaining (name, expected_date, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [row.name, '', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, row.sort_order]
       )
       const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
       if (!removed) throw new Error('源记录删除失败')
@@ -1220,13 +1229,13 @@ class BangumiDatabase {
   moveWatchingToWatched(watchingId, watchDate) {
     try {
       const normalizedDate = this._normalizeDate(watchDate)
-      const row = this._get('SELECT name, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM watching WHERE id = ?', [watchingId])
       if (!row) return { success: false, error: '未找到记录' }
       // 从追番移入已看时清空链接：追番页的链接是追更地址，已看记录不再需要它。
       this.beginBatch()
       this._run(
-        'INSERT INTO watched (name, watch_date, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [row.name, normalizedDate, '', '', row.notes, row.sort_order]
+        'INSERT INTO watched (name, watch_date, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [row.name, normalizedDate, String(row.cover_url || ''), '', '', row.notes, row.sort_order]
       )
       this._ensureYearLabel(normalizedDate)
       const removed = this._run('DELETE FROM watching WHERE id = ?', [watchingId])
@@ -1262,12 +1271,12 @@ class BangumiDatabase {
 
   moveRemainingToWatching(remainingId, { day_of_week = '', time_slot = '' } = {}) {
     try {
-      const row = this._get('SELECT name, url, url_params, notes, sort_order FROM remaining WHERE id = ?', [remainingId])
+      const row = this._get('SELECT name, cover_url, url, url_params, notes, sort_order FROM remaining WHERE id = ?', [remainingId])
       if (!row) return { success: false, error: '未找到记录' }
       this.beginBatch()
       this._run(
-        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [row.name, day_of_week, time_slot, '0', row.url || '', row.url_params || '', row.notes, row.sort_order]
+        'INSERT INTO watching (name, day_of_week, time_slot, current_episode, cover_url, url, url_params, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.name, day_of_week, time_slot, '0', String(row.cover_url || ''), row.url || '', row.url_params || '', row.notes, row.sort_order]
       )
       const removed = this._run('DELETE FROM remaining WHERE id = ?', [remainingId])
       if (!removed) throw new Error('源记录删除失败')

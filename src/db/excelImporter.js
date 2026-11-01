@@ -164,7 +164,7 @@ function importWatching(db, workbook) {
     }
 
     if (headerRow === -1) {
-      errors.push('未找到追番表的星期表头行')
+      errors.push({ code: 'XLSX_NO_DAY_HEADER' })
       return
     }
 
@@ -239,16 +239,16 @@ function importWatching(db, workbook) {
             importedCount++
           } else {
             errorCount++
-            errors.push(`追番『${parsed.name}』导入失败（${result.error}）`)
+            errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'watching', name: parsed.name, detail: result.error } })
           }
         } catch (err) {
           errorCount++
-          errors.push(`追番『${parsed.name}』导入失败: ${safeErrorMessage(err)}`)
+          errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'watching', name: parsed.name, detail: safeErrorMessage(err) } })
         }
       }
     }
   } catch (err) {
-    errors.push('导入追番失败: ' + safeErrorMessage(err))
+    errors.push({ code: 'XLSX_KIND_FAILED', params: { kind: 'watching', detail: safeErrorMessage(err) } })
   }
 }
 
@@ -297,15 +297,15 @@ function importRemaining(db, workbook) {
           importedCount++
         } else {
           errorCount++
-          errors.push(`等番『${name}』导入失败（${result.error}）`)
+          errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'remaining', name, detail: result.error } })
         }
       } catch (err) {
         errorCount++
-        errors.push(`等番『${name}』导入失败: ${safeErrorMessage(err)}`)
+        errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'remaining', name, detail: safeErrorMessage(err) } })
       }
     }
   } catch (err) {
-    errors.push('导入等番失败: ' + safeErrorMessage(err))
+    errors.push({ code: 'XLSX_KIND_FAILED', params: { kind: 'remaining', detail: safeErrorMessage(err) } })
   }
 }
 
@@ -409,17 +409,17 @@ async function importWatched(db, workbook) {
               importedCount++
             } else {
               errorCount++
-              errors.push(`已看『${parsed.name}』(${year}) 导入失败（${result.error}）`)
+              errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'watched', name: parsed.name, detail: result.error } })
             }
           } catch (err) {
             errorCount++
-            errors.push(`已看『${parsed.name}』(${year}) 导入失败: ${safeErrorMessage(err)}`)
+            errors.push({ code: 'XLSX_ITEM_FAILED', params: { kind: 'watched', name: parsed.name, detail: safeErrorMessage(err) } })
           }
         }
       }
     }
   } catch (err) {
-    errors.push('导入已看数据失败: ' + safeErrorMessage(err))
+    errors.push({ code: 'XLSX_KIND_FAILED', params: { kind: 'watched', detail: safeErrorMessage(err) } })
   }
 }
 
@@ -499,7 +499,7 @@ export async function importExcel(file, { onProgress } = {}) {
     importRemaining(db, workbook)
     await importWatched(db, workbook)
   } catch (err) {
-    errors.push('导入过程异常: ' + safeErrorMessage(err))
+    errors.push({ code: 'XLSX_UNEXPECTED', params: { detail: safeErrorMessage(err) } })
   } finally {
     // 无论成功与否都把未落盘的改动刷一次；失败时批已被 rollbackBatch 处理
     try { await db.flush?.() } catch { /* ignore */ }
@@ -513,9 +513,9 @@ export async function importExcel(file, { onProgress } = {}) {
   // 否则界面只会显示「导入失败：成功 0 条，失败 0 条」——用户看到「失败 0 条」
   // 却被告知失败，完全无法自查。这类静默失败是本轮重点修掉的坑。
   if (!recognized) {
-    errors.push('没有找到可识别的工作表（需包含「追番/等番/已看」或 Watching/Remaining/Watched 字样）')
+    errors.push({ code: 'XLSX_NO_SHEET' })
   } else if (importedCount === 0 && errorCount === 0 && errors.length === 0) {
-    errors.push('工作表已识别，但没有解析到任何数据行，请检查表头（星期列 / Name,Time / 年份列）是否符合模板')
+    errors.push({ code: 'XLSX_SHEET_EMPTY' })
   }
 
   const success = recognized && (importedCount > 0 || (errorCount === 0 && errors.length === 0))
