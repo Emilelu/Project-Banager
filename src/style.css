@@ -306,13 +306,19 @@ select:focus-visible {
  * 仅在**真正需要复制**的地方显式放开：输入框、文本域、.selectable-text 区域。
  * 这样既消除了误选高亮，又保留了必要场景的复制能力。
  */
-:root {
+/* 把禁用范围从 :root 扩到 body 的全部后代。
+   原来只写在 :root 上，虽然 user-select 可继承，但任何子元素一旦被显式
+   设成 text 就能选中 —— 表格单元格、部分内联元素正好会这样，
+   于是 Shift+单击 / 三击 / Ctrl+A 仍会出选区。 */
+html,
+body,
+body * {
   -webkit-user-select: none;
   -moz-user-select: none;
   user-select: none;
 }
 
-/* 输入类控件必须保留可选中/可编辑（否则无法选中输入内容） */
+/* 输入类控件必须保留可选中/可编辑（用 !important 压过上面的通配规则） */
 input,
 textarea,
 select,
@@ -321,17 +327,17 @@ option,
 [contenteditable=''],
 input *,
 textarea * {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  user-select: text;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
 }
 
 /* 「当前选中：XXX」等需要复制读取的区域 */
 .selectable-text,
 .selectable-text * {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  user-select: text;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
   cursor: text;
 }
 
@@ -2707,8 +2713,11 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* 强制 flex 子项遵守边界 */
-td > div.flex {
+/* 强制 flex 子项遵守边界。
+   注意排除 role=checkbox 的勾选框 —— 它也是 td > div.flex，
+   若被强制 width:100% 会覆盖自身的 w-4（16px），
+   表现为「数据行的勾比表头的勾宽好几倍」（实测 75.47px vs 14px）。 */
+td > div.flex:not([role='checkbox']) {
   min-width: 0;
   width: 100%;
 }
@@ -3615,4 +3624,25 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 .frost-preview,
 .liquid-preview {
   border-radius: var(--r-sm);
+}
+
+
+/* ---------- 快速填充按钮：外壳 34px、内部字号压小 ---------- */
+/*
+ * 需求：B站视频 / 空间搜索 / 全站搜索三个按钮「调大点」但「字调小点」。
+ * 外壳用 .btn-base 的高度（34px），字号压到 9.6px —— 中文字在窄按钮里不挤，
+ * 同时按钮本身比原来（30px）更高，点起来更好按。
+ *
+ * 为什么要 !important：`.btn-sm` 里写死了 font-size: 11.5px，
+ * 与 Tailwind 的 text-[...] 同优先级时后者被覆盖，实测字号一直没变。
+ */
+.quick-fill-btn {
+  height: 34px !important;
+  font-size: 9.6px !important;
+  padding: 0 10px !important;
+  gap: 4px !important;
+}
+.quick-fill-btn .app-icon {
+  width: 12px !important;
+  height: 12px !important;
 }

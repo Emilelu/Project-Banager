@@ -22,13 +22,13 @@
     <!-- 标签列表 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 mb-3">
           <AppIcon scale="md" name="bookmark" class="text-primary" />
           <!-- 与其它页的 tooltip 标题保持同一几何：inline-flex + gap-1，
                让 info 图标与文字之间有 3.5px 间隙（原 block 布局下图标紧贴文字）。 -->
           <h3 class="text-base font-bold gradient-text cursor-help inline-flex items-center gap-1"
             v-tip="tt('tags.builtinHint')">{{ tt('tags.manageTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h3>
-          <span class="tag-meta text-xs text-gray-400">{{ tt('tags.totalCount', { count: tags.length }) }}</span>
+          <!-- 计数已上提到顶栏（与另外三页规范一致） -->
         </div>
       </div>
 
@@ -84,6 +84,7 @@
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { tagsApi } from '../db/api'
 import { useI18n } from '../composables/useI18n'
+import { setPageStats, clearPageStats } from '../composables/usePageStats'
 import { useErrorText } from '../composables/useErrorText'
 import { useTagLabel } from '../composables/useTagLabel'
 import { showToast } from '../composables/useToast'
@@ -93,6 +94,14 @@ const { errorText } = useErrorText()
 const { tagLabel } = useTagLabel()
 
 const tags = ref([])
+
+/** 标签计数同步到顶栏（用户要求：计数统一放页面标题旁，不占卡片内一行） */
+watch(
+  () => tags.value.length,
+  (n) => setPageStats('/tags', [{ text: tt('tags.totalCount', { count: n }), tone: 'neutral' }]),
+  { immediate: true },
+)
+
 const newName = ref('')
 const newColor = ref('#7C3AED')
 const error = ref('')

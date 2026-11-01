@@ -32,6 +32,32 @@ window.addEventListener('unhandledrejection', (e) =>
   console.error('[boot] unhandledrejection:', e.reason),
 )
 
+/**
+ * 兜底拦截「Shift / 三击 / Ctrl+A 触发文本选区」。
+ *
+ * 为什么 CSS 之外还要 JS：user-select: none 在部分浏览器/元素上
+ * 仍会被 Shift+单击、三击、拖拽越过元素边界等操作绕过（尤其 tr/td）。
+ * 这里在 selectstart 阶段直接 preventDefault —— 但**放行**输入控件与
+ * 明确标记为可复制的区域（.selectable-text），否则用户无法选中输入内容
+ * 或复制「当前选中」那类文本。
+ *
+ * 用捕获阶段（第三个参数 true）：确保在选择开始之前就拦到，
+ * 不被任何子元素的处理抢先。
+ */
+document.addEventListener(
+  'selectstart',
+  (e) => {
+    const t = e.target
+    if (!t || typeof t.closest !== 'function') return
+    // 放行：输入类控件、contenteditable、显式可复制区域
+    if (t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], .selectable-text')) {
+      return
+    }
+    e.preventDefault()
+  },
+  true,
+)
+
 console.log('[boot] main.js start')
 
 async function boot() {

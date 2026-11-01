@@ -23,6 +23,7 @@ export const pageStats = reactive({
   '/watching': [],
   '/remaining': [],
   '/watched': [],
+  '/tags': [],
 })
 
 /**
@@ -58,6 +59,7 @@ export const pageSelection = reactive({
   '/watching': null,
   '/remaining': null,
   '/watched': null,
+  '/tags': null,
 })
 
 /**

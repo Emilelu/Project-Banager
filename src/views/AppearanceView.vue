@@ -52,38 +52,68 @@
                 </div>
               </div>
 
-              <!-- ① 预设配色（最常用，一眼可选） -->
-              <div class="flex gap-3 flex-wrap">
-                <button v-for="preset in presets" :key="preset.key" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
-                  class="w-10 h-10 rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden relative"
-                  :class="isActivePreset(preset) ? 'border-gray-700 scale-110' : 'border-transparent hover:scale-105'"
-                  :aria-label="tt(preset.key)" v-tip="tt(preset.key)">
-                  <span class="w-full h-full" :style="{ background: `linear-gradient(135deg, ${hslCss(preset.p)}, ${hslCss(preset.s)})` }"></span>
-                </button>
-              </div>
-
-              <!-- 配色来源：跟随壁纸 / 每次随机（互斥二选一）—— 标签与两个按钮同一行 -->
-              <div class="mt-5 flex items-center gap-2.5 flex-wrap">
-                <span class="text-xs text-gray-500 shrink-0">{{ tt('theme.paletteSource') }}</span>
-                <button @click="setPaletteMode('auto')" :disabled="noCorsSource"
-                  v-tip="noCorsSource ? tt('theme.noCorsHint') : tt('theme.autoPickHint')"
-                  class="btn-base btn-sm btn-neutral shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                  :class="isPaletteAuto ? 'btn-primary' : 'btn-neutral'">
-                  <AppIcon scale="xs" name="palette" />{{ tt('theme.pickFromWallpaper') }}
-                </button>
-                <button @click="setPaletteMode('random')"
-                  class="btn-base btn-sm btn-neutral"
-                  :class="state.paletteMode === 'random' ? 'btn-primary' : 'btn-neutral'">
-                  <AppIcon scale="xs" name="refresh" />{{ tt('theme.randomEachRefresh') }}
-                </button>
-              </div>
-
-              <!-- ③ 自定义取色：低频高级项，默认折叠 -->
-                  <button @click="showCustomColor = !showCustomColor"
-                    class="btn-base btn-sm btn-link mt-5">
-                    <AppIcon scale="xs" :name="showCustomColor ? 'caretUp' : 'caretDown'" />
-                    {{ tt('theme.customColor') }}
+              <!-- 配色控制整行：预设色 / 配色来源（下拉）/ 自定义颜色。
+                   用户要求：来源做成下拉菜单，且与六种预设色、自定义入口同一行。
+                   按钮样式统一到「随机配色」基准 btn-base btn-primary。 -->
+              <div class="flex items-center gap-3 flex-wrap">
+                <!-- 预设配色（最常用，一眼可选） -->
+                <div class="flex gap-3 flex-wrap">
+                  <button v-for="preset in presets" :key="preset.key" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
+                    class="w-10 h-10 rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden"
+                    :class="isActivePreset(preset) ? 'border-gray-700 scale-110' : 'border-transparent hover:scale-105'"
+                    :aria-label="tt(preset.key)" v-tip="tt(preset.key)">
+                    <span class="w-full h-full" :style="{ background: 'linear-gradient(135deg, ' + hslCss(preset.p) + ', ' + hslCss(preset.s) + ')' }"></span>
                   </button>
+                </div>
+              
+                <!-- 配色来源：两个互斥选项收进一个下拉菜单（原来是两个并排按钮） -->
+                <div class="relative shrink-0">
+                  <button @click="togglePaletteSourceMenu($event)"
+                    :aria-expanded="showPaletteSourceMenu" aria-haspopup="menu"
+                    class="btn-base btn-primary">
+                    <AppIcon scale="sm" name="palette" />{{ currentPaletteModeLabel }}
+                    <AppIcon scale="xs" :name="showPaletteSourceMenu ? 'caretUp' : 'caretDown'" />
+                  </button>
+                  <Teleport to="body">
+                    <div v-if="showPaletteSourceMenu" class="fixed inset-0 z-[100]"
+                      @click="showPaletteSourceMenu = false"></div>
+                    <div v-if="showPaletteSourceMenu" role="menu"
+                      class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[13rem]"
+                      :style="paletteSourceMenuStyle">
+                      <button @click="pickPaletteMode('auto')" :disabled="noCorsSource" role="menuitemradio"
+                        :aria-checked="isPaletteAuto ? 'true' : 'false'"
+                        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                        :class="isPaletteAuto ? 'text-primary font-bold' : 'text-gray-700'">
+                        <span class="w-4 shrink-0" aria-hidden="true">
+                          <svg v-if="isPaletteAuto" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                          </svg>
+                        </span>
+                        {{ tt('theme.pickFromWallpaper') }}
+                      </button>
+                      <button @click="pickPaletteMode('random')" role="menuitemradio"
+                        :aria-checked="state.paletteMode === 'random' ? 'true' : 'false'"
+                        class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                        :class="state.paletteMode === 'random' ? 'text-primary font-bold' : 'text-gray-700'">
+                        <span class="w-4 shrink-0" aria-hidden="true">
+                          <svg v-if="state.paletteMode === 'random'" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                          </svg>
+                        </span>
+                        {{ tt('theme.randomEachRefresh') }}
+                      </button>
+                    </div>
+                  </Teleport>
+                </div>
+              
+                <!-- 自定义取色：低频高级项，默认折叠，入口与上面同一行 -->
+                <button @click="showCustomColor = !showCustomColor" class="btn-base btn-primary shrink-0">
+                  <AppIcon scale="sm" :name="showCustomColor ? 'caretUp' : 'caretDown'" />
+                  {{ tt('theme.customColor') }}
+                </button>
+              </div>
               <!-- 折叠统一走 style.css 的 .collapse 过渡（grid-template-rows 0fr↔1fr）。
                    必须套两层：transition 根（grid 容器）→ 收缩层 → 内容卡片。
                    原因：style.css 的 `.collapse-*-active > *` 只把 overflow:hidden /
@@ -148,17 +178,68 @@
                   <!-- 选中态用「白底 + 主题色描边 + 深色文字」而不是「同色系淡底 + 同色系深字」：
                        后者在主题色偏红/偏粉时会"红字压红底"糊成一片，辨识度差。深色模式由
                        style.css 的 .dark .seg-btn.* 规则反转（半透明白底 + 亮色描边 + 白字）。 -->
-                  <button @click="setAutoSwitch(true)"
-                    class="btn-base btn-sm btn-neutral"
-                    :class="state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
-                    <AppIcon scale="sm" name="refresh" />{{ tt('theme.autoChange') }}
-                  </button>
-                  <button @click="setAutoSwitch(false)"
-                    v-tip="tt('theme.autoSwitchHint')"
-                    class="btn-base btn-sm btn-neutral"
-                    :class="!state.bgAutoSwitch ? 'btn-primary' : 'btn-neutral'">
-                    <AppIcon scale="sm" name="bookmark" />{{ tt('theme.fixCurrent') }}
-                  </button>
+                  <!-- 自动换图 / 固定壁纸 收进一个下拉菜单（原来是两个并排按钮）。
+                       触发器样式与「原链接预览」一致（btn-base btn-neutral）。 -->
+                  <div class="relative shrink-0">
+                    <button @click="toggleAutoMenu($event)" :aria-expanded="showAutoMenu" aria-haspopup="menu"
+                      class="btn-base btn-neutral">
+                      <AppIcon scale="sm" :name="state.bgAutoSwitch ? 'refresh' : 'bookmark'" />{{ autoModeLabel }}
+                      <AppIcon scale="xs" :name="showAutoMenu ? 'caretUp' : 'caretDown'" />
+                    </button>
+                    <Teleport to="body">
+                      <div v-if="showAutoMenu" class="fixed inset-0 z-[100]" @click="showAutoMenu = false"></div>
+                      <div v-if="showAutoMenu" role="menu"
+                        class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[12rem]"
+                        :style="autoMenuStyle">
+                        <button @click="pickAutoMode(true)" role="menuitemradio"
+                          :aria-checked="state.bgAutoSwitch ? 'true' : 'false'"
+                          class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                          :class="state.bgAutoSwitch ? 'text-primary font-bold' : 'text-gray-700'">
+                          <span class="w-4 shrink-0" aria-hidden="true">
+                            <svg v-if="state.bgAutoSwitch" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                            </svg>
+                          </span>
+                          {{ tt('theme.autoChange') }}
+                        </button>
+                        <button @click="pickAutoMode(false)" role="menuitemradio"
+                          :aria-checked="!state.bgAutoSwitch ? 'true' : 'false'"
+                          class="w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10"
+                          :class="!state.bgAutoSwitch ? 'text-primary font-bold' : 'text-gray-700'">
+                          <span class="w-4 shrink-0" aria-hidden="true">
+                            <svg v-if="!state.bgAutoSwitch" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                            </svg>
+                          </span>
+                          {{ tt('theme.fixCurrent') }}
+                        </button>
+                      </div>
+                    </Teleport>
+                  </div>
+
+                  <!-- 「原链接预览 / 下载原图」居中，「遮罩与模糊」靠右 —— 全部与上面同一行。
+                       窄屏用 flex-wrap 换行，不挤坏布局。 -->
+                  <div class="flex items-center gap-2.5 flex-1 justify-center min-w-0">
+                    <p v-if="bgFailed" class="tone-danger text-xs text-danger truncate">{{ tt('theme.previewFailed') }}</p>
+                    <button @click="openOriginal" class="btn-base btn-neutral shrink-0"
+                      v-tip="tt('theme.openOriginalHint')"><AppIcon scale="sm" name="link" />{{ tt('theme.openOriginal') }}</button>
+                    <button @click="downloadOriginal" class="btn-base btn-neutral shrink-0"
+                      v-tip="tt('theme.downloadOriginalHint')"><AppIcon scale="sm" name="download" />{{ tt('theme.downloadOriginal') }}</button>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button @click="showTuning = !showTuning" class="btn-base btn-neutral tone-fold"
+                      :aria-expanded="showTuning">
+                      <AppIcon scale="sm" :name="showTuning ? 'caretUp' : 'caretDown'" />
+                      {{ tt('theme.tuning') }}
+                    </button>
+                    <transition name="fade">
+                      <button v-if="showTuning" @click="resetBgTuning" v-tip="tt('theme.resetMaskBlurHint')"
+                        class="btn-base btn-sm btn-neutral tone-fold shrink-0"><AppIcon scale="xs" name="undo" />
+                      </button>
+                    </transition>
+                  </div>
                 </div>
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
                   :aria-label="tt('theme.customUrlHint')" v-tip="tt('theme.customUrlHint')" class="tone-input w-full mt-3 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
@@ -176,29 +257,6 @@
                     <img v-else-if="previewFailed" :src="state.bgBlobUrl || state.bgUrl" @error="onBgError" @load="bgLoaded = true"
                       loading="lazy" decoding="async" class="w-full h-full object-cover" :alt="tt('theme.backgroundPreview')" />
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
-                  </div>
-                  <div class="flex items-center gap-2.5 mt-2 flex-wrap">
-                    <p v-if="bgFailed" class="tone-danger text-xs text-danger flex-1">{{ tt('theme.previewFailed') }}</p>
-                    <button @click="openOriginal"
-                      class="btn-base btn-neutral shrink-0"
-                      v-tip="tt('theme.openOriginalHint')"><AppIcon scale="sm" name="link" />{{ tt('theme.openOriginal') }}</button>
-                    <button @click="downloadOriginal"
-                      class="btn-base btn-neutral shrink-0"
-                      v-tip="tt('theme.downloadOriginalHint')"><AppIcon scale="sm" name="download" />{{ tt('theme.downloadOriginal') }}</button>
-              <!-- 「遮罩与模糊」折叠入口与上面的按钮同一行，省掉一整行高度 -->
-              <div class="flex items-center gap-1.5 ml-auto">
-                  <button @click="showTuning = !showTuning"
-                    class="btn-base btn-sm btn-link tone-fold"
-                    :aria-expanded="showTuning">
-                    <AppIcon scale="xs" :name="showTuning ? 'caretUp' : 'caretDown'" />
-                    {{ tt('theme.tuning') }}
-                  </button>
-                  <!-- 「恢复默认」是展开后才出现的附属动作：单独淡入，不和折叠主体抢动画 -->
-                  <transition name="fade">
-                    <button v-if="showTuning" @click="resetBgTuning" v-tip="tt('theme.resetMaskBlurHint')"
-                      class="btn-base btn-sm btn-link tone-fold shrink-0"><AppIcon scale="xs" name="undo" class="mr-0.5 inline-block align-middle" />{{ tt('theme.resetMaskBlur') }}</button>
-                  </transition>
-              </div>
                   </div>
                   <p v-if="noCorsSource" class="tone-warning card-sub mt-1 flex items-start gap-1">
                     <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsDetail') }}
@@ -422,6 +480,49 @@ const isActivePreset = (preset) =>
 
 // 自定义取色：低频高级项，默认折叠起来，避免一排颜色选择器冲散主流程
 const showCustomColor = ref(false)
+
+/* 配色来源下拉：两个互斥选项（跟随壁纸 / 每次刷新随机）收进一个菜单。
+   与「每页条数」菜单同一套做法：Teleport + fixed，坐标用 bottom 定位，
+   不需要知道菜单高度（菜单多高都自动向上展开）。 */
+const showPaletteSourceMenu = ref(false)
+const paletteSourceMenuPos = ref({ left: 0, bottom: 0 })
+const paletteSourceMenuStyle = computed(() => ({
+  left: paletteSourceMenuPos.value.left + 'px',
+  bottom: paletteSourceMenuPos.value.bottom + 'px',
+}))
+
+/** 触发器上显示当前模式的文字（而不是固定写「配色来源」） */
+const currentPaletteModeLabel = computed(() =>
+  state.paletteMode === 'random'
+    ? tt('theme.randomEachRefresh')
+    : tt('theme.pickFromWallpaper'),
+)
+
+const togglePaletteSourceMenu = (e) => {
+  if (showPaletteSourceMenu.value) {
+    showPaletteSourceMenu.value = false
+    return
+  }
+  const btn = e && e.currentTarget
+  if (!btn) return
+  const r = btn.getBoundingClientRect()
+  const MENU_W = 220
+  const MARGIN = 8
+  let left = r.left
+  if (left + MENU_W > window.innerWidth - MARGIN) {
+    left = Math.max(MARGIN, window.innerWidth - MENU_W - MARGIN)
+  }
+  const bottom = window.innerHeight - r.top + MARGIN
+  paletteSourceMenuPos.value = { left: left, bottom: bottom }
+  showPaletteSourceMenu.value = true
+}
+
+/** 选中模式后关闭菜单 */
+const pickPaletteMode = (mode) => {
+  setPaletteMode(mode)
+  showPaletteSourceMenu.value = false
+}
+
 // 遮罩浓度 / 背景模糊属于低频微调项，默认折叠以压缩弹窗高度
 const showTuning = ref(false)
 

@@ -288,15 +288,15 @@
                        说明与触发点同处一处，面板收起后也不再占一行。 -->
                   <span class="text-xs text-gray-400">{{ tt('showDialog.quickFill') }}</span>
                   <button type="button" @click="selectTemplate('video')"
-                    class="btn-base btn-sm"
+                    class="btn-base btn-sm quick-fill-btn"
                     v-tip="tt('showDialog.bvHint')" :aria-label="tt('showDialog.bilibiliVideo')"
                     :class="activeTemplate==='video' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="video" />{{ tt('showDialog.bilibiliVideo') }}</button>
                   <button type="button" @click="selectTemplate('space')"
-                    class="btn-base btn-sm"
+                    class="btn-base btn-sm quick-fill-btn"
                     v-tip="tt('showDialog.spaceHint')" :aria-label="tt('showDialog.bilibiliSpace')"
                     :class="activeTemplate==='space' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="home" />{{ tt('showDialog.bilibiliSpace') }}</button>
                   <button type="button" @click="selectTemplate('search')"
-                    class="btn-base btn-sm"
+                    class="btn-base btn-sm quick-fill-btn"
                     v-tip="tt('showDialog.searchHint')" :aria-label="tt('showDialog.bilibiliSearch')"
                     :class="activeTemplate==='search' ? 'btn-primary' : 'btn-neutral'"><AppIcon scale="xs" name="search" />{{ tt('showDialog.bilibiliSearch') }}</button>
                 </div>

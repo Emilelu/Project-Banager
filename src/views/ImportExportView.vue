@@ -115,7 +115,7 @@
           v-tip="tm('transfer.exportHint')">{{ tm('transfer.exportTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
         <button v-for="fmt in exportFormats" :key="fmt.key" type="button"
           :data-test="'export-' + fmt.key" @click="runExport(fmt.key)"
           :disabled="exporting || importing"

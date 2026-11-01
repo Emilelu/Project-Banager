@@ -84,8 +84,8 @@
            这两个原本在顶栏右侧，按要求移到这里；「数据」分区标题也随之删除
            （导入导出已不是底部按钮，而是「设置」分区下的一个导航项）。 -->
       <div class="relative z-10 border-t border-white/10"
-        :class="sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-3'">
-        <div :class="sidebarCollapsed ? 'flex flex-col gap-1' : 'grid grid-cols-2 gap-2'">
+        :class="sidebarCollapsed ? 'px-2 py-2' : 'px-2.5 py-2.5'">
+        <div :class="sidebarCollapsed ? 'flex flex-col gap-1' : 'grid grid-cols-2 gap-1.5'">
           <!-- 壁纸背景开关。
                样式与上方导航项（.nav-item）保持一致：
                  · 收起态：justify-center px-2 py-3.5，配色 text-white/60 hover:bg-white/10 hover:text-white
@@ -96,14 +96,14 @@
             :class="[
               sidebarCollapsed
                 ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
-                : 'w-full justify-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press',
+                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press',
               { 'opacity-50': !bgActive }
             ]"
             :aria-pressed="appearance.state.bgEnabled ? 'true' : 'false'"
             :aria-label="bgActive ? tt('topbar.bgOff') : tt('topbar.bgOn')"
-            @mouseenter="showBottomBtnTip($event, tt('sidebar.bgToggle'), bgStateLabel)"
+            @mouseenter="showBottomBtnTip($event, tt('sidebar.bgToggle'), 'bg')"
             @mouseleave="hideSidebarTip"
-            @focus="showBottomBtnTip($event, tt('sidebar.bgToggle'), bgStateLabel)"
+            @focus="showBottomBtnTip($event, tt('sidebar.bgToggle'), 'bg')"
             @blur="hideSidebarTip">
             <AppIcon scale="sm" :name="bgActive ? 'image' : 'imageOff'" />
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.bgToggle') }}</span>
@@ -116,12 +116,12 @@
             :class="[
               sidebarCollapsed
                 ? 'nav-item w-full justify-center px-2 py-3.5 text-white/60 hover:bg-white/10 hover:text-white'
-                : 'w-full justify-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press'
+                : 'w-full justify-center gap-1.5 px-2 py-2 bg-white/10 hover:bg-white/20 text-white/70 hover:text-white rounded-xl text-sm btn-press'
             ]"
             :aria-label="themeLabel"
-            @mouseenter="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"
+            @mouseenter="showBottomBtnTip($event, tt('sidebar.themeToggle'), 'theme')"
             @mouseleave="hideSidebarTip"
-            @focus="showBottomBtnTip($event, tt('sidebar.themeToggle'), themeStateLabel)"
+            @focus="showBottomBtnTip($event, tt('sidebar.themeToggle'), 'theme')"
             @blur="hideSidebarTip">
             <AppIcon scale="sm" :name="themeIconName" />
             <span v-if="!sidebarCollapsed" class="truncate">{{ tt('sidebar.themeToggle') }}</span>
@@ -148,7 +148,7 @@
             top: sidebarTip.top + 'px',
             transform: sidebarTip.placement === 'top' ? 'none' : 'translateY(-50%)',
           }">
-          {{ sidebarTip.text }}
+          {{ sidebarTipLiveText }}
         </div>
       </transition>
     </Teleport>
@@ -509,10 +509,42 @@ const hideSidebarTip = () => {
  * @param {string} name  按钮名称（收起态拼进文案）
  * @param {string} state 当前状态文案
  */
-const showBottomBtnTip = (e, name, state) => {
-  const text = sidebarCollapsed.value ? `${name} · ${state}` : state
-  showSidebarTip(e, text, sidebarCollapsed.value ? 'right' : 'top')
+const showBottomBtnTip = (e, name, stateSource) => {
+  /*
+   * 关键：不把状态文本快照进去，而是存「状态来源标记」（bg / theme）。
+   * 用户点按钮切换状态时鼠标仍停在按钮上、不会重新触发 mouseenter，
+   * 气泡里若是快照文本就会一直显示旧值（如已开启却仍写「已关闭」）。
+   * 存标记后由 sidebarTipLiveText 这个 computed 在渲染时实时算出文本。
+   */
+  const el = e?.currentTarget || e?.target
+  const r = el?.getBoundingClientRect()
+  if (!r) return
+  sidebarTipAnchor = { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }
+  const placement = sidebarCollapsed.value ? 'right' : 'top'
+  sidebarTip.value = {
+    show: true,
+    text: '',
+    stateKey: stateSource,
+    btnName: name,
+    placement,
+    left: placement === 'top' ? Math.round(r.left + r.width / 2) : Math.round(r.right + 8),
+    top: placement === 'top' ? Math.round(r.top) : Math.round(r.top + r.height / 2),
+  }
+  if (placement === 'top') nextTick(() => measureSidebarTipTop())
 }
+
+/**
+ * 气泡文本 —— 实时计算，不取快照。
+ *
+ * 收起态必须带按钮名：此时按钮只有图标，用户看不出这是「壁纸」还是「主题」；
+ * 展开态按钮上已有文字，再重复名字就是废话，只报当前状态。
+ */
+const sidebarTipLiveText = computed(() => {
+  const t = sidebarTip.value
+  if (!t.stateKey) return t.text
+  const state = t.stateKey === 'bg' ? bgStateLabel.value : themeStateLabel.value
+  return sidebarCollapsed.value ? `${t.btnName} · ${state}` : state
+})
 
 /**
  * 「导出备份」按钮获得焦点（键盘 Tab 或点击）时的气泡处理。

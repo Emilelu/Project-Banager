@@ -256,7 +256,7 @@
             <AppIcon scale="xs" name="undo" />{{ tt('remaining.restoreDateSort') }}
           </button>
           <div class="relative inline-block">
-            <button @click="showPageSizeMenu=!showPageSizeMenu"
+            <button @click="togglePageSizeMenu($event)"
               :aria-expanded="showPageSizeMenu" aria-haspopup="menu"
               class="btn-base btn-sm btn-neutral page-size-trigger">
               <AppIcon scale="xs" name="listCheck" />{{ tt('remaining.perPage', { n: pageSize }) }}<AppIcon scale="xs" name="caretDown" />
@@ -269,9 +269,14 @@
             <transition name="pop">
               <!-- 方向变量：本菜单向上展开（bottom-full），原点在底边、起始位移朝下，
                    因此动画是「从触发按钮那一侧向上长出来」。 -->
-              <div v-if="showPageSizeMenu" role="menu"
-                class="page-size-menu app-menu-surface absolute left-0 bottom-full mb-1 z-50 rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem] app-menu-surface"
-                style="--pop-origin-y: bottom; --pop-from-y: 6px">
+              <!-- 必须 fixed + Teleport 到 body：本菜单原本挂在 .glass 卡片内用 absolute，
+               而 .glass 带 backdrop-filter 会形成 backdrop root，
+               菜单自身的 backdrop-filter 因此采不到页面背景 → 背景模糊形同虚设。
+               语言菜单正是 fixed z-[110] 才正常。 -->
+         <Teleport to="body">
+         <div v-if="showPageSizeMenu" role="menu"
+                class="page-size-menu app-menu-surface fixed z-[110] rounded-xl shadow-2xl border border-white/40 py-1 min-w-[12rem]"
+                :style="pageSizeMenuStyle">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
                   class="w-full text-left px-4 py-2 text-sm transition hover:bg-primary/10 whitespace-nowrap"
@@ -283,6 +288,7 @@
                   <button @click="applyCustomPageSize" class="btn-base btn-sm btn-link shrink-0">{{ tt('common.confirm') }}</button>
                 </div>
               </div>
+         </Teleport>
             </transition>
           </div>
         </div>
@@ -825,6 +831,50 @@ const pageSizeOptions = [10, 20, 50, 100]
 const customPageSize = ref('')
 const showPageSizeMenu = ref(false)
 
+/** 「每页 N 条」菜单的 fixed 坐标（向上展开，贴在触发按钮上方） */
+const pageSizeMenuPos = ref({ left: 0, bottom: 0 })
+/**
+ * 菜单用 bottom 定位：不需要知道菜单自身高度，
+ * 「底边贴住触发按钮上边」由 CSS 保证，菜单多高都自动向上展开。
+ * （之前用 top = 按钮顶 - 菜单高，得先量高度，时序不可靠。）
+ */
+const pageSizeMenuStyle = computed(() => ({
+  left: pageSizeMenuPos.value.left + 'px',
+  bottom: pageSizeMenuPos.value.bottom + 'px',
+}))
+
+/**
+ * 打开/关闭「每页 N 条」菜单。
+ *
+ * 菜单是 fixed 定位（为了脱离 .glass 的 backdrop root，让背景模糊生效），
+ * 所以必须自己算坐标。向上展开：top = 触发按钮 top - 菜单高 - 间距；
+ * 上方放不下就翻到下方。
+ */
+const togglePageSizeMenu = async (e) => {
+  if (showPageSizeMenu.value) {
+    showPageSizeMenu.value = false
+    return
+  }
+  showPageSizeMenu.value = true
+  const btn = e && e.currentTarget
+  if (!btn) return
+  const r = btn.getBoundingClientRect()
+  const MENU_W = 200
+  const MARGIN = 8
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  // 横向：左对齐触发按钮；右侧放不下就贴右边界
+  let left = r.left
+  if (left + MENU_W > vw - MARGIN) left = Math.max(MARGIN, vw - MENU_W - MARGIN)
+
+  // 纵向：用 bottom —— 菜单底边在按钮上方 MARGIN 处，高度多少都自动向上展开
+  const bottom = vh - r.top + MARGIN
+
+  pageSizeMenuPos.value = { left: left, bottom: bottom }
+}
+
+
 const totalPages = computed(() => Math.max(1, Math.ceil(sortedRemainingList.value.length / pageSize.value)))
 const paginatedList = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
@@ -1001,6 +1051,12 @@ const onDocClick = (e) => {
   }
   if (e.target.closest('tbody tr, button, input, select, textarea, a, .app-dialog, .context-menu, .selectable-text')) return
   selected.value = null
+  // 点表格外的空白区域 → 清空批量勾选并退出批量模式（用户要求）
+  if ((batchMode.value || checkedIds.value.length > 0)
+      && !e.target.closest('table, .pager-btn, .page-size-trigger, .page-size-menu, .glass .toolbar-enter, .app-dialog, .context-menu, .sel-anim-wrap')) {
+    checkedIds.value = []
+    batchMode.value = false
+  }
 }
 
 // 批量添加
