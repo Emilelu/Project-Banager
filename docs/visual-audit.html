@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>视觉审计报告 · Project Banager v1.19.0</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --red: #dc2626;
+    --amber: #d97706;
+    --green: #059669;
+    --blue: #2563eb;
+    --code-bg: #f1f3f6;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1c1f26;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #2d323b;
+      --code-bg: #23272f;
+      --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  /* ---------- 头部 ---------- */
+  header.top { margin-bottom: 28px; }
+  h1 {
+    font-size: 26px; line-height: 1.35; margin: 0 0 10px;
+    letter-spacing: -.01em; font-weight: 700;
+  }
+  .meta {
+    color: var(--muted); font-size: 12.5px; line-height: 1.9;
+  }
+  .meta strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- 统计卡 ---------- */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin: 20px 0 26px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .stat .n { font-size: 22px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .stat.red .n { color: var(--red); }
+  .stat.amber .n { color: var(--amber); }
+  .stat.green .n { color: var(--green); }
+  .stat.blue .n { color: var(--blue); }
+
+  /* ---------- 工具栏 ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); padding: 12px 0 14px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 5px 13px; font-size: 12.5px; cursor: pointer;
+    transition: all .15s ease; font-weight: 500;
+  }
+  .chip:hover { border-color: var(--muted); }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- 分组 ---------- */
+  .group-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 700; margin: 28px 0 12px;
+    letter-spacing: -.005em;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .dot.red { background: var(--red); }
+  .dot.amber { background: var(--amber); }
+  .dot.green { background: var(--green); }
+  .dot.blue { background: var(--blue); }
+
+  /* ---------- 条目 ---------- */
+  .item {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 10px; box-shadow: var(--shadow);
+    transition: border-color .15s ease;
+  }
+  .item:hover { border-color: var(--muted); }
+  .item.picked { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.15), var(--shadow); }
+
+  .item-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .cb {
+    flex: 0 0 auto; width: 17px; height: 17px; margin-top: 3px;
+    border: 1.5px solid var(--line); border-radius: 5px; background: var(--card);
+    cursor: pointer; position: relative; transition: all .15s ease;
+  }
+  .item.picked .cb { background: var(--blue); border-color: var(--blue); }
+  .item.picked .cb::after {
+    content: ''; position: absolute; left: 4.5px; top: 1.5px;
+    width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .id {
+    flex: 0 0 auto; font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    letter-spacing: .02em; margin-top: 1px;
+  }
+  .title { font-size: 14.5px; font-weight: 600; line-height: 1.45; flex: 1; }
+  .orig {
+    flex: 0 0 auto; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, Consolas, monospace; margin-top: 2px;
+  }
+
+  .body { padding-left: 27px; }
+  .body ul { margin: 0; padding-left: 18px; }
+  .body li { margin: 5px 0; color: var(--text); }
+  .body li::marker { color: var(--muted); }
+  .suggest { color: var(--blue); font-weight: 500; }
+
+  code {
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  b, strong { font-weight: 700; }
+  .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* ---------- 内嵌小表 ---------- */
+  table.mini {
+    width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px;
+  }
+  table.mini th, table.mini td {
+    border: 1px solid var(--line); padding: 6px 9px; text-align: left;
+  }
+  table.mini th { background: var(--code-bg); font-weight: 600; }
+  table.mini td:not(:first-child), table.mini th:not(:first-child) {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- 排除表 ---------- */
+  table.excl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  table.excl th, table.excl td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  table.excl th { background: var(--code-bg); font-weight: 600; }
+  table.excl tr:hover td { background: var(--code-bg); }
+
+  /* ---------- 复制条 ---------- */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--card); border-top: 1px solid var(--line);
+    padding: 11px 20px; display: flex; gap: 12px; align-items: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.08);
+  }
+  .bar .info { font-size: 12.5px; color: var(--muted); }
+  .bar .info b { color: var(--text); }
+  .btn {
+    border: 0; border-radius: 8px; padding: 8px 16px; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: all .15s ease;
+  }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .btn.ghost:hover { color: var(--text); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .hidden { display: none !important; }
+
+  @media print {
+    body { padding: 0; background: #fff; }
+    .toolbar, .bar, .cb { display: none !important; }
+    .item { break-inside: avoid; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>视觉审计报告 · Project Banager</h1>
+  <div class="meta">
+    <div>版本 <strong>v1.19.0</strong> · 审计日期 2026-11-02 · 7 轮累计</div>
+    <div>覆盖：6 页 ×（浅色 / 深色 / 768 / 1024 / 1440 / 1920 / 缩放 / 英 / 日 / 空态 / 加载态）
+      · 18 个弹窗与面板 · 3 个自研选择器 · Toast · Tooltip · 交互态 · 选中态 · 图片降级 · 侧栏 · 无障碍</div>
+    <div style="margin-top:6px">每条都附实测数值。勾选你确认要改的条目，底部会生成回复文本。</div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat red"><div class="n">7</div><div class="l">严重</div></div>
+  <div class="stat amber"><div class="n">15</div><div class="l">中等 + 无障碍</div></div>
+  <div class="stat green"><div class="n">5</div><div class="l">轻微</div></div>
+  <div class="stat blue"><div class="n">21</div><div class="l">实测排除</div></div>
+</div>
+
+<div class="toolbar">
+  <div class="filters">
+    <button class="chip on" data-f="all">全部 27</button>
+    <button class="chip" data-f="red">🔴 严重 7</button>
+    <button class="chip" data-f="amber">🟡 中等 15</button>
+    <button class="chip" data-f="green">🟢 轻微 5</button>
+    <button class="chip" data-f="pass">✅ 通过 3</button>
+    <span class="count" id="visibleCount">显示 27 / 30</span>
+  </div>
+</div>
+
+<!-- ================= 🔴 严重 ================= -->
+<div class="group-title">🔴 严重</div>
+
+<div class="item" data-sev="red" data-id="V-01">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-01</span>
+    <span class="title">追番页顶部空玻璃横条</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测（有数据与空数据均存在）：高 <b class="num">30px</b>、<code>textContent=""</code>、可交互元素 <b class="num">0</b></li>
+    <li>同页其它卡片都有内容（49 / 565 / 200px）</li>
+    <li class="suggest">建议：删掉该容器</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-02">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-02</span>
+    <span class="title">标签徽章被压缩</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测 8 个中 <b class="num">6 个</b> <code>scrollWidth &gt; clientWidth</code>：<code>悬疑</code> <b class="num">15px</b> / 需 25px；<code>热血</code>、<code>科幻</code> 22px / 需 25px</li>
+    <li class="suggest">建议：加 <code>shrink-0</code> + <code>whitespace-nowrap</code>，或超过 2 个折叠为「+N」</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-03">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-03</span>
+    <span class="title">1024 窄屏表格溢出</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测（1024×768）：表格右边界 <b class="num">1210px</b>，超视口 <b class="num">186px</b>；越界元素 5 个</li>
+    <li>其它 5 页在 1024 下均无溢出</li>
+    <li class="suggest">建议：容器加 <code>overflow-x-auto</code>，或断点隐藏备注列</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-04">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-04</span>
+    <span class="title">1920 宽屏列宽冗余 1467px</span>
+  </div>
+  <div class="body">
+    <table class="mini">
+      <tr><th>列</th><th>列宽</th><th>内容需</th><th>冗余</th></tr>
+      <tr><td>#</td><td>72</td><td>7</td><td>65</td></tr>
+      <tr><td>番剧名称</td><td>412</td><td>62</td><td>350</td></tr>
+      <tr><td><b>预计日期</b></td><td><b>554</b></td><td><b>51</b></td><td><b>503</b></td></tr>
+      <tr><td>链接</td><td>296</td><td>37</td><td>259</td></tr>
+      <tr><td>备注</td><td>296</td><td>6</td><td>290</td></tr>
+    </table>
+    <ul>
+      <li>「预计日期」554px 只放 <code>2026/01</code>（51px）</li>
+      <li>根因：缺少 <code>table-layout: fixed</code> 与列宽约束</li>
+      <li class="suggest">建议：关键列定宽（日期 120 / 链接 200），备注吃剩余空间</li>
+    </ul>
+  </div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-05">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-05</span>
+    <span class="title">768 极窄屏顶栏标题换行挤压</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测（768×1024，侧栏固定 210px，正文仅 558px）：</li>
+    <li>「等待更新」标题被挤成<b>两行</b>（「等待更」/「新」）</li>
+    <li>右上日期「2026/11/02 周一」被截断成「2026/11/02 周」+「一」</li>
+    <li>表格横向溢出，越界元素 <b class="num">5 个</b>，最右「备注」列完全不可见</li>
+    <li>根因：顶栏左侧（标题 + 计数 + 5 个动作图标）与右侧（3 图标 + 日期）在 558px 内放不下，且都不允许收缩</li>
+    <li class="suggest">建议：①768 以下把侧栏折叠为图标模式　②顶栏动作收进「更多」菜单　③表格容器加 <code>overflow-x-auto</code></li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-06">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-06</span>
+    <span class="title">清空弹窗按钮溢出卡片</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测：弹窗宽 <b class="num">462px</b>；三按钮 <b class="num">67 / 167 / 266px</b>，合计超出卡片</li>
+    <li class="suggest">建议：按钮 <code>flex-1</code> 等分，或长文案改短</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="red" data-id="V-07">
+  <div class="item-head">
+    <div class="cb"></div><span class="id">V-07</span>
+    <span class="title">周五表头背景色丢失</span>
+  </div>
+  <div class="body"><ul>
+    <li>实测：7 个表头仅周五 <code>rgba(0,0,0,0)</code>，其余均为 <code>rgba(...,0.15)</code></li>
+    <li>根因：<code>DAY_THEMES[4]</code> 写的是 <code>bg-[#D97706]/18</code>，而 <b><code>/18</code> 不在 Tailwind 透明度刻度</b>，该 class 被静默丢弃</li>
+    <li class="suggest">建议：改成 <code>/15</code> 或 <code>/20</code></li>
+  </ul></div>
+</div>
+
+<!-- ================= 🟡 中等 ================= -->
+<div class="group-title">🟡 中等</div>
+
+<div class="item" data-sev="amber" data-id="V-08">
+  <div class="item-head"><div class="cb"></div><span class="id">V-08</span><span class="title">侧栏分区标题 9.625px</span></div>
+  <div class="body"><ul>
+    <li>实测：「番单」「设置」= <b class="num">9.625px</b>，色 <code>rgb(83,97,116)</code></li>
+    <li class="suggest">建议：提到 11px</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-09">
+  <div class="item-head"><div class="cb"></div><span class="id">V-09</span><span class="title">卡内番剧名可用宽度异常</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>星际牛仔</code> <b class="num">48px</b>（需 56）；<code>攻壳机动队…</code> <b class="num">129px</b>（需 234）</li>
+    <li>根因：名称与标签同处一个 flex 行抢宽度，名称缺 <code>flex-1 min-w-0</code></li>
+    <li class="suggest">建议：名称独占一行，或加 <code>flex-1 min-w-0</code> + 标签 <code>shrink-0</code></li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-10">
+  <div class="item-head"><div class="cb"></div><span class="id">V-10</span><span class="title">行分隔线对比不足</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>1px solid rgba(255,255,255,0.1)</code>，浅色壁纸上几乎不可见</li>
+    <li class="suggest">建议：提到 <code>0.18</code></li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-11">
+  <div class="item-head"><div class="cb"></div><span class="id">V-11</span><span class="title">深色表头渐变断层</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>thead</code> 紫 → 琥珀横跨整行，中间可见色阶跳变</li>
+    <li class="suggest">建议：深色下改用单一低透明底色</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-12">
+  <div class="item-head"><div class="cb"></div><span class="id">V-12</span><span class="title">年份菜单分隔线过粗</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>border-white/20</code> 在 <code>rgba(255,255,255,0.82)</code> 的菜单上成为两条粗白带</li>
+    <li class="suggest">建议：改用 <code>rgba(0,0,0,0.06)</code></li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-13">
+  <div class="item-head"><div class="cb"></div><span class="id">V-13</span><span class="title">标签「内置」徽章 8.75px</span></div>
+  <div class="body"><ul>
+    <li>实测 <code>text-[0.625rem]</code> = <b class="num">8.75px</b>，低于 10px 可读下限</li>
+    <li class="suggest">建议：提到 10.5px</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-14">
+  <div class="item-head"><div class="cb"></div><span class="id">V-14</span><span class="title">导入卡片留白过多</span></div>
+  <div class="body"><ul>
+    <li>实测：导入卡 <b class="num">107px</b> / 导出卡 <b class="num">99px</b>，导入卡内仅 1 个按钮</li>
+    <li class="suggest">建议：减少 <code>py</code>，或补充说明文字</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-15">
+  <div class="item-head"><div class="cb"></div><span class="id">V-15</span><span class="title">取色器色相条 11px 高</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>.cp-hue</code> <b class="num">194×11px</b></li>
+    <li class="suggest">建议：提到 16px，并给滑块 thumb 加可见标记</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-16">
+  <div class="item-head"><div class="cb"></div><span class="id">V-16</span><span class="title">取色器预设色块 23×16px</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>.cp-preset</code> <b class="num">23×16px</b>，低于 24px 触控建议值</li>
+    <li class="suggest">建议：提到 24×24</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-17">
+  <div class="item-head"><div class="cb"></div><span class="id">V-17</span><span class="title">集数行与百分比间距 59px</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>e</code> x=243、<code>1</code> x=253、<code>/ 24</code> x=260（止于 285），<code>4%</code> x=<b class="num">332</b></li>
+    <li>中间空 <b class="num">59px</b>，进度条起点与文字不连续</li>
+    <li class="suggest">建议：百分比紧跟集数，进度条单独一行</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-18">
+  <div class="item-head"><div class="cb"></div><span class="id">V-18</span><span class="title">星期底色色相跨 258°</span></div>
+  <div class="body">
+    <table class="mini">
+      <tr><th>星期</th><th>色相</th><th>饱和</th><th>亮度</th></tr>
+      <tr><td>周一</td><td><b>258°</b></td><td>90%</td><td>66%</td></tr>
+      <tr><td>周二</td><td>25°</td><td>95%</td><td>53%</td></tr>
+      <tr><td>周三</td><td>199°</td><td>89%</td><td>48%</td></tr>
+      <tr><td>周四</td><td>160°</td><td>84%</td><td>39%</td></tr>
+      <tr><td>周五</td><td><b>透明</b></td><td>—</td><td>—</td></tr>
+      <tr><td>周六</td><td>25°</td><td><b>5%</b>（近灰）</td><td>45%</td></tr>
+      <tr><td>周日</td><td>0°</td><td>84%</td><td>60%</td></tr>
+    </table>
+    <ul>
+      <li>色相跨度 <b class="num">258°</b>（0° 红 → 258° 紫），横跨整个色环</li>
+      <li>周六饱和度 <b class="num">5%</b>，与其它 84–95% 完全不同档</li>
+      <li class="suggest">建议：改「工作日同色 + 周末强调」两档，饱和度统一</li>
+    </ul>
+  </div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-19">
+  <div class="item-head"><div class="cb"></div><span class="id">V-19</span><span class="title">首帧无骨架屏，先显示空态</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>domcontentloaded</code> 后 700ms → <code>skeletons: 0</code>，页面已显示「No waiting shows yet」</li>
+    <li>数据到达前用户会看到「暂无记录」的误报</li>
+    <li class="suggest">建议：数据未就绪时渲染骨架行</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-20">
+  <div class="item-head"><div class="cb"></div><span class="id">V-20</span><span class="title">侧栏激活项比其它宽 5.6px</span></div>
+  <div class="body"><ul>
+    <li>实测：「等待更新」（激活）<b class="num">193.64 × 43.26</b>，x=7.68</li>
+    <li>其它 5 项 <b class="num">188 × 42</b>，x=10.5</li>
+    <li>差 <b class="num">5.64px 宽 / 1.26px 高 / 2.82px 位移</b>，切换页面时导航项会轻微跳动</li>
+    <li class="suggest">建议：激活态用 <code>box-shadow</code> 或 <code>outline</code>，不要撑大盒子</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="amber" data-id="V-21">
+  <div class="item-head"><div class="cb"></div><span class="id">V-21</span><span class="title">Transfer 页按钮字号不统一</span></div>
+  <div class="body"><ul>
+    <li>实测：「选择文件并导入」<b class="num">12.25px / 高 34px</b></li>
+    <li>五个导出按钮 <b class="num">14px / 高 37px</b></li>
+    <li>同页内字号差 1.75px、高度差 3px</li>
+    <li class="suggest">建议：统一到 12.25px / 34px（与全站 <code>.btn-base</code> 一致）</li>
+  </ul></div>
+</div>
+
+<!-- ================= 🟡 无障碍 ================= -->
+<div class="group-title">🟡 无障碍</div>
+
+<div class="item" data-sev="amber" data-id="V-22">
+  <div class="item-head"><div class="cb"></div><span class="id">V-22</span><span class="title">prefers-reduced-motion 仅覆盖 3% 动画</span></div>
+  <div class="body"><ul>
+    <li>实测（<code>reducedMotion: 'reduce'</code> 环境）：<code>matchMedia</code> 匹配为 <b>true</b> ✅，但示例过渡 <code>opacity 0.5s</code> 的实际时长仍是 <b class="num">0.5s</b>，未归零</li>
+    <li>源码统计：<code>style.css</code> 有 <b class="num">56 条 transition + 10 条 animation = 66 条</b>动画声明</li>
+    <li>但 <code>@media (prefers-reduced-motion: reduce)</code> <b class="num">只有 2 处</b>（L171 壁纸过渡、L504 导航项）</li>
+    <li>覆盖率约 <b class="num">3%</b>。仍在播放：弹窗 0.4s spring、菜单 0.32s、Toast 进出场、壁纸缩放 0.8s、按钮 hover 缩放</li>
+    <li>影响：前庭功能障碍用户对大幅位移/缩放敏感，这是真实无障碍缺口</li>
+    <li class="suggest">建议：加一条全局兜底</li>
+  </ul>
+  <div style="margin-top:10px;padding:12px;background:var(--code-bg);border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre;overflow-x:auto">@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}</div>
+  </div>
+</div>
+
+<!-- ================= 🟢 轻微 ================= -->
+<div class="group-title">🟢 轻微</div>
+
+<div class="item" data-sev="green" data-id="V-23">
+  <div class="item-head"><div class="cb"></div><span class="id">V-23</span><span class="title">主题页色圆基线差 1px</span></div>
+  <div class="body"><ul>
+    <li>实测：色圆 y=286 高 35px；按钮 y=287 高 34px</li>
+    <li class="suggest">建议：容器加 <code>items-center</code>，或色圆改 34px</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="green" data-id="V-24">
+  <div class="item-head"><div class="cb"></div><span class="id">V-24</span><span class="title">Tooltip 字号 10.5px</span></div>
+  <div class="body"><ul>
+    <li>实测：<code>#sidebar-tip</code> 62×30、radius 6px、font <b class="num">10.5px</b>、padding 5.25 / 8.75</li>
+    <li class="suggest">建议：字号提到 11.5px（与 <code>.btn-sm</code> 同档）</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="green" data-id="V-25">
+  <div class="item-head"><div class="cb"></div><span class="id">V-25</span><span class="title">侧栏底部按钮左右边距不对称</span></div>
+  <div class="body"><ul>
+    <li>实测：容器 x=<b class="num">9</b>、宽 192、右缘 201；aside 右缘 <b class="num">210</b></li>
+    <li>按钮本身：左钮 x=8.75 宽 93.13，右钮 right=200.25</li>
+    <li>实际左右边距 8.75 / 9.75，<b class="num">差 1px</b></li>
+    <li class="suggest">建议：容器 padding 对称</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="green" data-id="V-26">
+  <div class="item-head"><div class="cb"></div><span class="id">V-26</span><span class="title">Help 弹窗 kbd 圆角 3.5px</span></div>
+  <div class="body"><ul>
+    <li>实测：7 个 <code>kbd</code> 元素 radius <b class="num">3.5px</b>、高 20px、font <b class="num">10.5px</b></li>
+    <li>与全站圆角规格（6 / 8 / 10 / 14）不在同一档</li>
+    <li class="suggest">建议：改成 <code>6px</code>（xs 档）</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="green" data-id="V-27">
+  <div class="item-head"><div class="cb"></div><span class="id">V-27</span><span class="title">表格选中行与邻行背景难分辨</span></div>
+  <div class="body"><ul>
+    <li>实测：选中行 <code>rgba(199,122,96,0.1)</code>（主题色 10%）</li>
+    <li>奇数行 <code>rgba(255,255,255,0.2)</code>、偶数行 <code>rgba(255,255,255,0.4)</code></li>
+    <li>问题：斑马纹本身的 0.2 vs 0.4 差异比选中态的 10% 主色叠加更容易被感知，选中反而不醒目</li>
+    <li class="suggest">建议：选中行改 <code>rgba(var(--c-primary) / 0.18)</code>，或加左侧 3px 主色条</li>
+  </ul></div>
+</div>
+
+<!-- ================= ✅ 正向验证 ================= -->
+<div class="group-title">✅ 正向验证（无需修改）</div>
+
+<div class="item" data-sev="pass" data-id="V-28" data-pass="1">
+  <div class="item-head"><div class="cb" style="display:none"></div><span class="id">V-28</span><span class="title">浏览器缩放 125% / 150% 表现正常</span></div>
+  <div class="body">
+    <table class="mini">
+      <tr><th>缩放</th><th>页面</th><th>横向溢出</th><th>越界元素</th><th>顶栏高</th><th>标题/动作重叠</th></tr>
+      <tr><td>125%</td><td>等待更新</td><td>false</td><td>0</td><td>61px</td><td>false</td></tr>
+      <tr><td>125%</td><td>正在追番</td><td>false</td><td>0</td><td>61px</td><td>false</td></tr>
+      <tr><td>125%</td><td>已看历史</td><td>false</td><td>0</td><td>61px</td><td>false</td></tr>
+      <tr><td>150%</td><td>等待更新</td><td>false</td><td>0</td><td>74px</td><td>false</td></tr>
+      <tr><td>150%</td><td>正在追番</td><td>false</td><td>0</td><td>74px</td><td>false</td></tr>
+      <tr><td>150%</td><td>已看历史</td><td>false</td><td>0</td><td>74px</td><td>false</td></tr>
+    </table>
+    <ul>
+      <li>顶栏高度随缩放线性增长（49 → 61 → 74），说明用的是相对单位</li>
+      <li class="suggest">结论：缩放适配良好，不需要改动</li>
+    </ul>
+  </div>
+</div>
+
+<div class="item" data-sev="pass" data-id="V-31" data-pass="1">
+  <div class="item-head"><div class="cb" style="display:none"></div><span class="id">V-31</span><span class="title">图片加载失败降级正常</span></div>
+  <div class="body"><ul>
+    <li>实测：一半封面用必失败域名，加载后追番卡 3 张正常图 <code>complete: true / naturalWidth: 400</code>，<b>无一张显示坏图图标</b></li>
+    <li>表格页 9 张图 <code>broken: 0</code></li>
+    <li>尺寸统一：卡片 <b class="num">25×35</b>、表格 <b class="num">21×28</b></li>
+    <li class="suggest">结论：失败图被移除而非留下破图占位，降级实现正确</li>
+  </ul></div>
+</div>
+
+<div class="item" data-sev="pass" data-id="V-32" data-pass="1">
+  <div class="item-head"><div class="cb" style="display:none"></div><span class="id">V-32</span><span class="title">贴底菜单向上展开正常</span></div>
+  <div class="body"><ul>
+    <li>实测（分页栏贴视口底部）：菜单 <code>top 593 / bottom 816</code>，触发器 <code>top 824</code></li>
+    <li><code>完整在视口内: true</code>、<code>向上展开: true</code></li>
+    <li class="suggest">结论：贴边翻转逻辑正确</li>
+  </ul></div>
+</div>
+
+<!-- ================= ✅ 实测排除 ================= -->
+<div class="group-title">✅ 实测排除的疑点</div>
+
+<div class="item" data-sev="pass" data-id="EXCL" data-pass="1" style="padding-bottom:8px">
+  <div class="body" style="padding-left:0">
+    <div style="color:var(--muted);font-size:12.5px;margin-bottom:4px">
+      以下是我最初怀疑、测量后<b>确认没问题</b>的。列出来避免误以为要改。
+    </div>
+    <table class="excl">
+      <tr><th style="width:44%">疑点</th><th>实测结果</th></tr>
+      <tr><td>深色说明文字对比不足</td><td>全页扫描 <b>0 处</b>低于 4.5:1</td></tr>
+      <tr><td>顶栏图标无焦点环</td><td>有 <code>outline: rgb(67,78,93) solid 2px</code></td></tr>
+      <tr><td>Toast 背景透明不可见</td><td>截图显示实底彩条白字</td></tr>
+      <tr><td>弹窗内容英文（语言错乱）</td><td>locale=zh 时全中文</td></tr>
+      <tr><td>DatePicker 精确度按钮高度不一</td><td>全 <b>23px</b> / 宽 <b>87px</b></td></tr>
+      <tr><td>DatePicker 底部按钮宽度不等</td><td>全 <b>133×28</b></td></tr>
+      <tr><td>DatePicker 上月日期无区分</td><td>灰 107 vs 深灰 55</td></tr>
+      <tr><td>DatePicker 日期格尺寸不一</td><td>42 格全 <b>37×32</b></td></tr>
+      <tr><td>分页按钮尺寸不一</td><td>4 个全 <b>50×50</b></td></tr>
+      <tr><td>禁用态样式缺失</td><td><code>opacity 0.4</code> + <code>not-allowed</code></td></tr>
+      <tr><td>滚动条挤压布局</td><td>宽 <b>0</b>（覆盖层）</td></tr>
+      <tr><td>滚动后顶栏错位</td><td><code>relative</code>、y=0</td></tr>
+      <tr><td>超长内容溢出单元格</td><td>5 列全无溢出</td></tr>
+      <tr><td>标签页输入框与按钮不齐</td><td>都 34px / y 112</td></tr>
+      <tr><td>导出五按钮宽度不一</td><td>全 <b>223px</b></td></tr>
+      <tr><td>两玻璃预览块高度不同</td><td>都 <b>42px</b></td></tr>
+      <tr><td>卡片被拉伸满列高</td><td>都 <b>738px</b></td></tr>
+      <tr><td>表头与正文列错位</td><td>全 <b>0px</b></td></tr>
+      <tr><td>英/日表头换行</td><td>0 处</td></tr>
+      <tr><td>1024 其它 5 页溢出</td><td>仅 1 页</td></tr>
+      <tr><td>Help 弹窗超出视口</td><td>476×572 完整在视口内</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ================= 建议顺序 ================= -->
+<div class="group-title">📋 建议修复顺序</div>
+
+<div class="item" data-sev="pass" data-id="ORDER" data-pass="1" style="padding-bottom:8px">
+  <div class="body" style="padding-left:0">
+    <ul>
+      <li><b>第一批 · 布局结构性缺陷（P0）</b>：<b>V-03</b> + <b>V-04</b>（表格 <code>table-layout: fixed</code> + 列定宽 + <code>overflow-x-auto</code>）、<b>V-05</b>（窄屏折叠侧栏）<br>
+        <span style="color:var(--muted)">同一根因，一次改完窄屏与宽屏两端。</span></li>
+      <li><b>第二批 · 一眼可见</b>：<b>V-01</b>（删空容器）、<b>V-07</b>（<code>/18</code> → <code>/15</code>）<br>
+        <span style="color:var(--muted)">改动量 1~2 行。</span></li>
+      <li><b>第三批 · 内容挤压</b>：<b>V-02</b> + <b>V-09</b>（同源：名称与标签抢宽度）</li>
+      <li><b>第四批 · 组件几何</b>：<b>V-06</b>、<b>V-21</b></li>
+      <li><b>第五批 · 可读性与规格</b>：<b>V-08</b>、<b>V-13</b>、<b>V-24</b>、<b>V-26</b>、<b>V-10</b></li>
+      <li><b>第六批 · 体验打磨</b>：<b>V-19</b>、<b>V-20</b>、<b>V-22</b>、<b>V-27</b>、<b>V-18</b>、其余</li>
+    </ul>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<!-- ================= 底部条 ================= -->
+<div class="bar">
+  <span class="info">已选 <b id="pickCount">0</b> 项<span id="pickList"></span></span>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn ghost" id="clearBtn">清空</button>
+    <button class="btn primary" id="copyBtn" disabled>复制回复</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var items = Array.prototype.slice.call(document.querySelectorAll('.item'))
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'))
+  var visibleCount = document.getElementById('visibleCount')
+  var pickCount = document.getElementById('pickCount')
+  var pickList = document.getElementById('pickList')
+  var copyBtn = document.getElementById('copyBtn')
+  var clearBtn = document.getElementById('clearBtn')
+
+  var filter = 'all'
+  var picked = {}
+
+  function refreshVisible () {
+    var shown = 0
+    items.forEach(function (it) {
+      var sev = it.getAttribute('data-sev')
+      var sevMatch = (filter === 'all' || filter === sev)
+      var isPass = sev === 'pass'
+      var show = sevMatch
+      // 「全部」不显示 pass 类（正向验证 + 排除表 + 顺序），避免干扰勾选
+      if (filter === 'all' && isPass) show = false
+      it.classList.toggle('hidden', !show)
+      if (show) shown++
+    })
+    visibleCount.textContent = '显示 ' + shown + ' 项'
+  }
+
+  function refreshPicked () {
+    var ids = Object.keys(picked).filter(function (k) { return picked[k] })
+    ids.sort()
+    pickCount.textContent = ids.length
+    pickList.textContent = ids.length ? '（' + ids.join('、') + '）' : ''
+    copyBtn.disabled = ids.length === 0
+    items.forEach(function (it) {
+      var id = it.getAttribute('data-id')
+      it.classList.toggle('picked', !!picked[id])
+    })
+  }
+
+  items.forEach(function (it) {
+    var cb = it.querySelector('.cb')
+    if (!cb || cb.style.display === 'none') return
+    var id = it.getAttribute('data-id')
+    function toggle () {
+      picked[id] = !picked[id]
+      refreshPicked()
+    }
+    cb.addEventListener('click', function (e) { e.stopPropagation(); toggle() })
+    it.addEventListener('click', function (e) {
+      // 点条目任意处也可选中，但不干扰文本选择
+      if (window.getSelection && String(window.getSelection()).length) return
+      if (e.target.closest('table') || e.target.closest('code')) return
+      toggle()
+    })
+  })
+
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      chips.forEach(function (x) { x.classList.remove('on') })
+      c.classList.add('on')
+      filter = c.getAttribute('data-f')
+      refreshVisible()
+    })
+  })
+
+  clearBtn.addEventListener('click', function () {
+    picked = {}
+    refreshPicked()
+  })
+
+  copyBtn.addEventListener('click', function () {
+    var ids = Object.keys(picked).filter(function (k) { return picked[k] }).sort()
+    var text = '改 ' + ids.join(' ')
+    navigator.clipboard.writeText(text).then(function () {
+      var old = copyBtn.textContent
+      copyBtn.textContent = '已复制 ✓'
+      setTimeout(function () { copyBtn.textContent = old }, 1500)
+    }, function () {
+      window.prompt('请手动复制：', text)
+    })
+  })
+
+  refreshVisible()
+  refreshPicked()
+})()
+</script>
+</body>
+</html>
