@@ -48,7 +48,7 @@ Test Files  14 passed (14)
 
 ```
 src/
-├── App.vue                根组件：侧栏、顶栏、Toast、项目级弹窗（1333 行，改动前先读完相关段）
+├── App.vue                根组件：侧栏、顶栏、Toast、帮助弹窗（947 行，改动前先读完相关段）
 ├── main.js                启动编排：i18n → theme → mount → appearance（顺序有讲究，见文件注释）
 ├── router/index.js        7 条路由 + /import 重定向
 ├── components/            11 个 .vue 组件 + iconData.js（AppIcon / DatePicker / ColorPicker / ClockPicker / WatchingCard …）
@@ -267,9 +267,9 @@ pnpm build                     # 期望 93 modules / ~5.3s
 |---|---|
 | **V-18 星期配色** | **未改**。用户明确从修复清单中排除，星期表头仍是 7 种意象色（色相跨 258°、周六饱和度仅 5%）。若日后要统一，需重新决策。 |
 | **V-25 侧栏底部 1px 偏差** | 未消除。根因是侧栏 210px 减内边距后为奇数像素，两列等分无法整除；flex 与 grid 两种方案都试过。**视觉不可感知**，判断可接受。 |
-| **`review/SUMMARY.md` 数字过期** | 该文件记录 9 文件 / 332 用例，实际已是 **14 文件 / 473 用例**。它还有「299 passed」等更早数字。**以实际测试输出为准**，不要引用该文件的计数。 |
-| **CHANGELOG 有一条过时的缺口描述** | `CHANGELOG.md` 记「侧栏导入菜单选 .xlsx 会报不支持格式、待接线」。**实测已不成立**：该功能已迁至 `/transfer` 页，`runImport()` 里 `if (kind === 'xlsx') raw = await importExcel(file)`（`ImportExportView.vue:461`）分派正确，且有测试覆盖（`watched-import.test.js` 的 `mountTransfer`）。这条描述针对的是已被取代的旧侧栏菜单。 |
-| **App.vue 残留死代码** | `showImportMenu` / `showExportMenu` / `importData` / `exportData` / `fileInputRef` / `importFormats` / `exportFormats` 等约 120 行导入导出逻辑仍留在 `App.vue`，但**模板引用次数为 0**（入口已全部迁到 `/transfer` 页）。属清理项，删除前请确认无其它模块引用。 |
+| **`review/SUMMARY.md` 已标注为历史快照** | 该文件记录 9 文件 / 332 用例与「299 passed」，都是**当时的事实**。已在文件头加警示说明「引用计数前以当下 `pnpm test` 为准」，当前实际基线是 **14 文件 / 473 用例**。原文保留不改动，以免篡改历史审计记录。 |
+| **CHANGELOG 的 xlsx 缺口已标为已解决** | 原文那条「侧栏导入菜单选 .xlsx 会报不支持格式」针对的是**当时**的旧侧栏菜单。已用删除线保留原文，并补一条说明：入口迁到 `/transfer` 页后 `runImport()` 分派正确且有测试覆盖。 |
+| **App.vue 死代码已清理** | 已删除约 470 行：整条导入/导出菜单链路、两个导入弹窗（确认框 + 结果面板）、备份气泡、未使用的辅助函数。`App.vue` 从 **1419 行降到 947 行**。删除后 `pnpm test` 473 全绿、`pnpm build` 成功、Chromium 六页零报错。 |
 | `dist/index.html` 纳入了版本控制 | 每次改源码后需 `pnpm build` 并提交 dist，否则单文件下载用户拿不到修复。 |
 | `backup-before-squash` 分支 | 本地保留的历史重写备份（204 提交），未推送。确认无用后可删。 |
 
@@ -387,9 +387,9 @@ await page.screenshot({ path: 'tmp/x.png' })
 | 项 | 状态 |
 |---|---|
 | 工作区 | **干净**（`git status` 无输出） |
-| 本地 = 远端 | **是**（HEAD `0419c89`） |
+| 本地 = 远端 | **是** |
 | 测试 | **473 passed / 14 files** |
-| 构建 | **成功**，93 modules，~5.3 s |
+| 构建 | **成功**，93 modules |
 | 编码体检 | **乱码 0 / BOM 0** |
 | 产物 | `dist/index.html` 已构建并提交，约 1.6 MB |
 | 未解决项 | V-18（用户明确排除）、V-25（1px，不可感知） |
