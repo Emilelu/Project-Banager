@@ -57,7 +57,7 @@
                     </button>
 
                     <!-- 未归类 -->
-                    <div class="border-t border-gray-200/60 my-1"></div>
+                    <div class="menu-sep"></div>
                     <button type="button" role="menuitemradio"
                       :aria-checked="selectedYear === '__unclassified__' ? 'true' : 'false'"
                       @click="pickYear('__unclassified__')"
@@ -72,7 +72,7 @@
 
                     <!-- 年份 CRUD 收进本菜单：用户要求不再保留三个独立按钮。
                          放在菜单底部、分隔线之后，与「选择年份」区分开。 -->
-                    <div class="border-t border-gray-200/60 my-1"></div>
+                    <div class="menu-sep"></div>
                     <button type="button" role="menuitem" @click="openAddYearDialog"
                       class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
                       <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watched.addYear') }}</span>
@@ -112,12 +112,20 @@
     </div>
 
     <!-- 列表视图 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
+    <div class="tbl-scroll glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
       <!-- 需求 B：表格卡片**不再**自带「☰ 作品名称 / 共 N 条」标题行 ——
            下面的 <thead class="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-t-2xl"> 已经列出完整列名（#/作品名称/日期/链接/备注），
            再叠一个同名伪标题既重复又白占一行；「共 N 条」计数已上提到本页
            顶部第一张卡片的标题行（.stat-chip）与顶栏（setPageStats）。 -->
-      <table class="w-full">
+      <table class="record-table">
+        <colgroup>
+        <col v-if="batchMode" class="col-check" />
+        <col class="col-index" />
+        <col class="col-name" />
+        <col class="col-date" />
+        <col class="col-url" />
+        <col class="col-notes" />
+        </colgroup>
         <thead>
           <tr class="text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
@@ -144,7 +152,15 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="paginatedList.length===0">
+          <tr v-if="!listLoaded" class="record-skeleton-row">
+            <td :colspan="batchMode?6:5" class="py-6">
+              <div class="record-skeleton" aria-hidden="true">
+                <span class="record-skeleton-bar" v-for="n in 6" :key="n" :style="{ width: (88 - n * 8) + '%' }"></span>
+              </div>
+              <p class="sr-only">{{ tt('common.loading') }}</p>
+            </td>
+          </tr>
+          <tr v-else-if="paginatedList.length===0">
             <td :colspan="batchMode?6:5" class="py-10">
               <!-- 空态三段式：图标 + 主文案（+ 副说明）。
                    副说明原为「支持单个年份(2025)或年份范围(2014~2017)」——那是**年份标签格式**的说明，
@@ -158,7 +174,11 @@
           <tr v-for="(item,idx) in paginatedList" :key="item.id"
             :data-row-id="item.id"
             class="cursor-pointer transition-all duration-200 border-b border-white/10 list-item group"
-            :class="[batchMode && checkedIds.includes(item.id)?'bg-danger/10':selected?.id===item.id?'bg-primary/10':idx%2===0?'bg-white/20':'bg-white/40']"
+            :class="{
+              'is-checked': batchMode && checkedIds.includes(item.id),
+              'is-selected': !batchMode && selected?.id === item.id,
+              'is-odd': idx % 2 === 0,
+            }"
             @click="batchMode?toggleCheck(item.id):selectItem(item)"
             @dblclick="onRowDblclick($event)"
             @contextmenu.prevent="!batchMode && openContextMenu($event,item)"
@@ -364,12 +384,12 @@
             </div>
             <!-- 三个按钮并排一行（不换行）：cancel 固定宽度，两个动作按钮等分剩余空间。
                  原来用 flex-wrap 时最长那个会被挤到第二行，视觉不整齐。 -->
-            <div class="px-6 py-4 border-t border-white/20 flex items-center justify-center gap-2.5 flex-nowrap">
-              <button @click="showClearDialog=false" class="btn-base btn-neutral shrink-0">{{ tt('common.cancel') }}</button>
-              <button @click="doClearYear" class="btn-base btn-toned flex-auto whitespace-nowrap">
+            <div class="clear-scope-actions px-6 py-4 border-t border-white/20 grid gap-2.5">
+              <button @click="showClearDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
+              <button @click="doClearYear" class="btn-base btn-toned">
                 {{ tt('clearScope.clearYear', { year: selectedYear }) }}
               </button>
-              <button @click="doClearAll" class="btn-base btn-danger flex-auto whitespace-nowrap">
+              <button @click="doClearAll" class="btn-base btn-danger">
                 {{ tt('clearScope.clearAll') }}
               </button>
             </div>
@@ -570,6 +590,9 @@ const { errorText } = useErrorText()
 
 const years = ref([])
 const watchedList = ref([])
+// 首帧数据是否已到：false 时渲染骨架行，避免把「加载中」误显示成「暂无已看记录」。
+const listLoaded = ref(false)
+const loadFailed = ref(false)
 const selected = ref(null)
 const selectedYear = ref('')
 
@@ -1061,6 +1084,7 @@ const fetchData = async () => {
     yearCount.value = 0
     selected.value = null
     checkedIds.value = []
+    listLoaded.value = true
     return
   }
   try {
@@ -1109,6 +1133,7 @@ const fetchData = async () => {
     checkedIds.value = checkedIds.value.filter(id => visible.has(id))
     selected.value = selected.value ? watchedList.value.find(item => item.id === selected.value.id) || null : null
   } catch { showToast(tt('toast.fetchFailed'),'error') }
+  finally { listLoaded.value = true }
 }
 
 const selectItem = (item) => { selected.value = item }

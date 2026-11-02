@@ -34,7 +34,7 @@
     <!-- 列表视图 -->
     <!-- 拖放监听挂在整个表格容器：tbody 底边恰好等于末行底边，表格下方无任何可放置区，
          只挂 tbody 会导致「拖到末行之下」永远无法命中。挂容器后含末行下方空白均可响应。 -->
-    <div ref="tableWrapRef" class="glass rounded-2xl shadow-lg border border-white/30 overflow-hidden"
+    <div ref="tableWrapRef" class="tbl-scroll glass rounded-2xl shadow-lg border border-white/30 overflow-hidden"
       @dragover="onTableDragOver"
       @drop="onTableDrop"
       @dragleave="onTableDragLeave">
@@ -43,7 +43,16 @@
            再叠一个伪标题只是重复占一行高度；「共 N 条」这个计数已上提到本页
            顶部第一张卡片的标题行右侧（见文件开头的 .card-head + .stat-chip），
            同时也有 setPageStats('/remaining', …) 供 App.vue 顶栏使用。 -->
-      <table class="w-full">
+      <table class="record-table">
+        <colgroup>
+        <col v-if="batchMode" class="col-check" />
+        <col class="col-index" />
+        <col class="col-name" />
+        <col class="col-date" />
+        <col class="col-url" />
+        <col class="col-notes" />
+        <col class="col-tail" />
+        </colgroup>
         <thead>
           <tr class="text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
@@ -77,7 +86,15 @@
           </tr>
         </thead>
         <tbody ref="tbodyRef">
-          <tr v-if="paginatedList.length === 0">
+          <tr v-if="!listLoaded" class="record-skeleton-row">
+            <td :colspan="batchMode ? 7 : 6" class="py-6">
+              <div class="record-skeleton" aria-hidden="true">
+                <span class="record-skeleton-bar" v-for="n in 6" :key="n" :style="{ width: (88 - n * 8) + '%' }"></span>
+              </div>
+              <p class="sr-only">{{ tt('common.loading') }}</p>
+            </td>
+          </tr>
+          <tr v-else-if="paginatedList.length === 0">
             <td :colspan="batchMode ? 7 : 6" class="py-10">
               <!-- 空态三段式：图标 + 主文案 + 副说明。
                    副说明这里原本是「支持: 年月(2025/07)、完整日期…」——那是**表格日期列**的格式说明，
@@ -93,9 +110,11 @@
             :data-row-id="item.id"
             class="transition-all duration-200 border-b border-white/10 list-item group"
             :class="[
-              batchMode && checkedIds.includes(item.id) ? 'bg-danger/10'
-                : selected?.id === item.id ? 'bg-primary/10'
-                : idx % 2 === 0 ? 'bg-white/20' : 'bg-white/40',
+              {
+                'is-checked': batchMode && checkedIds.includes(item.id),
+                'is-selected': !batchMode && selected?.id === item.id,
+                'is-odd': idx % 2 === 0,
+              },
               canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
               dragIndex >= 0 && absoluteIndexOf(item) === dragIndex ? 'opacity-40' : '',
               dragOverIndex >= 0 && absoluteIndexOf(item) === dragOverIndex && absoluteIndexOf(item) !== dragIndex
@@ -546,6 +565,8 @@ const dayLabel = (cn) => {
 }
 
 const remainingList = ref([])
+// 首帧数据是否已到：false 时渲染骨架行，避免把「加载中」误显示成「暂无记录」。
+const listLoaded = ref(false)
 const selected = ref(null)
 
 // 排序：偏好持久化到 localStorage；预计日期用数字位比较（兼容 2025/07、2025/07/15 混排）
@@ -1174,6 +1195,7 @@ const fetchData = async () => {
         : null
     }
   } catch { showToast(tt('toast.fetchFailed'), 'error') }
+  finally { listLoaded.value = true }
 }
 
 const selectItem = (item) => { selected.value = item }
