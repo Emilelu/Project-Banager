@@ -10,7 +10,7 @@
           v-tip="tm('transfer.importHint')">{{ tm('transfer.importTitle') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></h2>
       </div>
 
-      <div class="flex items-center gap-3 flex-wrap min-h-[3.25rem]">
+      <div class="flex items-center gap-3 flex-wrap">
         <!-- 支持格式清单（xlsx · xls · csv …）是「这个按钮接受什么」的说明：
              清单本身移入按钮气泡，按钮旁只留一个 info 图标提示「此处可悬浮」。
              文案 key 未删除，只是渲染位置从正文变成气泡。 -->
@@ -119,7 +119,7 @@
         <button v-for="fmt in exportFormats" :key="fmt.key" type="button"
           :data-test="'export-' + fmt.key" @click="runExport(fmt.key)"
           :disabled="exporting || importing"
-          class="xfer-option flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition
+          class="btn-base xfer-option justify-between text-left transition
                  disabled:opacity-40 disabled:cursor-not-allowed"
           :aria-label="tm(fmt.labelKey)">
           <AppIcon scale="sm" :name="fmt.icon" class="text-primary shrink-0" />

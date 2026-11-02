@@ -49,7 +49,7 @@
           </template>
           <template v-else>
             <span class="tag-name flex-1 text-sm text-gray-700 truncate">{{ tagLabel(tag, tt) }}</span>
-            <span v-if="tag.is_builtin" class="tag-badge text-[0.625rem] text-gray-400 shrink-0">{{ tt('tags.builtin') }}</span>
+            <span v-if="tag.is_builtin" class="tag-badge text-xs text-gray-400 shrink-0">{{ tt('tags.builtin') }}</span>
           </template>
 
           <!-- 鎿嶄綔 -->
@@ -242,7 +242,7 @@ watch(() => tags.value.length, () => { error.value = '' })
   color: #e2e8f0 !important;
 }
 
-  /* 「内置」标记：0.625rem 属于小字，同样按 4.5:1 要求（不用更暗的灰） */
+  /* 「内置」标记：0.75rem 小字，同样按 4.5:1 要求（不用更暗的灰） */
 .dark .tag-badge {
   color: #cbd5e1 !important;
 }

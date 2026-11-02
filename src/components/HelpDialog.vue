@@ -23,7 +23,7 @@
                        原先没写 color，继承了父级 text-gray-600 且被深色模式的
                        "浅色文字"规则覆盖 → 浅字压浅底，几乎不可读。
                        这里固定 kbd-token 类，浅色/深色模式各自取正确色。 -->
-                  <kbd class="kbd-token shrink-0 px-2 py-0.5 rounded border text-xs font-mono">{{ s.keys }}</kbd>
+                  <kbd class="kbd-token shrink-0 px-2 py-0.5 rounded-[6px] border text-xs font-mono">{{ s.keys }}</kbd>
                 </li>
               </ul>
             </section>

@@ -59,7 +59,7 @@
                 <!-- 预设配色（最常用，一眼可选） -->
                 <div class="flex gap-3 flex-wrap">
                   <button v-for="preset in presets" :key="preset.key" @click="setPalette({ p: [...preset.p], s: [...preset.s] })"
-                    class="w-10 h-10 rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden"
+                    class="w-[34px] h-[34px] rounded-full border-2 transition-all btn-press flex items-center justify-center overflow-hidden"
                     :class="isActivePreset(preset) ? 'border-gray-700 scale-110' : 'border-transparent hover:scale-105'"
                     :aria-label="tt(preset.key)" v-tip="tt(preset.key)">
                     <span class="w-full h-full" :style="{ background: 'linear-gradient(135deg, ' + hslCss(preset.p) + ', ' + hslCss(preset.s) + ')' }"></span>

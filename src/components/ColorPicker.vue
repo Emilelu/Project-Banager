@@ -389,7 +389,7 @@ function applyHex() {
 .cp-panel {
   position: fixed;
   z-index: 160;
-  width: 15.5rem;
+  width: 16.5rem;
   border-color: rgb(255 255 255 / 0.45);
   box-shadow: 0 16px 48px rgb(31 38 135 / 0.24), 0 4px 12px rgb(0 0 0 / 0.12);
 }
@@ -431,14 +431,14 @@ function applyHex() {
 /* 色相条 */
 .cp-hue {
   position: relative;
-  height: 0.75rem;
+  height: max(16px, 1.125rem);
   margin-top: 0.625rem;
   border-radius: 9999px;
   cursor: pointer;
   background: linear-gradient(
     to right,
     #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%
-  );
+  ) center / 100% 0.75rem no-repeat;
   touch-action: none;
 }
 .cp-hue-cursor {
@@ -504,12 +504,15 @@ function applyHex() {
 /* 预设色 */
 .cp-presets {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(24px, 1fr));
   gap: 0.375rem;
   margin-top: 0.75rem;
 }
 .cp-preset {
-  height: 1.125rem;
+  min-width: 24px;
+  min-height: 24px;
+  height: max(24px, 1.5rem);
+  padding: 0;
   border-radius: 0.3125rem;
   border: 1px solid rgb(255 255 255 / 0.5);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
