@@ -15,24 +15,6 @@
       </div>
     </div>
 
-    <!-- 操作面板 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4 shrink-0">
-        <!-- 标题行：与「标签管理 / 导入 & 导出」同一套卡片标题（图标在前 + gradient-text + 计数 chip） -->
-        <!-- 按钮配色统一由主题色驱动（.btn-primary/.btn-toned/.btn-neutral/.btn-danger），
-             不再为每个按钮写死不同渐变；图标全为 currentColor，天然跟随按钮配色。 -->
-        <!-- 整个工具栏是一个 transition-group：
-             若只把「选中项按钮」放进组内，取消选中时该组宽度骤减，
-             **组外的分隔线与其后按钮会瞬间跳位**（没有过渡）。
-             全部元素共处一组后，任一元素出入场时其余元素都会平滑归位（.sel-anim-move）。 -->
-        <!-- 注意：tag 容器不能是 display:contents —— 那样元素不参与布局，
-             Vue 的 -move 位移计算失去参照，归位动画不会播放。用正常 flex 盒子。 -->
-        <!-- 工具栏按钮已按要求全部移到顶栏（见 setPageActions 注册）。
-             「添加番剧」按钮也移除了 —— 改为在周历空白处右键即可添加。
-             本卡片保留为空，让周历获得更多纵向空间。 -->
-      <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支），此处不再需要 transition -->
-
-    </div>
-
     <!-- 周历视图（独立卡片：卡片标题行 + 周历本体） -->
     <div class="glass rounded-2xl shadow-lg overflow-hidden border border-white/30 flex-1 flex flex-col">
       <div class="grid grid-cols-7 grid-rows-[auto_1fr] flex-1">
@@ -498,7 +480,7 @@ const DAY_THEMES = [
   { bg: 'bg-[#F97316]/15', text: 'text-[#9A3412]' },  // 火 橙
   { bg: 'bg-[#0EA5E9]/15', text: 'text-[#075985]' },  // 水 青
   { bg: 'bg-[#10B981]/15', text: 'text-[#065F46]' },  // 木 绿
-  { bg: 'bg-[#D97706]/18', text: 'text-[#78350F]' },  // 金 琥珀
+  { bg: 'bg-[#D97706]/15', text: 'text-[#78350F]' },  // 金 琥珀
   { bg: 'bg-[#78716C]/15', text: 'text-[#44403C]' },  // 土 土褐
   { bg: 'bg-[#EF4444]/15', text: 'text-[#991B1B]' },  // 日 红
 ]

@@ -111,10 +111,7 @@ const moreTitle = computed(() =>
 </script>
 
 <style scoped>
-/* 默认**不换行**：换行会让「名称 + 标签」这一行变成两三行，
-   追番卡片里表现为标签竖着堆叠（实测把卡片首行撑成 3 行），表格里则把行高撑高。
-   放不下时由 chip 自己收缩（flex:0 1 auto + min-width:0 + ellipsis），
-   而不是折行；容器 max-width:100% + 祖先 min-width:0 保证永不横向溢出。 */
+/* 徽章保持其内容宽度，不被相邻名称压缩成半个字；长自定义标签仍用省略号。 */
 .item-tags {
   display: inline-flex;
   align-items: center;
@@ -136,8 +133,7 @@ const moreTitle = computed(() =>
 .item-tag {
   --tg: rgb(var(--c-primary));
   display: inline-block;
-  /* 允许被压缩：窄列时先缩 chip 宽度（内部省略号），而不是把整行撑出父盒 */
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   padding: 0 0.375rem;
   border-radius: 0.375rem;
@@ -160,8 +156,8 @@ const moreTitle = computed(() =>
   gap: 0.1875rem;
 }
 .item-tags-compact .item-tag {
-  font-size: 0.625rem;
-  line-height: 1rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
   padding: 0 0.25rem;
   max-width: 4rem;
   border-radius: 0.3125rem;

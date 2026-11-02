@@ -55,17 +55,17 @@
           :aria-label="editLabels.name"
           @input="$emit('update:editValue', $event.target.value)"
           @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')" class="inline-edit-input w-full" autofocus />
-        <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors card-name-text">{{ item.name }}</span>
+        <span v-else class="text-base font-semibold text-gray-800 group-hover:text-primary transition-colors card-name-text" v-tip="item.name">{{ item.name }}</span>
         <a v-if="item.url" :href="itemUrl" target="_blank" rel="noopener" @click.stop
           :aria-label="openLinkLabel"
           class="ml-1 text-primary/60 hover:text-primary transition-colors inline-flex items-center shrink-0" v-tip="openLinkTip">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
         </a>
-        <!-- 标签排在作品名称右边（不是另起一行）：名称可省略号收缩、标签可收缩，
-             整行 nowrap，因此卡片宽度不变、不会横向溢出。
-             无标签时组件不渲染任何节点，卡片高度与没加标签时完全一致。 -->
-        <ItemTags v-if="item.tags" :tags="item.tags" :max="3" compact class="card-name-tags" />
       </div>
+    </div>
+    <!-- 标签行：恒定高度占位，有/无标签的卡片等高，周历列内不错位。 -->
+    <div class="card-tags-row" :class="{ 'ml-5': batchMode }">
+      <ItemTags v-if="item.tags" :tags="item.tags" :max="2" compact class="card-name-tags" />
     </div>
     <div class="flex items-center gap-1 mt-0.5 card-ep-row">
       <span class="text-sm font-bold text-gray-800 shrink-0 card-ep-label" aria-hidden="true">e</span>
@@ -77,16 +77,14 @@
           @input="$emit('update:editValue', $event.target.value)"
           type="text" inputmode="decimal" @blur="$emit('save-edit')" @keyup.enter="$emit('save-edit')" @keyup.escape="$emit('cancel-edit')"
           class="inline-edit-input w-16" autofocus />
-        <!-- 集数排布：`3 / 12`（斜杠两侧留白，不与数字粘连），百分比独立右对齐到行末。
+        <!-- 集数排布：`3 / 12`（斜杠两侧留白，不与数字粘连），百分比紧跟集数读数。
              无进度时保持原来的纯 `e 5`，不渲染任何占位文字。 -->
         <span v-else class="text-sm font-bold text-gray-800 card-ep-line"><span class="card-ep-cur">{{ item.current_episode }}</span><span v-if="progress" class="card-ep-total text-gray-400 font-normal">&nbsp;/ {{ progress.total }}</span></span>
       </span>
-      <!-- 用弹性占位把百分比推到行末（+/- 按钮之左）；无进度时占位仍撑开，
-           按钮位置与原来一致，因此有/无进度的卡片行内元素不跳动 -->
-      <span class="flex-1 min-w-0" aria-hidden="true"></span>
       <span v-if="progress" class="card-progress-pct" :class="{ 'is-complete': progress.pct >= 100 }"
         v-tip="progressTip">{{ progress.pct }}%</span>
-      <div class="opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 shrink-0">
+      <!-- 空间留在读数与动作之间，百分比与集数始终相邻。 -->
+      <div class="ml-auto opacity-75 group-hover:opacity-100 transition-opacity flex gap-0.5 shrink-0">
         <!-- 集数加减：统一用主题色驱动的迷你按钮（.btn-mini-plus / .btn-mini-minus），
              尺寸、圆角、字形与其他组件一致；原先「+ 绿 / - 橙」与主题色无关且割裂 -->
         <button @click.stop="$emit('increment')" :aria-label="incLabel"
@@ -306,10 +304,7 @@ const onCardKeydown = (e) => {
 </script>
 
 <style scoped>
-/* 名称行外壳 = 封面缩略图 + 名称行（flex/nowrap）。
-   封面与名称必须在同一行：直接把 <img> 放在卡片根下会独占一行，
-   名称被顶下去，卡片高度随「有无封面」跳变（实测差 40px）。
-   无封面时外壳里只剩 `.card-name-row`，几何与加封面之前完全一致。 */
+/* 封面与名称同排；标签在下一行，名称不再与徽章争夺宽度。 */
 .card-name-wrap {
   display: flex;
   align-items: center;
@@ -322,12 +317,7 @@ const onCardKeydown = (e) => {
   flex: 1 1 auto;
 }
 
-/* 作品名称行：名称 + 外链图标 + 标签 chips 同一行，**永不换行**。
-   列宽只有约 1/7 屏（960 宽约 100px、1440 宽约 169px）。
-   收缩优先级：名称先截断（ellipsis），标签随后收缩（chip 内部 ellipsis）。
-   反过来（让标签先占位）实测会把名称压成「标…」、chip 也压成「Ac…」，两边都读不出来；
-   名称是本行最重要的信息，必须优先保住。
-   不换行很重要：一旦允许折行，标签会竖着堆到名称下方，把卡片首行撑成 3 行（已实测到）。 */
+/* 作品名称行只放名称和外链；标签另行显示，避免两个主要信息互相挤压。 */
 .card-name-row {
   display: flex;
   align-items: center;
@@ -345,12 +335,19 @@ const onCardKeydown = (e) => {
   white-space: nowrap;
 }
 
-/* 标签跟在名称右边：只拿剩余空间（上限 55%，保证名称始终有位置）；
-   再窄就由 chip 自身收缩 + 省略号，绝不撑出卡片。 */
-.card-name-tags {
+/* 标签行：固定最小高度，保证有/无标签的卡片等高 */
+.card-tags-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 1.25rem;
+  margin-top: 0.25rem;
+  overflow: hidden;
+}
+
+.card-tags-row .card-name-tags {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 55%;
 }
 
 /* 封面缩略图：28×40（竖排海报 5:7），压在名称行左侧。
