@@ -361,75 +361,6 @@
     <!-- 帮助弹窗：键盘快捷键 + 操作小贴士 -->
     <HelpDialog :show="showHelp" @close="showHelp = false" />
 
-    <!-- 导入备份确认对话框 -->
-    <Teleport to="body">
-      <transition name="modal-overlay">
-        <div v-if="showImportConfirm" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[8px]" @click="cancelImport"></div>
-      </transition>
-      <transition name="modal">
-        <div v-if="showImportConfirm" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div ref="importConfirmRef" class="relative glass rounded-2xl shadow-2xl w-[26.25rem] border border-white/40 pointer-events-auto app-dialog"
-            role="dialog" aria-modal="true" aria-labelledby="app-import-confirm-title">
-            <div class="px-6 py-5 text-center">
-              <div class="mb-3 flex justify-center"><AppIcon scale="xl" class="text-gray-400" name="folderOpen" /></div>
-              <h3 id="app-import-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{ tt('confirm.importBackupTitle') }}</h3>
-              <p class="text-sm text-gray-500">
-                {{ tt('confirm.importBackupMessage') }}<br />
-                {{ tt('confirm.importBackupFile') }}<span class="font-semibold text-gray-700">{{ pendingImportFile?.name }}</span>
-              </p>
-            </div>
-            <div class="px-6 py-4 border-t border-white/20 flex justify-center gap-3">
-              <button @click="cancelImport" class="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition btn-press">{{ tt('common.cancel') }}</button>
-              <button @click="confirmImportDb" class="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-danger to-red-400 rounded-xl hover:shadow-lg hover:shadow-danger/30 transition-all btn-press">{{ tt('confirm.confirmImport') }}</button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </Teleport>
-
-    <!-- 结构化导入结果（csv / json / md）：只写业务数据，不覆盖数据库，故无需二次确认 -->
-    <Teleport to="body">
-      <transition name="modal-overlay">
-        <div v-if="showImportResult" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[8px]" @click="showImportResult = false"></div>
-      </transition>
-      <transition name="modal">
-        <div v-if="showImportResult" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <div class="relative glass rounded-2xl shadow-2xl w-[min(30rem,calc(100vw-2rem))] max-h-[80vh] flex flex-col border border-white/40 pointer-events-auto"
-            role="dialog" aria-modal="true" aria-labelledby="import-result-title">
-            <div class="px-6 py-4 border-b border-white/20 flex items-center gap-2 shrink-0">
-              <AppIcon scale="lg" :name="importResult?.failed ? 'warning' : 'check'" />
-              <h3 id="import-result-title" class="text-lg font-bold gradient-text">{{ tt('importResult.title') }}</h3>
-            </div>
-            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-              <div class="grid grid-cols-3 gap-2 text-center">
-                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
-                  <div class="text-lg font-bold text-primary">{{ importResult?.imported ?? 0 }}</div>
-                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.imported') }}</div>
-                </div>
-                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
-                  <div class="text-lg font-bold" :class="importResult?.failed ? 'text-danger' : 'text-gray-400'">{{ importResult?.failed ?? 0 }}</div>
-                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.failed') }}</div>
-                </div>
-                <div class="rounded-xl bg-white/60 border border-primary/15 py-2">
-                  <div class="text-lg font-bold text-gray-700">{{ (importResult?.byTable?.watching ?? 0) + (importResult?.byTable?.remaining ?? 0) + (importResult?.byTable?.watched ?? 0) }}</div>
-                  <div class="text-[0.6875rem] text-gray-500">{{ tt('importResult.total') }}</div>
-                </div>
-              </div>
-              <div v-if="importResult?.errors?.length" class="text-xs text-danger space-y-1">
-                <div v-for="(e, i) in importResult.errors.slice(0, 30)" :key="i">· {{ e }}</div>
-                <div v-if="importResult.errors.length > 30" class="text-gray-500">
-                  {{ tt('importResult.moreErrors', { count: importResult.errors.length - 30 }) }}
-                </div>
-              </div>
-            </div>
-            <div class="px-6 py-4 border-t border-white/20 flex justify-end shrink-0">
-              <button @click="showImportResult = false"
-                class="btn-base btn-primary">{{ tt('common.confirm') }}</button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </Teleport>
   </div>
 </template>
 
@@ -438,15 +369,6 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from './composables/useTheme'
 import { getDb } from './db/index'
-import {
-  buildExportWorkbook, buildExportCsv, buildExportJson, buildExportMarkdown,
-  downloadBlob, exportTimestamp,
-} from './db/excelExporter'
-import { importStructured } from './db/structuredImporter'
-// xlsx 导入走既有 Excel 导入器：它自带分段识别、超链接、年份列与「名称 (2025/07)」解析，
-// 比结构化导入器完整得多，因此导入菜单里的 Excel 项必须接到这里。
-import { importExcel } from './db/excelImporter'
-import { showToast } from './composables/useToast'
 import ToastHost from './components/ToastHost.vue'
 import HelpDialog from './components/HelpDialog.vue'
 import { useAppearance } from './composables/useAppearance'
@@ -462,7 +384,6 @@ const { tt, locale, setLocale } = useI18n()
 const appVersion = `v${__APP_VERSION__}`
 // 项目主仓库（顶栏 GitHub 图标指向这里）
 const REPO_URL = 'https://github.com/Emilelu/Project-Banager'
-const showBackupTip = ref(false)
 const showTimeTip = ref(false)
 
 // ===== 侧边栏收起态悬浮气泡 =====
@@ -583,210 +504,10 @@ const sidebarTipLiveText = computed(() => {
   return sidebarCollapsed.value ? `${t.btnName} · ${state}` : state
 })
 
-/**
- * 「导出备份」按钮获得焦点（键盘 Tab 或点击）时的气泡处理。
- * 展开态显示「上次备份时间」提示，收起态显示菜单名称（此时按钮没有可见文字）。
- * 两者互斥，避免同一位置叠两个气泡。
- */
-const onExportBackupFocus = (e) => {
-  if (sidebarCollapsed.value) {
-    showSidebarTip(e, tt('sidebar.exportBackup'))
-  } else {
-    showBackupTip.value = true
-  }
-}
-
-// ===== 导出数据（Excel / JSON）=====
-// 与「导出备份」(.db) 区分：备份用于整库迁移恢复，这里是给人看/给别的工具处理的表格
-const showExportMenu = ref(false)
-const exportMenuRef = ref(null)
-const exportMenuPos = ref({ left: 0, top: 0 })
-// 展开方向：向上弹（菜单在按钮上方）时原点在底边、起始位移朝下；
-// 向下弹时相反。写入 CSS 变量，让 pop 动画始终"从按钮那一侧长出来"。
-const exportMenuDir = ref('up')
-const exportTriggerRef = ref(null)
-
-const exportMenuStyle = computed(() => ({
-  left: `${exportMenuPos.value.left}px`,
-  top: `${exportMenuPos.value.top}px`,
-  '--pop-origin-y': exportMenuDir.value === 'up' ? 'bottom' : 'top',
-  '--pop-from-y': exportMenuDir.value === 'up' ? '6px' : '-6px',
-}))
-
-// 菜单 Teleport 到 body，需按触发按钮位置算坐标（右对齐、贴上方）
-const measureExportMenu = () => {
-  const btn = exportTriggerRef.value
-  const menu = exportMenuRef.value
-  if (!btn) return
-  const b = btn.getBoundingClientRect()
-  const w = menu?.offsetWidth || 150
-  const h = menu?.offsetHeight || 90
-  const gap = 6
-  const margin = 8
-  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
-  // 优先向上弹（侧边栏按钮贴近屏幕底部）；空间不足才向下，并同步方向变量
-  let top = b.top - h - gap
-  let dir = 'up'
-  if (top < margin) {
-    top = b.bottom + gap
-    dir = 'down'
-  }
-  exportMenuDir.value = dir
-  exportMenuPos.value = { left: Math.round(left), top: Math.round(top) }
-}
-
-// ===== 导入菜单 =====
-// 与导出菜单对等：能导出什么就能导入什么。
-const showImportMenu = ref(false)
-const importMenuRef = ref(null)
-const importTriggerRef = ref(null)
-const importMenuPos = ref({ left: 0, top: 0 })
-
-const importMenuStyle = computed(() => ({
-  left: `${importMenuPos.value.left}px`,
-  top: `${importMenuPos.value.top}px`,
-}))
-
-const measureImportMenu = () => {
-  const btn = importTriggerRef.value
-  const menu = importMenuRef.value
-  if (!btn) return
-  const b = btn.getBoundingClientRect()
-  const w = menu?.offsetWidth || 150
-  const h = menu?.offsetHeight || 90
-  const gap = 6
-  const margin = 8
-  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
-  let top = b.top - h - gap
-  if (top < margin) top = b.bottom + gap
-  importMenuPos.value = { left: Math.round(left), top: Math.round(top) }
-}
-
-const toggleImportMenu = async () => {
-  showImportMenu.value = !showImportMenu.value
-  if (showImportMenu.value) {
-    showExportMenu.value = false
-    await nextTick()
-    measureImportMenu()
-  }
-}
-
-const toggleExportMenu = async () => {
-  showExportMenu.value = !showExportMenu.value
-  if (showExportMenu.value) {
-    showImportMenu.value = false
-    await nextTick()
-    measureExportMenu()
-  }
-}
-
-// 拉取三类数据 → 交给导出器
-const collectAllData = async () => {
-  const db = await getDb()
-  return {
-    watching: db.getAllWatching() || [],
-    remaining: db.getAllRemaining() || [],
-    watched: db.getAllWatched() || [],
-  }
-}
-
-/**
- * 导出格式清单。一个按钮 + 下拉菜单即可覆盖全部格式，避免侧边栏堆一排按钮。
- * 顺序按「最常用 → 最特殊」排列：xlsx 给 Excel 看，md 给笔记，db 是整库备份。
- */
-const exportFormats = [
-  { key: 'xlsx', labelKey: 'sidebar.exportXlsx', icon: 'log' },
-  { key: 'csv', labelKey: 'sidebar.exportCsv', icon: 'log' },
-  { key: 'json', labelKey: 'sidebar.exportJson', icon: 'note' },
-  { key: 'md', labelKey: 'sidebar.exportMd', icon: 'note' },
-  { key: 'db', labelKey: 'sidebar.exportDb', icon: 'download' },
-]
-
-/**
- * 导入格式清单 —— 与导出格式一一对应（能导出什么就能导入什么）。
- * 目前 xlsx 走既有的 excelImporter；db 走整库恢复；
- * csv/json/md 走「结构化回灌」（见 db/structuredImporter.js）。
- */
-const importFormats = [
-  { key: 'xlsx', labelKey: 'sidebar.importXlsx', icon: 'log', accept: '.xlsx,.xls' },
-  { key: 'csv', labelKey: 'sidebar.importCsv', icon: 'log', accept: '.csv' },
-  { key: 'json', labelKey: 'sidebar.importJson', icon: 'note', accept: '.json' },
-  { key: 'md', labelKey: 'sidebar.importMd', icon: 'note', accept: '.md' },
-  { key: 'db', labelKey: 'sidebar.importDb', icon: 'download', accept: '.db,.sqlite,.bak' },
-]
-
-const importData = (kind) => {
-  showImportMenu.value = false
-  const fmt = importFormats.find(f => f.key === kind)
-  if (!fmt) return
-  // 复用同一个隐藏 input，只切换 accept 与模式标记
-  importMode.value = kind
-  if (fileInputRef.value) {
-    fileInputRef.value.accept = fmt.accept
-    fileInputRef.value.value = ''
-    fileInputRef.value.click()
-  }
-}
-
-const exportData = async (kind) => {
-  showExportMenu.value = false
-  try {
-    const ts = exportTimestamp()
-
-    // .db 是整库备份：走 database 的 export()，与「导出备份」完全等价
-    if (kind === 'db') {
-      await exportDb()
-      return
-    }
-
-    const data = await collectAllData()
-    const total = data.watching.length + data.remaining.length + data.watched.length
-    if (total === 0) {
-      showToast(tt('toast.noDataToExport'), 'warning')
-      return
-    }
-
-    switch (kind) {
-      case 'xlsx': {
-        const bytes = buildExportWorkbook(data)
-        downloadBlob(
-          new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-          `bangumi_data_${ts}.xlsx`,
-        )
-        showToast(tt('toast.exportedXlsx', { count: total }))
-        break
-      }
-      case 'csv': {
-        // 带 BOM，Excel 打开不会把中文显示成乱码
-        downloadBlob(buildExportCsv(data), `bangumi_data_${ts}.csv`, 'text/csv;charset=utf-8')
-        showToast(tt('toast.exportedCsv', { count: total }))
-        break
-      }
-      case 'json': {
-        downloadBlob(buildExportJson(data), `bangumi_data_${ts}.json`, 'application/json')
-        showToast(tt('toast.exportedJson', { count: total }))
-        break
-      }
-      case 'md': {
-        downloadBlob(buildExportMarkdown(data), `bangumi_data_${ts}.md`, 'text/markdown;charset=utf-8')
-        showToast(tt('toast.exportedMd', { count: total }))
-        break
-      }
-      default:
-        break
-    }
-  } catch (e) {
-    console.error('[export] failed:', e)
-    showToast(tt('toast.exportDataFailed', { message: e?.message || 'unknown' }), 'error')
-  }
-}
-
 // ========== 悬浮气泡定位（fixed + 视口感知） ==========
 // 侧边栏只有 240px 宽，气泡若用 absolute 居中，长文案（尤其中日）会横向溢出页面。
 // 这里改成 fixed 定位，在显示前按触发元素位置算出坐标，并强制夹在视口内。
-const backupTipRef = ref(null)
 const clockTipRef = ref(null)
-const backupTipPos = ref({ left: 0, top: 0 })
 const clockTipPos = ref({ left: 0, top: 0 })
 // 时钟气泡的锚点：鼠标指针坐标（需求二）。
 // 与「跟随时钟元素」的区别：指针不一定在元素中心，靠右/靠下时按元素定位会跑偏到视口外。
@@ -800,20 +521,6 @@ const clampToViewport = (left, top, w, h, margin = 8) => {
     left: Math.min(Math.max(left, margin), maxLeft),
     top: Math.min(Math.max(top, margin), maxTop),
   }
-}
-
-// 备份气泡：优先放按钮上方；上方放不下就放下方
-const measureBackupTip = (anchorEl) => {
-  if (!anchorEl) return
-  const tip = backupTipRef.value
-  if (!tip) return
-  const a = anchorEl.getBoundingClientRect()
-  const t = tip.getBoundingClientRect()
-  const gap = 8
-  const left = a.left + a.width / 2 - t.width / 2
-  let top = a.top - t.height - gap
-  if (top < 8) top = a.bottom + gap
-  backupTipPos.value = clampToViewport(left, top, t.width, t.height)
 }
 
 /**
@@ -871,22 +578,11 @@ const onClockFocus = async (e) => {
   measureClockTip(e.currentTarget)
 }
 
-const backupTipStyle = computed(() => ({
-  left: `${backupTipPos.value.left}px`,
-  top: `${backupTipPos.value.top}px`,
-}))
 const clockTipStyle = computed(() => ({
   left: `${clockTipPos.value.left}px`,
   top: `${clockTipPos.value.top}px`,
 }))
 
-// 显示/隐藏时重新测量（文案与语言变化会改变气泡宽高）
-watch(showBackupTip, async (on) => {
-  if (!on) return
-  await nextTick()
-  const btn = backupTipRef.value?.parentElement?.querySelector('button')
-  measureBackupTip(btn)
-})
 // 时钟气泡：先显示（让 DOM 可测量），再同步定位，避免依赖 watch 时序。
 // 无指针信息（如被程序化调用）时按时钟元素兜底定位。
 const openTimeTip = async (e) => {
@@ -982,10 +678,6 @@ const onKeydownLang = (e) => {
 const onResizeLang = () => {
   if (showLangMenu.value) measureLangMenu()
 }
-const fileInputRef = ref(null)
-// 当前导入格式（'db' | 'xlsx' | 'csv' | 'json' | 'md'），由导入菜单设置，
-// 文件选择回调据此决定走整库恢复还是结构化回灌。
-const importMode = ref('db')
 const showHelp = ref(false)
 
 const appearance = useAppearance()
@@ -1008,170 +700,6 @@ const bgStateLabel = computed(() =>
   appearance.state.bgEnabled ? tt('sidebar.bgStateOn') : tt('sidebar.bgStateOff'))
 const onToggleBg = () => { appearance.toggleBackground() }
 const { theme, isDark, toggleTheme } = useTheme()
-
-const BACKUP_KEY = 'banager_last_backup'
-const lastBackupTs = ref(0)
-
-const backupLabel = computed(() => {
-  if (!lastBackupTs.value) return tt('sidebar.neverBackedUp')
-  const days = Math.floor((Date.now() - lastBackupTs.value) / 86400000)
-  return days <= 0 ? tt('sidebar.backupToday') : tt('sidebar.backupDaysAgo', { days })
-})
-// 从未备份或超过一周未备份时高亮提醒
-const backupWarning = computed(() => !lastBackupTs.value || (Date.now() - lastBackupTs.value > 7 * 86400000))
-
-// 导出数据库为 .db 文件
-async function exportDb() {
-  try {
-    const db = await getDb()
-    const data = db.export() // Uint8Array
-    const blob = new Blob([data], { type: 'application/x-sqlite3' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    const now = new Date()
-    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`
-    a.href = url
-    a.download = `bangumi_backup_${ts}.db`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 1500)
-    localStorage.setItem(BACKUP_KEY, String(Date.now()))
-    lastBackupTs.value = Date.now()
-    showToast(tt('toast.backupExported'))
-  } catch (e) {
-    console.error('导出失败:', e)
-    showToast(tt('toast.exportFailed', { message: e.message }), 'error')
-  }
-}
-
-// 触发文件选择
-function triggerImportDb() {
-  fileInputRef.value?.click()
-}
-
-// 选择备份文件后弹确认框（替代原生 confirm）
-const showImportConfirm = ref(false)
-// 结构化导入（csv/json/md）的结果弹窗：逐条汇总成功/失败数，失败原因可展开查看
-const showImportResult = ref(false)
-const importResult = ref(null)
-const pendingImportFile = ref(null)
-
-// 导入确认弹窗：打开聚焦弹窗内首个按钮、Esc 关闭、关闭后焦点还给触发按钮
-const importConfirmRef = ref(null)
-useDialogFocus({
-  isOpen: () => showImportConfirm.value,
-  getDialog: () => importConfirmRef.value,
-  onEscape: () => cancelImport(),
-})
-
-/**
- * 选定文件后的分派：
- *   db         → 走整库恢复确认弹窗（覆盖前会导出一份回滚快照）
- *   xlsx       → 走既有 Excel 导入页（它带完整的预览/冲突处理 UI）
- *   csv/json/md→ 走结构化回灌
- * 用户在菜单里选的是格式，这里据此决定后续流程，避免"选 csv 却按 db 处理"。
- */
-function onBackupFileChosen(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  const mode = importMode.value || 'db'
-
-  if (mode !== 'db') {
-    // 非整库格式：交给对应的导入流程
-    handleStructuredImport(file, mode)
-    if (fileInputRef.value) fileInputRef.value.value = ''
-    return
-  }
-
-  pendingImportFile.value = file
-  showImportConfirm.value = true
-}
-
-function cancelImport() {
-  showImportConfirm.value = false
-  pendingImportFile.value = null
-  if (fileInputRef.value) fileInputRef.value.value = ''
-}
-
-/**
- * 结构化回灌（csv / json / md）。
- * 与整库恢复不同：这些格式只包含业务数据，不覆盖数据库文件本身，
- * 因此不需要「覆盖确认」弹窗，而是直接逐条写入并汇报结果。
- */
-async function handleStructuredImport(file, kind) {
-  try {
-    // xlsx 走既有 Excel 导入器（它自带完整的分段/超链接/年份列解析）。
-    // 之前这里一律调 importStructured，而后者只支持 json/csv/md，
-    // 导致「导入菜单选 Excel」必然返回「不支持的格式：xlsx」—— 已修正。
-    let res
-    if (kind === 'xlsx') {
-      const excelRes = await importExcel(file)
-      // 把 Excel 导入器的返回结构适配成与结构化导入一致的形状，
-      // 这样结果弹窗对两种来源都能正确展示。
-      const ok = excelRes?.success !== false
-      res = {
-        imported: Number(excelRes?.importedCount ?? excelRes?.imported ?? 0),
-        failed: Number(excelRes?.errorCount ?? excelRes?.failed ?? (ok ? 0 : 1)),
-        errors: Array.isArray(excelRes?.errors) ? excelRes.errors : (excelRes?.message ? [excelRes.message] : []),
-        byTable: excelRes?.byTable || { watching: 0, remaining: 0, watched: 0 },
-      }
-    } else {
-      res = await importStructured(file, kind)
-    }
-    importResult.value = res
-    showImportResult.value = true
-  } catch (e) {
-    console.error('[structured import] failed:', e)
-    showToast(tt('toast.importFailed', { message: e?.message || 'unknown' }), 'error')
-  }
-}
-
-// 从备份文件恢复数据库
-async function confirmImportDb() {
-  const file = pendingImportFile.value
-  showImportConfirm.value = false
-  pendingImportFile.value = null
-  if (fileInputRef.value) fileInputRef.value.value = ''
-  if (!file) return
-  try {
-    const arrayBuffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(arrayBuffer)
-    const header = new TextDecoder().decode(bytes.slice(0, 16))
-    if (header !== 'SQLite format 3\u0000') throw new Error(tt('toast.importNotSqlite'))
-    const db = await getDb()
-    const rollback = db.export()
-    // 覆盖前先把当前库落一份快照文件，出问题时用户有回滚点
-    try {
-      const snapBlob = new Blob([rollback], { type: 'application/x-sqlite3' })
-      const snapUrl = URL.createObjectURL(snapBlob)
-      const tag = document.createElement('a')
-      tag.href = snapUrl
-      tag.download = `bangumi_pre_restore_${Date.now()}.db`
-      document.body.appendChild(tag)
-      tag.click()
-      tag.remove()
-      setTimeout(() => URL.revokeObjectURL(snapUrl), 1500)
-    } catch (e) {
-      console.warn('恢复前快照导出失败（继续执行恢复）:', e)
-    }
-    try {
-      db.importDb(bytes)
-      await db.save()
-    } catch (importError) {
-      try {
-        db.importDb(rollback)
-        await db.save()
-      } catch { /* 旧库已在 importDb 失败路径保留 */ }
-      throw importError
-    }
-    showToast(tt('toast.importSuccessReload'))
-    setTimeout(() => window.location.reload(), 900)
-  } catch (e) {
-    console.error('导入失败:', e)
-    showToast(tt('toast.importFailed', { message: e.message }), 'error')
-  }
-}
 
 // 顶栏主题按钮已改为内联 SVG 三态图标（太阳/月亮/自动），此处旧的 emoji 映射已删除
 /**
@@ -1377,7 +905,6 @@ onMounted(() => {
   window.addEventListener('resize', onShellResize)
   onUnmountedHooks.push(() => window.removeEventListener('resize', onShellResize))
   updateTime()
-  lastBackupTs.value = parseInt(localStorage.getItem(BACKUP_KEY)) || 0
   timer = setInterval(updateTime, 1000)
 
   // 首屏入场动画：main 首次挂载时播一次 0.45s 上浮淡入。
