@@ -22,7 +22,7 @@
   <a href="README.md">中文</a> · <b>English</b> · <a href="README.ja.md">日本語</a>
 </p>
 
-![Week view: your whole schedule on one screen](docs/screenshots/watching.png)
+![Week view: your whole schedule on one screen](docs/screenshots/watching.jpg)
 
 ## Get started in three steps
 
@@ -61,21 +61,23 @@ Columns per weekday, sorted by air time, progress right on the card as `e 8 / 12
 One click on the plus or minus logs an episode. Anything from your waiting list that airs this
 month is called out at the top of the page.
 
-![Week view](docs/screenshots/watching.png)
+![Week view](docs/screenshots/watching.jpg)
 
 ### Waiting — queued up before it airs
 
 Table plus paging, sorted by expected date, with batch add and drag-to-reorder. The "seasonal anime"
-button jumps straight to the current season, so adding a show takes one click.
+button jumps straight to the current season, so adding a show takes one click. Column widths are
+fixed, so a wide screen no longer stretches the date column; on narrow screens the table scrolls
+inside its card instead of squeezing every column.
 
-![Waiting list](docs/screenshots/remaining.png)
+![Waiting list](docs/screenshots/remaining.jpg)
 
 ### History — filed by year
 
 Grouped by year with this-year and all-time totals; year labels can be renamed or added.
 Each entry carries tags, a link and a note, so future-you can remember why it was on the list.
 
-![Watch history](docs/screenshots/watched.png)
+![Watch history](docs/screenshots/watched.jpg)
 
 ### Tags — built-ins can't be deleted, but can be renamed and recolored
 
@@ -83,28 +85,28 @@ Twelve built-in tags work out of the box; custom tags get their own color. Renam
 every entry. Built-ins can be renamed and recolored but never deleted — so their meaning can't
 quietly disappear.
 
-![Tag management](docs/screenshots/tags.png)
+![Tag management](docs/screenshots/tags.jpg)
 
 ### Import & Export — five formats, both directions
 
 Import detects the format from the file type, no picker needed. Export is one click per format.
 `.db` is a full database backup, and a restore takes a rollback snapshot first.
 
-![Import and export](docs/screenshots/transfer.png)
+![Import and export](docs/screenshots/transfer.jpg)
 
 ### Theme & background — change the wallpaper too
 
 Frosted and liquid glass, 6 presets, palette sampled from the wallpaper, and a random wallpaper
 background that can either rotate on every launch or be pinned. Dimming and blur are both tunable.
 
-![Theme and background](docs/screenshots/appearance.png)
+![Theme and background](docs/screenshots/appearance.jpg)
 
 ### Dark mode
 
 Not a filter over the light theme: glass layering, text contrast and the wallpaper mask are each
 tuned separately for dark.
 
-![Week view in dark mode](docs/screenshots/dark.png)
+![Week view in dark mode](docs/screenshots/dark.jpg)
 
 ## Run from source
 
@@ -134,11 +136,18 @@ to a bundled pure-JS inflate. Neither path touches the network, so both work fro
 
 **Global**
 
-- Chinese / English / Japanese (551 aligned keys), CJK font family per language; light / dark / follow-system
+- Chinese / English / Japanese (589 aligned keys), CJK font family per language; light / dark / follow-system
 - Collapsible sidebar (15rem ↔ 4rem) grouped into lists / data / settings, icons with tooltips when collapsed
 - One shared color picker; root font size scales with the viewport for high-DPI screens
+- Responsive shell: page actions fold into a more-actions menu at ≤1100px, the sidebar collapses to
+  icons at ≤900px, and the title, counters and date stay on one line; tables scroll inside their
+  card on narrow screens instead of squeezing every column
+- Fixed table column widths (index / date / link / notes), so wide screens no longer give a
+  date column a third of the width to hold a single `2026/01`
+- Skeleton rows render until the first data arrives, instead of flashing an empty state
 - `.db` backup with a rollback snapshot before a restore; structured imports report success/failure counts
 - Fully keyboard operable, focus trap, Esc to close; help dialog collects shortcuts in one place
+- Honours `prefers-reduced-motion`: animations and transitions drop to near-zero duration
 
 </details>
 
