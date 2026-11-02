@@ -50,6 +50,7 @@ export default {
   'common.none': '无',
   'common.loading': '加载中...',
   'common.retry': '重试',
+  'topbar.moreActions': '更多操作',
   'common.reset': '恢复默认',
   'common.custom': '自定义',
   'common.listSep': '、',

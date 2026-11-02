@@ -53,6 +53,7 @@ export default {
   'common.none': 'なし',
   'common.loading': '読み込み中...',
   'common.retry': '再試行',
+  'topbar.moreActions': 'その他の操作',
   'common.reset': '初期設定に戻す',
   'common.custom': 'カスタム',
   'common.listSep': '、',

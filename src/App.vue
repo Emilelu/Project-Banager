@@ -3,8 +3,8 @@
     <!-- 侧边栏 -->
     <!-- 侧边栏可折叠：展开 15rem / 收起 4rem（只留图标）。
          宽度用 transition 平滑变化，收起后文字与分区标题隐藏、图标居中。 -->
-    <aside class="flex flex-col shadow-xl relative overflow-hidden sidebar-bg transition-[width] duration-300 ease-out"
-      :class="sidebarCollapsed ? 'w-16' : 'w-60'"
+    <aside class="app-sidebar flex flex-col shadow-xl relative overflow-hidden sidebar-bg transition-[width] duration-300 ease-out"
+      :class="[sidebarCollapsed ? 'w-16' : 'w-60', { 'sidebar-is-collapsed': sidebarCollapsed }]"
       :style="{ '--sb-w': sidebarCollapsed ? '4rem' : '15rem' }">
       <!-- 装饰圆 -->
       <!-- ⚠️ 装饰元素勿加无限动画：它们位于 .sidebar-bg（backdrop-filter）子树内，
@@ -48,7 +48,7 @@
           :class="gi > 0 ? (sidebarCollapsed ? 'mt-3 pt-3 border-t border-white/10' : 'mt-5') : ''">
           <!-- 分区标题（收起时改为一条细分割线，已由上面的 border 表达） -->
           <div v-if="!sidebarCollapsed"
-            class="px-3 mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-white/40">
+            class="sidebar-section-label px-3 mb-1.5 text-[11px] font-semibold tracking-wide text-white/60">
             {{ tt(group.labelKey) }}
           </div>
           <router-link v-for="item in group.items" :key="item.path" :to="item.path"
@@ -83,9 +83,9 @@
       <!-- 底部：壁纸开关 + 深浅切换（原「导入/导出」按钮已迁到 /transfer 页面）。
            这两个原本在顶栏右侧，按要求移到这里；「数据」分区标题也随之删除
            （导入导出已不是底部按钮，而是「设置」分区下的一个导航项）。 -->
-      <div class="relative z-10 border-t border-white/10"
+      <div class="sidebar-footer relative z-10 border-t border-white/10"
         :class="sidebarCollapsed ? 'px-2 py-2' : 'px-2.5 py-2.5'">
-        <div :class="sidebarCollapsed ? 'flex flex-col gap-1' : 'grid grid-cols-2 gap-1.5'">
+        <div class="sidebar-footer-actions" :class="sidebarCollapsed ? 'flex flex-col gap-1' : 'grid grid-cols-2 gap-1.5'">
           <!-- 壁纸背景开关。
                样式与上方导航项（.nav-item）保持一致：
                  · 收起态：justify-center px-2 py-3.5，配色 text-white/60 hover:bg-white/10 hover:text-white
@@ -154,7 +154,7 @@
     </Teleport>
 
     <!-- 主内容区 -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="app-content flex-1 min-w-0 flex flex-col overflow-hidden">
       <!-- 顶部栏 -->
       <header class="app-header h-14 flex items-center justify-between px-6 glass shadow-sm relative">
         <!-- 页面标题 + 番单计数：跟随路由做淡入淡出 + 轻微位移。
@@ -164,14 +164,14 @@
              mode="out-in"：旧标题先退场，新标题再进场，杜绝两块标题重叠挤压布局。
              不做读屏播报（页面内内容本身已变化），故不加 aria-live。 -->
         <transition name="title-swap" mode="out-in">
-          <div :key="currentTitle" class="flex items-center gap-3">
-            <h1 class="text-lg font-bold gradient-text flex items-center gap-2">
+          <div :key="currentTitle" class="topbar-heading flex items-center gap-3 min-w-0">
+            <h1 class="topbar-title text-lg font-bold gradient-text flex items-center gap-2" :title="currentTitle">
               <AppIcon scale="md" :name="currentIcon" />
               {{ currentTitle }}
             </h1>
             <!-- 计数徽章：视觉与顶栏其它元素协调 —— 高度 24px、圆角 8px、
                  字号 11.5px、左右内边距 8px，与顶栏按钮的 36px 图标块并排不突兀 -->
-            <div v-if="topbarStats.length" class="flex items-center gap-2">
+            <div v-if="topbarStats.length" class="topbar-stats flex items-center gap-2">
               <span v-for="(s, i) in topbarStats" :key="i" class="topbar-stat"
                 :class="s.tone === 'neutral' ? 'is-neutral' : ''">{{ s.text }}</span>
             </div>
@@ -181,10 +181,10 @@
                  不放进上面的 title-swap transition 里 —— 它随选中项变化，
                  但页面标题不变时不该整块重放动画。 -->
             <transition name="sel-anim">
-              <div v-if="topbarSelection" class="flex items-center gap-2 min-w-0">
+              <div v-if="topbarSelection" class="topbar-selection flex items-center gap-2 min-w-0" v-tip="topbarSelection.name">
                 <span class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
                   :class="topbarSelection.dot === 'danger' ? 'bg-danger' : 'bg-primary'"></span>
-                <span class="text-xs text-gray-500 shrink-0">{{ topbarSelection.name }}</span>
+                <span class="topbar-selection-name text-xs text-gray-500">{{ topbarSelection.name }}</span>
                 <span v-for="(s, i) in topbarSelection.items" :key="i" class="topbar-stat"
                   :class="s.tone === 'neutral' ? 'is-neutral' : ''">{{ s.text }}</span>
               </div>
@@ -194,9 +194,9 @@
         <!-- 页面操作按钮：由各 view 通过 setPageActions 写入，统一显示在顶栏。
              用户要求把工具栏按钮从页面内移到这里，正文区只留搜索/筛选等内容控件。
              顶栏空间有限，按钮以图标形态渲染，文案走 v-tip 气泡。 -->
-        <transition-group name="sel-anim" tag="div" class="flex items-center gap-1.5 mr-auto ml-4">
+        <transition-group name="sel-anim" tag="div" class="topbar-actions flex items-center gap-1.5 mr-auto ml-4">
           <button v-for="a in topbarActions" :key="a.key" @click="a.onClick()"
-            class="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
+            class="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-all duration-150"
             :class="a.danger
               ? 'text-danger hover:bg-danger/10'
               : 'text-gray-500 hover:bg-primary/10 hover:text-primary'"
@@ -204,8 +204,31 @@
             <AppIcon scale="sm" :name="a.icon" />
           </button>
         </transition-group>
+        <div v-if="topbarActions.length" class="topbar-more">
+          <button ref="pageActionsBtnRef" type="button" @click="togglePageActionsMenu"
+            class="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-gray-500 hover:bg-primary/10"
+            :aria-label="tt('topbar.moreActions')" :aria-expanded="showPageActionsMenu" aria-haspopup="menu"
+            v-tip="tt('topbar.moreActions')">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+            </svg>
+          </button>
+          <Teleport to="body">
+            <div v-if="showPageActionsMenu" class="fixed inset-0 z-[100]" @click="showPageActionsMenu = false"></div>
+            <transition name="pop">
+              <div v-if="showPageActionsMenu" ref="pageActionsMenuRef" role="menu" :aria-label="tt('topbar.moreActions')"
+                class="app-menu-panel fixed z-[110] topbar-actions-menu" :style="pageActionsMenuStyle"
+                @keydown="onPageActionsKeydown">
+                <button v-for="a in topbarActions" :key="a.key" type="button" role="menuitem"
+                  @click="runPageAction(a)" :class="a.danger ? 'text-danger' : 'text-gray-700'">
+                  <AppIcon scale="sm" :name="a.icon" /><span>{{ a.label }}</span>
+                </button>
+              </div>
+            </transition>
+          </Teleport>
+        </div>
 
-        <div class="flex items-center gap-3">
+        <div class="topbar-utilities flex items-center gap-3">
           <!-- 壁纸开关与深浅切换已按要求移到侧边栏左下角（替代原「导入/导出」按钮位置），
                顶栏不再保留这两个入口，避免同一功能两处重复。 -->
           <!-- 标签管理与主题背景已改为侧边导航中的独立页面（/tags 与 /appearance），
@@ -292,7 +315,7 @@
                需求二：气泡定位锚点从「时钟元素」改为「鼠标指针」——
                指针进入时记录坐标，之后在时钟区域内的每次 mousemove 都刷新记录值，
                气泡恒在指针正下方（水平以指针为中心），并做视口夹取 / 下边翻上。 -->
-          <div class="relative" tabindex="0" style="order: 4"
+          <div class="topbar-clock relative" tabindex="0" style="order: 4"
             @mouseenter="onClockEnter"
             @mousemove="onClockMove"
             @mouseleave="showTimeTip = false"
@@ -1235,16 +1258,30 @@ const allNavItems = [...navItems, ...orphanNavItems]
 // ===== 侧边栏折叠 =====
 // 持久化到 localStorage：用户收起后重开页面仍是收起状态，不必每次再点。
 const SIDEBAR_KEY = 'banager_sidebar_collapsed'
-const sidebarCollapsed = ref(false)
+const savedSidebarCollapsed = ref(false)
+const narrowSidebar = ref(typeof window !== 'undefined' && window.innerWidth <= 900)
+const mobileSidebarExpanded = ref(false)
 try {
-  sidebarCollapsed.value = localStorage.getItem(SIDEBAR_KEY) === '1'
+  savedSidebarCollapsed.value = localStorage.getItem(SIDEBAR_KEY) === '1'
 } catch { /* localStorage 不可用时保持默认展开 */ }
+const sidebarCollapsed = computed(() => narrowSidebar.value
+  ? !mobileSidebarExpanded.value : savedSidebarCollapsed.value)
 
 const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
+  hideSidebarTip()
+  if (narrowSidebar.value) {
+    mobileSidebarExpanded.value = !mobileSidebarExpanded.value
+    return
+  }
+  savedSidebarCollapsed.value = !savedSidebarCollapsed.value
   try {
-    localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+    localStorage.setItem(SIDEBAR_KEY, savedSidebarCollapsed.value ? '1' : '0')
   } catch { /* ignore */ }
+}
+const onShellResize = () => {
+  narrowSidebar.value = window.innerWidth <= 900
+  mobileSidebarExpanded.value = false
+  showPageActionsMenu.value = false
 }
 
 const currentTitle = computed(() => {
@@ -1266,6 +1303,46 @@ const topbarStats = computed(() => pageStats[route.path] || [])
 
 /** 当前页在顶栏显示的操作按钮（由各 view 写入 pageActions） */
 const topbarActions = usePageActions(computed(() => route.path))
+const showPageActionsMenu = ref(false)
+const pageActionsBtnRef = ref(null)
+const pageActionsMenuRef = ref(null)
+const pageActionsMenuStyle = ref({})
+const togglePageActionsMenu = async () => {
+  showPageActionsMenu.value = !showPageActionsMenu.value
+  if (!showPageActionsMenu.value) return
+  await nextTick()
+  const btn = pageActionsBtnRef.value?.getBoundingClientRect()
+  const menu = pageActionsMenuRef.value
+  if (!btn || !menu) return
+  const w = menu.offsetWidth
+  const h = menu.offsetHeight
+  const top = btn.bottom + h + 8 > window.innerHeight ? btn.top - h - 6 : btn.bottom + 6
+  const p = clampToViewport(btn.right - w, top, w, h)
+  pageActionsMenuStyle.value = { left: p.left + 'px', top: p.top + 'px', '--pop-origin-y': 'top' }
+  menu.querySelector('button')?.focus()
+}
+const runPageAction = (action) => {
+  showPageActionsMenu.value = false
+  pageActionsBtnRef.value?.focus()
+  action.onClick()
+}
+const onPageActionsKeydown = (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    showPageActionsMenu.value = false
+    pageActionsBtnRef.value?.focus()
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const buttons = Array.from(pageActionsMenuRef.value?.querySelectorAll('button') || [])
+    const index = buttons.indexOf(document.activeElement)
+    buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
+  }
+}
+watch(() => route.path, () => {
+  showPageActionsMenu.value = false
+  mobileSidebarExpanded.value = false
+})
 /** 顶栏「当前选中」信息（各页写入，见 usePageStats.js 的 pageSelection） */
 const topbarSelection = computed(() => pageSelection[route.path] || null)
 
@@ -1297,6 +1374,8 @@ const timeDisplay = computed(() => {
 const updateTime = () => { now.value = new Date() }
 
 onMounted(() => {
+  window.addEventListener('resize', onShellResize)
+  onUnmountedHooks.push(() => window.removeEventListener('resize', onShellResize))
   updateTime()
   lastBackupTs.value = parseInt(localStorage.getItem(BACKUP_KEY)) || 0
   timer = setInterval(updateTime, 1000)

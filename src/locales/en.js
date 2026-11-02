@@ -53,6 +53,7 @@ export default {
   'common.none': 'None',
   'common.loading': 'Loading...',
   'common.retry': 'Retry',
+  'topbar.moreActions': 'More actions',
   'common.reset': 'Reset to Default',
   'common.custom': 'Custom',
   'common.listSep': ', ',
