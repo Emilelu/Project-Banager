@@ -33,8 +33,10 @@
 | V-18 | 七种星期底色色相跨 258° | 🟡 | **已量化** |
 | V-15 | 主题页色圆基线差 1px | 🟢 | 实测 |
 | V-16 | Tooltip 字号 10.5px | 🟢 | 实测 |
+| **V-27** | **reduced-motion 仅覆盖 3% 动画** | 🟡 | 实测 |
+| **V-28** | **缩放 125%/150% 表现正常（记录用）** | ✅ | 实测 |
 
-**确认 23 项，全部有实测数据。**
+**确认 24 项 + 1 项正向验证，全部有实测数据。**
 
 ---
 
@@ -157,6 +159,60 @@
 - 五个导出按钮 **14px / 高 37px**
 - 同页内字号差 1.75px、高度差 3px
 - **建议**：统一到 12.25px / 34px（与全站 `.btn-base` 一致）
+
+---
+
+# 🟡 无障碍
+
+## V-27 prefers-reduced-motion 仅覆盖 3% 动画
+
+开启系统「减弱动态效果」后，只有壁纸过渡和导航项动画会停，其余全部照常播放。
+
+- 实测（`reducedMotion: 'reduce'` 环境）：
+  - `matchMedia('(prefers-reduced-motion: reduce)').matches = true` ✅
+  - 但示例过渡 `transition: opacity 0.5s` 的实际 duration 仍是 **0.5s**，未归零
+- 源码统计：`style.css` 有 **56 条 transition + 10 条 animation = 66 条**动画声明
+- 但 `@media (prefers-reduced-motion: reduce)` **只有 2 处**：
+  - L171：壁纸 `body.with-bg::before` 过渡
+  - L504：`.nav-item` 过渡与 transform
+- **覆盖率约 3%**
+
+仍在播放的动画包括：弹窗 0.4s spring、菜单 0.32s、Toast 进出场、壁纸缩放 0.8s、按钮 hover 缩放。
+
+- 影响：前庭功能障碍用户对大幅位移/缩放敏感，这是真实无障碍缺口
+- **建议**：加一条全局兜底
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+---
+
+# ✅ 正向验证（无需修改，记录备用）
+
+## V-28 浏览器缩放 125% / 150% 表现正常
+
+实测三页 × 两档缩放：
+
+| 缩放 | 页面 | 横向溢出 | 越界元素 | 顶栏高 | 标题/动作重叠 |
+|---|---|---|---|---|---|
+| 125% | 等待更新 | false | 0 | 61px | false |
+| 125% | 正在追番 | false | 0 | 61px | false |
+| 125% | 已看历史 | false | 0 | 61px | false |
+| 150% | 等待更新 | false | 0 | 74px | false |
+| 150% | 正在追番 | false | 0 | 74px | false |
+| 150% | 已看历史 | false | 0 | 74px | false |
+
+- 顶栏高度随缩放线性增长（49 → 61 → 74），说明用的是相对单位
+- 无一处溢出，标题与动作区始终不重叠
+- **结论：缩放适配良好，不需要改动**
 
 ---
 
