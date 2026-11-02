@@ -14,7 +14,7 @@
   <img alt="version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-7C3AED?style=flat-square">
   <img alt="473 tests passing" src="https://img.shields.io/badge/tests-473%20passing-2ea44f?style=flat-square">
   <img alt="languages zh en ja" src="https://img.shields.io/badge/languages-zh%20%7C%20en%20%7C%20ja-orange?style=flat-square">
-  <img alt="single file 1.5 MB" src="https://img.shields.io/badge/single%20file-1.5%20MB-ff69b4?style=flat-square">
+  <img alt="single file 1.6 MB" src="https://img.shields.io/badge/single%20file-1.6%20MB-ff69b4?style=flat-square">
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
 
@@ -117,7 +117,7 @@ pnpm build    # outputs dist/index.html (one HTML file, WASM inlined)
 pnpm test     # 473 tests / 14 files
 ```
 
-The built file is about 1.5 MB, roughly 690 KB gzipped. The WASM is gzipped, then base64-inlined;
+The built file is about 1.6 MB, roughly 707 KB gzipped. The WASM is gzipped, then base64-inlined;
 at runtime it is restored with the native `DecompressionStream('gzip')` when available, falling back
 to a bundled pure-JS inflate. Neither path touches the network, so both work from `file://`.
 

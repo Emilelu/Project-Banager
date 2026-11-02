@@ -14,7 +14,7 @@
   <img alt="version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-7C3AED?style=flat-square">
   <img alt="473 tests passing" src="https://img.shields.io/badge/tests-473%20passing-2ea44f?style=flat-square">
   <img alt="languages zh en ja" src="https://img.shields.io/badge/languages-zh%20%7C%20en%20%7C%20ja-orange?style=flat-square">
-  <img alt="single file 1.5 MB" src="https://img.shields.io/badge/single%20file-1.5%20MB-ff69b4?style=flat-square">
+  <img alt="single file 1.6 MB" src="https://img.shields.io/badge/single%20file-1.6%20MB-ff69b4?style=flat-square">
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
 
@@ -114,7 +114,7 @@ pnpm build    # dist/index.html を出力（HTML 1 ファイル、WASM を内包
 pnpm test     # 473 テスト / 14 ファイル
 ```
 
-ビルド成果物は約 1.5 MB、gzip で約 690 KB。WASM は gzip にしてから base64 で内包し、
+ビルド成果物は約 1.6 MB、gzip で約 707 KB。WASM は gzip にしてから base64 で内包し、
 実行時はブラウザ標準の `DecompressionStream('gzip')` を優先、非対応環境では同梱の純 JS inflate に落ちます。
 どちらの経路もネットワークを使わないので、`file://` でも動作します。
 

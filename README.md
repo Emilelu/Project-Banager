@@ -14,7 +14,7 @@
   <img alt="version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-7C3AED?style=flat-square">
   <img alt="473 tests passing" src="https://img.shields.io/badge/tests-473%20passing-2ea44f?style=flat-square">
   <img alt="languages zh en ja" src="https://img.shields.io/badge/languages-zh%20%7C%20en%20%7C%20ja-orange?style=flat-square">
-  <img alt="single file 1.5 MB" src="https://img.shields.io/badge/single%20file-1.5%20MB-ff69b4?style=flat-square">
+  <img alt="single file 1.6 MB" src="https://img.shields.io/badge/single%20file-1.6%20MB-ff69b4?style=flat-square">
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
 
@@ -113,7 +113,7 @@ pnpm build    # 产物 dist/index.html（单个 HTML，WASM 已内联）
 pnpm test     # 473 用例 / 14 文件
 ```
 
-内置产物约 1.5 MB，gzip 后约 690 KB。WASM 先 gzip 再 base64 内联，
+内置产物约 1.6 MB，gzip 后约 707 KB。WASM 先 gzip 再 base64 内联，
 运行时优先走浏览器原生 `DecompressionStream('gzip')`，老浏览器回落到内置的纯 JS inflate——
 两条路径都不联网，`file://` 下都可用。
 
