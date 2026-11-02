@@ -219,9 +219,11 @@
 
 ## V-23 主题页色圆基线差 1px
 - 实测：色圆 y=286 高 35px；按钮 y=287 高 34px
+- **建议**：容器加 `items-center`，或色圆改 34px 与按钮同高
 
 ## V-24 Tooltip 字号 10.5px
-- 实测：`#sidebar-tip` 62×30、radius 6px、font **10.5px**
+- 实测：`#sidebar-tip` 62×30、radius 6px、font **10.5px**、padding 5.25/8.75
+- **建议**：字号提到 11.5px（与 `.btn-sm` 同档），padding 保持等比
 
 ## V-25 侧栏底部按钮左右边距不对称
 - 实测：容器 x=**9**、宽 192、右缘 201；aside 右缘 **210**
