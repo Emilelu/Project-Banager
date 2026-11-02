@@ -38,9 +38,14 @@
 - 导入菜单按所选格式分派：db → 整库恢复（带覆盖确认，覆盖前自动落一份回滚快照）；
   csv / json / md → 结构化回灌（不覆盖数据库，只需结果汇总）；xlsx → Excel 解析器
   （`excelImporter`，另有一条 `/import` 页面直连，老书签仍可用）
-- **已知缺口**：侧栏导入菜单选 `.xlsx` 时，分派目前仍走 `importStructured`，
+- ~~**已知缺口**：侧栏导入菜单选 `.xlsx` 时，分派目前仍走 `importStructured`，
   会返回「不支持的格式：xlsx」并计 1 条失败；`importStructured` 本身也只支持 csv/json/md。
-  菜单入口的 xlsx 分支待接线（代码注释写的「走既有 Excel 导入页」尚未实现）
+  菜单入口的 xlsx 分支待接线（代码注释写的「走既有 Excel 导入页」尚未实现）~~
+  **（已解决，见下条）**
+- **xlsx 分派已修好**：导入入口后来整体迁到 `/transfer` 页（`ImportExportView.vue`），
+  该页 `runImport()` 里 `if (kind === 'xlsx') raw = await importExcel(file)` 分派正确，
+  且有测试覆盖（`watched-import.test.js` 的 `mountTransfer`）；旧侧栏菜单已在 `App.vue` 中清理。
+  上文那条缺口针对的是**当时**的旧侧栏菜单，保留原文仅作历史记录。
 - 两枚按钮文案等长（`grid-cols-2` 让两枚天然等宽，文案一长一短会把长的那枚截断成省略号），故都收成两字 / 一个词
 - 旧侧栏导航项「导入Excel」移除（路由 `/import` 与 ImportView 仍保留，老书签可直达）
 
