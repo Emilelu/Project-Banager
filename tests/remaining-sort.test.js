@@ -140,6 +140,22 @@ describe('等待更新：拖动排序', () => {
     expect(wrapper.findAllComponents({ name: 'AppIcon' }).some(c => /arrow/i.test(c.props('name') || ''))).toBe(false)
   })
 
+  it('字段排序下 dragstart 不立即切手动序（视觉审计 A-62：拖拽期间锁定排序视图）', async () => {
+    // 手动序(sort_order)=[B番, A番]，日期序=[A番, B番] —— 两种顺序可区分
+    const wrapper = await mountView([
+      makeItem(1, 'B番', '2026/07', 1),
+      makeItem(2, 'A番', '2026/03', 2),
+    ])
+    const trs = wrapper.findAll('tbody tr')
+    await trs[0].trigger('dragstart')
+    await flushPromises()
+
+    // 抓起一行的一瞬间整表不得按 sort_order 重排：行序保持字段排序视图、箭头仍在
+    // （修复前：dragstart 即 enterManualOrder，首行立刻变 B番、箭头消失、整表跳位）
+    expect(rowNames(wrapper)[0]).toContain('A番')
+    expect(wrapper.findAllComponents({ name: 'AppIcon' }).some(c => /arrow/i.test(c.props('name') || ''))).toBe(true)
+  })
+
   it('手动模式下点表头可切回字段排序', async () => {
     const wrapper = await mountView([
       makeItem(1, 'A番', '2026/03'),

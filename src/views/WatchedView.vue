@@ -9,9 +9,9 @@
     <!-- 列表视图 -->
     <div class="tbl-scroll glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
       <!-- 需求 B：表格卡片**不再**自带「☰ 作品名称 / 共 N 条」标题行 ——
-           下面的 <thead class="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-t-2xl"> 已经列出完整列名（#/作品名称/日期/链接/备注），
-           再叠一个同名伪标题既重复又白占一行；「共 N 条」计数已上提到本页
-           顶部第一张卡片的标题行（.stat-chip）与顶栏（setPageStats）。 -->
+           下面的 <thead> 已经列出完整列名（#/作品名称/日期/链接/备注），
+           再叠一个同名伪标题既重复又白占一行；「共 N 条」计数由 setPageStats
+           写入顶栏（视觉审计 A-01 后第一卡整体迁入顶栏，页面内不再有标题卡）。 -->
       <table class="record-table">
         <colgroup>
         <col v-if="batchMode" class="col-check" />
@@ -92,13 +92,15 @@
             <td class="text-center px-2 py-2.5 cursor-pointer select-none"
               @click.stop="toggleCheckFromIndex(item)" @dblclick.stop>
               <span class="text-xs font-mono tabular-nums transition-colors"
-                :class="checkedIds.includes(item.id) ? 'text-primary font-bold' : 'text-gray-400 hover:text-primary'">{{ (currentPage - 1) * pageSize + idx + 1 }}</span>
+                :class="checkedIds.includes(item.id) ? 'text-primary font-bold' : 'text-gray-400 hover:text-primary cell-index-num'">{{ (currentPage - 1) * pageSize + idx + 1 }}</span>
             </td>
             <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'name')"
               @dblclick.stop="onFieldDblclick(item, 'name')"
               @keydown="onCellKeydown($event, item, 'name')">
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 :aria-label="tt('card.editWorkNameLabel', { name: item.name })"
+                :aria-invalid="editInvalid ? 'true' : null"
+                :class="{ 'is-invalid': editInvalid }"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <!-- 作品名称 + 标签同排（标签在名称右侧）：
                    不新增 td（既有列索引的测试断言不受影响），也不另起一行
@@ -118,7 +120,9 @@
                   @error="markRowCoverFailed(item.id)"
                   @mouseenter="showCoverZoom($event, item.cover_url)"
                   @mouseleave="hideCoverZoom" />
-                <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
+                <!-- 视觉审计 A-16：浅色悬浮变色改由 style.css 的钳暗规则接管
+                     （html:not(.dark) tr.group:hover .name-with-tags > .text-sm）。 -->
+                <span class="text-sm font-semibold text-gray-800 transition-colors truncate">{{ item.name }}</span>
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
             </td>
@@ -127,6 +131,8 @@
               @keydown="onCellKeydown($event, item, 'watch_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='watch_date'" v-model="editValue"
                 :aria-label="tt('card.editDateLabel', { name: item.name })"
+                :aria-invalid="editInvalid ? 'true' : null"
+                :class="{ 'is-invalid': editInvalid }"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
                 :placeholder="tt('moveWatched.datePlaceholder')" autofocus />
               <span v-else class="cell-date text-sm truncate block">{{ item.watch_date || '-' }}</span>
@@ -157,8 +163,8 @@
     </div>
 
     <!-- 分页（独立卡片：正文直接是翻页控件。
-         需求 B：去掉「共 N 条」卡片标题行 —— 计数已上提到本页顶部第一张卡片的
-         标题行右侧，此处再写一遍即为同一页面内的第三次重复。 -->
+         需求 B：去掉「共 N 条」卡片标题行 —— 计数已上提到顶栏（pageStats），
+         此处再写一遍即为同一页面内的第三次重复。 -->
     <div v-if="filteredList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-2">
       <div class="flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-2 text-sm text-gray-600">
@@ -201,7 +207,7 @@
             :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
             <AppIcon scale="sm" name="caretLeft" /></button>
           <template v-for="p in displayPages" :key="p">
-            <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
+            <span v-if="p==='...'" class="px-2 text-xs text-gray-400 pager-ellipsis">...</span>
             <button v-else @click="currentPage=p"
           class="btn-base btn-icon pager-btn" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
@@ -1076,9 +1082,15 @@ const onDocClick = (e) => {
 }
 
 // ========== 内联编辑 ==========
+// 视觉审计 A-64：校验失败（空名称/非法日期）时除 toast 外，给正在编辑的输入框
+// 错误描边（.is-invalid，见 style.css）并置 aria-invalid；重新输入即解除。
+const editInvalid = ref(false)
+watch(editValue, () => { if (editInvalid.value) editInvalid.value = false })
+
 const startEdit = (item, field) => {
   editing.value = { id: item.id, field }
   editValue.value = String(item[field] ?? '')
+  editInvalid.value = false
 }
 
 /**
@@ -1121,7 +1133,7 @@ const onCellKeydown = (e, item, field) => {
   startEdit(item, field)
 }
 
-const cancelEdit = () => { editing.value = null }
+const cancelEdit = () => { editing.value = null; editInvalid.value = false }
 
 const saveEdit = async () => {
   if (!editing.value) return
@@ -1130,11 +1142,11 @@ const saveEdit = async () => {
   let val = editValue.value
   if (field === 'name') {
     val = val.trim()
-    if (!val) { showToast(tt('toast.pleaseEnterWorkName'), 'warning'); return }
+    if (!val) { editInvalid.value = true; showToast(tt('toast.pleaseEnterWorkName'), 'warning'); return }
   }
   if (field === 'watch_date') {
     const validation = validateDate(val)
-    if (!validation.valid) { showToast(validation.error, 'warning'); return }
+    if (!validation.valid) { editInvalid.value = true; showToast(validation.error, 'warning'); return }
     val = validation.normalized
   }
   const item = watchedList.value.find(i => i.id === id)
@@ -1581,6 +1593,20 @@ const unpinLeavingGroup = (el) => {
 
 .dark .cell-notes {
   color: #a9b6cc;
+}
+
+/* 视觉审计 A-12：深色下序号列与分页省略号沿用全局 .dark .text-gray-400(#7c8ba5)
+   在深色斑马行上只有 3.4~4.28:1（even 亮档最差）。仿 .cell-date/.cell-notes 的
+   显式终值做法提亮到 #cbd5e1（与 .cell-date 深色终值同档；序号可点击，取比
+   #a9b6cc 更亮的一档以扛壁纸透色的亮底轮次）；!important 压过全局
+   `.dark .text-gray-400` 的 !important（此处特异性更高）。
+   cell-index-num 只加在未勾选分支，勾选态仍走 text-primary。 */
+.dark .cell-index-num {
+  color: #cbd5e1 !important;
+}
+
+.dark .pager-ellipsis {
+  color: #cbd5e1 !important;
 }
 
 /* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。

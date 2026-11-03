@@ -245,10 +245,13 @@ defineExpose({ loadTags })
   align-items: center;
   padding: 0.125rem 0.5rem;
   border-radius: 0.5rem;
-  font-size: 0.6875rem;
+  /* 视觉审计 A-15：字号从 0.6875rem(9.625px) 提到 0.75rem(10.5px，根字号 14 档)，
+     与 V-13 统一后的全站徽章档一致；浅色文字用 78% 混黑的钳暗主色深端、底改淡
+     （primary/0.08）—— 修复前浅色合成底上仅 1.97~3.85:1，钳暗后以同条件像素法复测。 */
+  font-size: 0.75rem;
   line-height: 1.25rem;
-  background: rgb(var(--c-primary) / 0.12);
-  color: rgb(var(--c-primary-dark));
+  background: rgb(var(--c-primary) / 0.08);
+  color: color-mix(in srgb, rgb(var(--c-primary-dark)) 78%, black);
   border: 1px solid rgb(var(--c-primary) / 0.3);
   cursor: pointer;
   transition: all 0.15s ease;

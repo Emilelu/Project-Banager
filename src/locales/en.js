@@ -256,9 +256,11 @@ export default {
   'remaining.batchAdd': 'Batch Add',
   'remaining.moveToWatching': 'Move to Watching',
   'remaining.colName': 'Show Name',
-  'remaining.colDate': 'Expected Date',
+  'remaining.colDate': 'Due Date',
   'remaining.colUrl': 'Link',
-  'remaining.colNotes': 'Notes',  'remaining.add': 'Add upcoming',  'remaining.clearList': 'Clear list',
+  'remaining.colNotes': 'Notes',
+  'remaining.add': 'Add upcoming',
+  'remaining.clearList': 'Clear list',
 
 
   'remaining.emptyTitle': 'No waiting shows yet',
@@ -296,7 +298,8 @@ export default {
   'watched.colName': 'Title',
   'watched.colDate': 'Date',
   'watched.colUrl': 'Link',
-  'watched.colNotes': 'Notes',  'watched.clearList': 'Clear list',
+  'watched.colNotes': 'Notes',
+  'watched.clearList': 'Clear list',
 
   'watched.emptyTitle': 'No watched records yet',
   'watched.emptyNoMatch': 'No matching records found',

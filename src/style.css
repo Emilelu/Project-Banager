@@ -2710,6 +2710,31 @@ td {
   box-sizing: border-box !important;
 }
 
+/* 视觉审计 A-44：表格行内编辑时输入框(py-1.5 + border-2 = 32px)高于单元格常态
+   内容盒(text-sm 行高 1.25rem = 17.5px@root14)，行高 41→50.5px、下方行整体下移抖动。
+   这里把**表格行内**的编辑输入框压到与内容盒同高（border 收 1px、上下 padding 0、
+   line-height 收 1.2），编辑时行高不变 —— 卡片内（WatchingCard）的同名输入框不受影响。
+   注意 height 是 border-box（上面刚声明 box-sizing），1.25rem 含边框。 */
+.record-table .inline-edit-input {
+  height: 1.25rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 1px;
+  line-height: 1.2;
+}
+
+/* 视觉审计 A-64：行内编辑校验失败（空名称/非法日期）时，除 toast 外给输入框
+   本体一个错误描边 —— 用户视线停在单元格上就能定位错误源；aria-invalid 同步。
+   !important 用于压过 .dark .inline-edit-input 的深色边框覆盖（同为 !important，
+   这里特异性 (0,3,0) 更高，浅深两主题都生效）。 */
+.record-table .inline-edit-input.is-invalid {
+  border-color: rgb(var(--c-danger)) !important;
+}
+.record-table .inline-edit-input.is-invalid:focus {
+  border-color: rgb(var(--c-danger)) !important;
+  box-shadow: 0 0 0 2px rgb(var(--c-danger) / 0.3);
+}
+
 /* 隐藏 number 输入框自带的增减箭头 */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
@@ -3205,8 +3230,12 @@ td .truncate {
   font-weight: 700;
 }
 .dark .filter-trigger.is-active {
-  background: rgb(var(--c-primary) / 0.7);
-  border-color: rgb(var(--c-primary) / 0.9);
+  /* 视觉审计 A-42：白字压 rgb(var(--c-primary)/0.7) 半透明底时，对比度随 auto 取色
+     大幅波动（实测 4.02~4.43 / 4.05~8.82），能跌破 4.5:1。与 .btn-primary 同一约束
+     「白字必须压 dark 端」：改 --c-primary-dark 实色底 —— 该变体由引擎朝浅色背景
+     收敛派生（相对亮度 ≤0.143），白字全色相实测最差 ≥5.43:1，不再随配色漂移。 */
+  background: rgb(var(--c-primary-dark));
+  border-color: rgb(var(--c-primary-dark));
   color: #fff;
   font-weight: 700;
 }
@@ -3942,7 +3971,11 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 }
 .record-table .col-check { width: 2.75rem; }
 .record-table .col-index { width: 3.5rem; }
-.record-table .col-date { width: 8.5rem; }
+/* 视觉审计 A-37：en 列名「Due Date」+ 日历/信息/排序箭头图标需 ~121px，
+   8.5rem(119px) 仍差 2~3px（1920 档 139 vs 136 同样差 3px）—— 方案A 缩短文案 +
+   方案B 加宽列并用：8.5rem → 9rem（126px / 1920 档 144px），名称列为 auto 吸收，
+   notes 不动；zh/ja 与各档位实测均不再出现「📅 …」整体省略号。 */
+.record-table .col-date { width: 9rem; }
 .record-table .col-url { width: 10.5rem; }
 .record-table .col-notes { width: 15rem; }
 .record-table .col-name { width: auto; }
@@ -3977,6 +4010,34 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 }
 .dark .record-table tbody tr.is-selected { background-color: rgb(var(--c-primary) / 0.34); }
 .dark .record-table tbody tr.is-checked { background-color: rgb(var(--c-danger) / 0.28); }
+
+/* ===== 视觉审计 A-41：浅色表头文字随 auto 取色漂移不达标 =====
+ * th 的 text-primary-dark 直接吃 --c-primary-dark；该变量由引擎朝「理想浅底(亮度
+ * 0.82)」收敛到恰好 4.5:1，而实际玻璃合成底（壁纸透色后）常更暗，暖色相轮次实测
+ * 2.4~4.07:1。这里统一再钳暗一档（78% 混黑），使同底色下全色相 ≥4.5:1（修复后
+ * 以「修复前同条件实测」的像素法复测，数值见修复记录）。
+ * 深色表头由 .dark th.text-primary-dark !important 接管，不受本条影响。 */
+html:not(.dark) .record-table thead th {
+  color: color-mix(in srgb, rgb(var(--c-primary-dark)) 78%, black);
+}
+
+/* ===== 视觉审计 A-16：浅色行悬浮时番剧名变 --c-primary，对比 1.9~2.5:1 =====
+ * 原 Tailwind group-hover:text-primary 直接吃原始主色（auto 取色下是亮端）。
+ * 改为悬浮时用与表头同源的钳暗主色深端；深色下名称色本就被
+ * .dark .text-gray-800 !important 固定（悬浮不变色，与修复前实测行为一致），
+ * 故这里用 html:not(.dark) 限定浅色。模板侧已同步移除 group-hover:text-primary。 */
+html:not(.dark) .record-table tbody tr.group:hover .name-with-tags > .text-sm {
+  color: color-mix(in srgb, rgb(var(--c-primary-dark)) 78%, black);
+}
+
+/* ===== 视觉审计 A-45：浅色行悬浮背景反馈失效 =====
+ * .list-item:hover（primary/0.04，特异性 0,2,0）被斑马纹
+ * .record-table tbody tr:not(.is-odd)（特异性 0,2,2）压过，浅色悬浮无任何底色反馈
+ * （深色靠 .dark .list-item:hover !important 一直正常）。补一条更高特异性的浅色
+ * 规则；排除 is-selected/is-checked，避免压掉语义行更强的选中/勾选底色。 */
+html:not(.dark) .record-table tbody tr.list-item:not(.is-selected):not(.is-checked):hover {
+  background-color: rgb(var(--c-primary) / 0.06);
+}
 /* 骨架行：加载中占位，避免闪现「暂无记录」 */
 .record-skeleton { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.25rem 0; }
 .record-skeleton-bar {

@@ -13,10 +13,9 @@
       @drop="onTableDrop"
       @dragleave="onTableDragLeave">
       <!-- 需求 B：表格卡片**不再**自带「☰ 番剧名称 / 共 N 条」标题行。
-           下面紧跟着的 <thead class="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-t-2xl"> 已经是完整的列名（番剧名称/预计日期/链接/备注），
-           再叠一个伪标题只是重复占一行高度；「共 N 条」这个计数已上提到本页
-           顶部第一张卡片的标题行右侧（见文件开头的 .card-head + .stat-chip），
-           同时也有 setPageStats('/remaining', …) 供 App.vue 顶栏使用。 -->
+           下面紧跟着的 <thead> 已经是完整的列名（番剧名称/预计日期/链接/备注），
+           再叠一个伪标题只是重复占一行高度；「共 N 条」计数由 setPageStats('/remaining', …)
+           写入顶栏（视觉审计 A-01 后第一卡整体迁入顶栏，页面内不再有标题卡）。 -->
       <table class="record-table">
         <colgroup>
         <col v-if="batchMode" class="col-check" />
@@ -48,9 +47,13 @@
             </th>
             <th class="text-left px-3 py-2.5 text-primary-dark font-bold cursor-pointer select-none hover:bg-primary/5 transition whitespace-nowrap"
               tabindex="0" role="button" :aria-sort="sortField==='expected_date'?(sortOrder==='asc'?'ascending':'descending'):'none'"
+              :title="tt('remaining.colDate')"
               @click="toggleSort('expected_date')" @keydown.enter.prevent="toggleSort('expected_date')" @keydown.space.prevent="toggleSort('expected_date')">
               <!-- 日期列的格式说明（原空态副说明「支持: 年月(2025/07)、完整日期…」）
-                   改为列头文字的悬浮气泡：说明归到它解释的那一列，空态只留主文案。 -->
+                   改为列头文字的悬浮气泡：说明归到它解释的那一列，空态只留主文案。
+                   th 自身再补 title（视觉审计 A-37）：极端字号下万一截断仍有全称兜底；
+                   en 文案已从「Expected Date」缩短为「Due Date」，配合 .col-date
+                   8.5rem→9rem（style.css）三档视口实测均不再截断。 -->
               <AppIcon scale="sm" name="calendar" /> <span
                 class="inline-flex items-center gap-1 cursor-help"
                 v-tip="tt('remaining.dateFormatsHint')">{{ tt('remaining.colDate') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span> <AppIcon scale="xs" class="inline-block align-middle ml-0.5" v-if="sortField==='expected_date'" :name="sortOrder==='asc'?'arrowUp':'arrowDown'" />
@@ -122,13 +125,15 @@
             @click.stop="toggleCheckFromIndex(item)"
             @dblclick.stop>
             <span class="text-xs font-mono tabular-nums transition-colors"
-              :class="checkedIds.includes(item.id) ? 'text-primary font-bold' : 'text-gray-400 hover:text-primary'">{{ (currentPage - 1) * pageSize + idx + 1 }}</span>
+              :class="checkedIds.includes(item.id) ? 'text-primary font-bold' : 'text-gray-400 hover:text-primary cell-index-num'">{{ (currentPage - 1) * pageSize + idx + 1 }}</span>
           </td>
           <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'name')"
               @dblclick.stop="onFieldDblclick(item, 'name')"
               @keydown="onCellKeydown($event, item, 'name')">
               <input v-if="editing?.id===item.id&&editing?.field==='name'" v-model="editValue"
                 :aria-label="tt('card.editNameLabel', { name: item.name })"
+                :aria-invalid="editInvalid ? 'true' : null"
+                :class="{ 'is-invalid': editInvalid }"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full" autofocus />
               <!-- 作品名称 + 标签同排（标签在名称右侧）：
                    不新增 td（既有列索引的测试断言不受影响），也不另起一行
@@ -148,7 +153,10 @@
                   @error="markRowCoverFailed(item.id)"
                   @mouseenter="showCoverZoom($event, item.cover_url)"
                   @mouseleave="hideCoverZoom" />
-                <span class="text-sm font-semibold text-gray-800 group-hover:text-primary transition-colors truncate">{{ item.name }}</span>
+                <!-- 视觉审计 A-16：浅色悬浮变色改由 style.css 的钳暗规则接管
+                     （html:not(.dark) tr.group:hover .name-with-tags > .text-sm），
+                     原 group-hover:text-primary 在 auto 取色下对比仅 1.9~2.5:1。 -->
+                <span class="text-sm font-semibold text-gray-800 transition-colors truncate">{{ item.name }}</span>
                 <ItemTags v-if="item.tags" :tags="item.tags" :max="3" />
               </div>
             </td>
@@ -157,6 +165,8 @@
               @keydown="onCellKeydown($event, item, 'expected_date')">
               <input v-if="editing?.id===item.id&&editing?.field==='expected_date'" v-model="editValue"
                 :aria-label="tt('card.editDateLabelShort', { name: item.name })"
+                :aria-invalid="editInvalid ? 'true' : null"
+                :class="{ 'is-invalid': editInvalid }"
                 @blur="saveEdit" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" class="inline-edit-input w-full"
                 :placeholder="tt('remaining.datePlaceholder')" autofocus />
               <span v-else class="cell-date text-sm truncate block">{{ item.expected_date || '-' }}</span>
@@ -198,7 +208,7 @@
     </div>
 
     <!-- 分页（独立卡片：正文直接是翻页控件。
-         需求 B：去掉「共 N 条」卡片标题行 —— 该计数已上提到顶部第一张卡片标题行右侧，
+         需求 B：去掉「共 N 条」卡片标题行 —— 该计数已上提到顶栏（pageStats），
          这里再写一遍属于同一页面内第三次重复，且平白多占一整行高度。 -->
     <div v-if="sortedRemainingList.length > 0" class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-2">
       <div class="flex items-center justify-between flex-wrap gap-3">
@@ -255,7 +265,7 @@
             :aria-label="tt('watched.prevPage')" v-tip="tt('watched.prevPage')">
             <AppIcon scale="sm" name="caretLeft" /></button>
           <template v-for="p in displayPages" :key="p">
-            <span v-if="p==='...'" class="px-2 text-xs text-gray-400">...</span>
+            <span v-if="p==='...'" class="px-2 text-xs text-gray-400 pager-ellipsis">...</span>
             <button v-else @click="currentPage=p"
           class="btn-base btn-icon pager-btn" :class="p===currentPage ? 'btn-primary font-bold' : 'btn-neutral'">{{ p }}</button>
           </template>
@@ -580,8 +590,11 @@ const toggleSort = (field) => {
 }
 
 // ========== 拖动排序 ==========
-// 设计：拖动是「显式的手动排序」意图，因此一旦开始拖动就把 sortField 置空（手动模式），
-// 否则刚拖好的顺序会被表头排序立刻打乱。手动模式下按 sort_order 排。
+// 设计：拖动是「显式的手动排序」意图，但**切换时机在 drop 成功那一刻**而不是
+// dragstart —— 视觉审计 A-62：原先抓起一行的一瞬间整表就按 sort_order 重排，
+// 指针下的落点指示作用在重排后的另一行上，极易放错位置。现在拖拽期间锁定当前
+// 排序视图（名称/日期序原样不动），drop 成功后整体按「用户看到的可视顺序」
+// 写 sort_order 并切手动序。手动模式下按 sort_order 排。
 // 落库：一次拖动只产生 N 个 sort_order 更新，用一次性顺序提交避免中间态闪烁。
 const MANUAL = '__manual__'
 const dragIndex = ref(-1)
@@ -637,7 +650,8 @@ const canDrag = computed(() =>
 
 const onDragStart = (e, index) => {
   if (!canDrag.value) { e.preventDefault(); return }
-  enterManualOrder()
+  // A-62：dragstart 不再切换排序（整表重排会让被拖行从指针下移走）；
+  // 手动序延后到 doReorder（drop 成功）才进入。
   dragIndex.value = index
   dragOverIndex.value = index
   try {
@@ -762,6 +776,10 @@ const doReorder = async (targetIndex, appendToEnd = false) => {
     const insertAt = Math.min(targetIndex > from ? targetIndex - 1 : targetIndex, list.length)
     list.splice(insertAt, 0, moved)
   }
+
+  // A-62：到这里 drop 已成功，才切换手动序 —— 上面的 list 正是拖拽期间用户看到的
+  // 可视顺序（字段排序视图），逐位写 sort_order 后它恰好就是手动序。
+  enterManualOrder()
 
   // 先记录「落库前」的原始 sort_order —— 若在乐观更新之后再比对，
   // 读到的是刚写入的新值，会被误判为「没变化」而整批跳过。
@@ -1228,9 +1246,16 @@ const fetchData = async () => {
 const selectItem = (item) => { selected.value = item }
 
 // ========== 内联编辑 ==========
+// 视觉审计 A-64：校验失败（空名称/非法日期）时除 toast 外，给正在编辑的输入框
+// 错误描边（.is-invalid，见 style.css）并置 aria-invalid —— 错误源在单元格本地可见。
+// 用户重新输入即解除（watch editValue），保存/取消时复位。
+const editInvalid = ref(false)
+watch(editValue, () => { if (editInvalid.value) editInvalid.value = false })
+
 const startEdit = (item, field) => {
   editing.value = { id: item.id, field }
   editValue.value = String(item[field] ?? '')
+  editInvalid.value = false
 }
 
 /**
@@ -1284,7 +1309,7 @@ const onCellKeydown = (e, item, field) => {
   startEdit(item, field)
 }
 
-const cancelEdit = () => { editing.value = null }
+const cancelEdit = () => { editing.value = null; editInvalid.value = false }
 
 const saveEdit = async () => {
   if (!editing.value) return
@@ -1293,11 +1318,11 @@ const saveEdit = async () => {
   let val = editValue.value
   if (field === 'name') {
     val = val.trim()
-    if (!val) { showToast(tt('toast.pleaseEnterShowName'), 'warning'); return }
+    if (!val) { editInvalid.value = true; showToast(tt('toast.pleaseEnterShowName'), 'warning'); return }
   }
   if (field === 'expected_date' && val.trim()) {
     const validation = validateDate(val)
-    if (!validation.valid) { showToast(validation.error, 'warning'); return }
+    if (!validation.valid) { editInvalid.value = true; showToast(validation.error, 'warning'); return }
     val = validation.normalized
   }
   const item = remainingList.value.find(i => i.id === id)
@@ -1566,7 +1591,7 @@ const openSeasonLink = () => {
 /**
  * 顶栏操作按钮。
  *
- * 用户要求把工具栏按钮从页面内移到顶栏，页面只留搜索与筛选。
+ * 用户要求把工具栏按钮从页面内移到顶栏（A-01 后搜索与筛选也一并迁入）。
  * 顶栏空间有限，所以全部以**图标**形态渲染，文案由 App.vue 用 v-tip 显示。
  *
  * 批量相关按钮只在 batchMode 或有勾选时出现 —— 否则顶栏常驻 8 个图标太拥挤。
@@ -1708,6 +1733,21 @@ const unpinLeavingGroup = (el) => {
 
 .dark .cell-notes {
   color: #a9b6cc;
+}
+
+/* 视觉审计 A-12：深色下序号列与分页省略号沿用全局 .dark .text-gray-400(#7c8ba5)
+   在深色斑马行上只有 3.4~4.28:1（even 亮档最差）。仿 .cell-date/.cell-notes 的
+   显式终值做法提亮到 #cbd5e1（与 .cell-date 深色终值同档）。序号是可点击控件，
+   取比 .cell-notes(#a9b6cc) 更亮的一档：壁纸透色把深色玻璃底提亮的轮次
+   （实测底 rgb(89,75,80)）#a9b6cc 只有 4.02:1，#cbd5e1 仍 ≥5:1。
+   !important 用于压过全局 `.dark .text-gray-400` 的 !important（此处特异性更高）。
+   cell-index-num 只加在 :class 的未勾选分支，勾选态仍走 text-primary。 */
+.dark .cell-index-num {
+  color: #cbd5e1 !important;
+}
+
+.dark .pager-ellipsis {
+  color: #cbd5e1 !important;
 }
 
 /* 「作品名称 + 标签」同排：标签紧跟名称右边（不被推到列最右侧）。

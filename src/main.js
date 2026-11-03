@@ -98,6 +98,12 @@ async function boot() {
   // 全站悬浮气泡指令：替代原生 title（样式与侧边栏气泡一致，见 useHoverTip.js）
   app.directive('tip', vTip)
   app.use(router)
+  // 视觉审计 A-46：直载 /#/remaining 时顶栏 h1 先显示 app.title「追番管理」约 0.3s
+  // 再经 out-in 过渡换成路由标题 —— 根因是挂载早于 router 初始导航解析，首帧
+  // route.path 仍为 '/'，currentTitle 回落到 app.title，路由就绪后又触发一次
+  // title-swap 换标题。改为等初始导航就绪再挂载：首帧直接渲染最终标题，
+  // 且初始渲染不播 title-swap 进入动画。解析失败也照常挂载（不因路由错误白屏）。
+  try { await router.isReady() } catch { /* 路由解析失败也照常挂载，保持可用性 */ }
   app.mount('#app')
 
   console.log('[boot] mounted')
