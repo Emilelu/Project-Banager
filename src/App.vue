@@ -191,6 +191,16 @@
             </transition>
           </div>
         </transition>
+        <!-- 页面内容控件（搜索 / 标签筛选 / 年份）：由各 view 通过 setPageControls 写入
+             （视觉审计 A-01：等番/已看页第一卡迁入顶栏）。组件由 view 提供（markRaw 存入
+             store），状态与过滤/年份逻辑留在 view，这里只负责渲染入口。
+             过渡与上面的 title-swap 同语言：路由切换时旧控件块先淡出、新控件再淡入，
+             mode="out-in" 防止两块控件重叠挤压布局；key 用 route.path 保证跨页隔离。 -->
+        <transition name="title-swap" mode="out-in">
+          <div :key="route.path" class="topbar-controls flex items-center gap-3 min-w-0">
+            <component v-for="c in topbarControls" :key="c.key" :is="c.component" v-bind="c.props" />
+          </div>
+        </transition>
         <!-- 页面操作按钮：由各 view 通过 setPageActions 写入，统一显示在顶栏。
              用户要求把工具栏按钮从页面内移到这里，正文区只留搜索/筛选等内容控件。
              顶栏空间有限，按钮以图标形态渲染，文案走 v-tip 气泡。 -->
@@ -375,7 +385,8 @@ import { useAppearance } from './composables/useAppearance'
 import { useDialogFocus } from './composables/useDialogFocus'
 import { useI18n } from './composables/useI18n'
 // 顶栏计数徽章共享状态：各页写入，顶栏读取（见 usePageStats.js）
-import { pageStats, pageSelection, usePageActions } from './composables/usePageStats'
+// pageControls：各页写入的**内容控件组件**（搜索/标签/年份），顶栏渲染入口（A-01）
+import { pageStats, pageSelection, pageControls, usePageActions, usePageControls, clearPageControls } from './composables/usePageStats'
 import logoUrl from './assets/logo.webp'
 
 const route = useRoute()
@@ -831,6 +842,9 @@ const topbarStats = computed(() => pageStats[route.path] || [])
 
 /** 当前页在顶栏显示的操作按钮（由各 view 写入 pageActions） */
 const topbarActions = usePageActions(computed(() => route.path))
+
+/** 当前页的顶栏内容控件（搜索/标签/年份，由各 view 写入 pageControls，A-01） */
+const topbarControls = usePageControls(computed(() => route.path))
 const showPageActionsMenu = ref(false)
 const pageActionsBtnRef = ref(null)
 const pageActionsMenuRef = ref(null)
@@ -867,9 +881,13 @@ const onPageActionsKeydown = (event) => {
     buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
   }
 }
-watch(() => route.path, () => {
+watch(() => route.path, (path, oldPath) => {
   showPageActionsMenu.value = false
   mobileSidebarExpanded.value = false
+  // 兜底清空旧页的内容控件（A-01）：view 卸载时会自己 clearPageControls，
+  // 但万一某页忘清（先例：等番页曾漏清 pageActions），路由切换时在这里强制清掉，
+  // 控件不会跨页残留在顶栏。
+  if (oldPath && oldPath !== path) clearPageControls(oldPath)
 })
 /** 顶栏「当前选中」信息（各页写入，见 usePageStats.js 的 pageSelection） */
 const topbarSelection = computed(() => pageSelection[route.path] || null)

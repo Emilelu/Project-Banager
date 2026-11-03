@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { pageStats, pageSelection, pageActions } from '../src/composables/usePageStats'
+import { mountTopbarControls } from './helpers/topbarControls'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import * as XLSX from 'xlsx'
@@ -187,10 +188,19 @@ const buttonByExact = (scope, text) => {
 
 /**
  * 打开年份下拉菜单（年份 CRUD 已收进这个菜单里，不再是独立按钮）。
+ * 视觉审计 A-01：年份触发钮已迁入顶栏 pageControls —— 单测里它挂在
+ * controls 宿主（attachTo body）下，从整份 document 找最稳。
  */
 async function openYearMenu(scope) {
-  const trig = scope.findAll('button').find((b) => String(b.attributes('class') || '').includes('year-filter-trigger'))
-  if (trig) {
+  let trig = scope.findAll('button').find((b) => String(b.attributes('class') || '').includes('year-filter-trigger'))
+  if (!trig) {
+    const el = document.querySelector('.year-filter-trigger')
+    if (el) {
+      el.click()
+      await flushPromises()
+      return
+    }
+  } else {
     await trig.trigger('click')
     await flushPromises()
   }
@@ -262,6 +272,13 @@ function makeWorkbook(sheets) {
 }
 
 let wrapper = null
+// 顶栏内容控件宿主（视觉审计 A-01）：搜索/标签/年份已迁入顶栏，
+// view 把控件组件注册进 pageControls，App.vue 才渲染；单测没有 App.vue，
+// 用与 App.vue 同构的宿主把注册的控件真正挂到 DOM（见 helpers/topbarControls.js）。
+let controls = null
+
+/** 已看页顶栏搜索框（控件宿主里的 28rem 输入框） */
+const watchedSearchInput = () => controls.find('input[placeholder="搜索作品名称..."]')
 
 async function mountWatched(opts = {}) {
   const years = opts.years ?? [{ id: 1, year_label: '2025', sort_order: 1 }]
@@ -271,6 +288,8 @@ async function mountWatched(opts = {}) {
     Promise.resolve(okYear(opts.byYear?.[year] ?? [], 0, 0)),
   )
   wrapper = mount(WatchedView, { attachTo: document.body })
+  await flushPromises()
+  controls = mountTopbarControls('/watched')
   await flushPromises()
   return wrapper
 }
@@ -290,6 +309,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  if (controls) {
+    controls.unmount()
+    controls = null
+  }
   if (wrapper) {
     wrapper.unmount()
     wrapper = null
@@ -307,10 +330,16 @@ afterEach(() => {
  * 测试统一走这个辅助函数：打开菜单 → 按文案点选目标项。
  */
 const selectYear = async (wrapperRef, label) => {
-  // 打开菜单
-  const trigger = wrapperRef.find('.year-filter-trigger')
-  if (!trigger.exists()) throw new Error('找不到年份选择按钮')
-  await trigger.trigger('click')
+  // 打开菜单（视觉审计 A-01：触发钮已迁入顶栏，先在 view 里找，再退到 document ——
+  // 控件宿主 attachTo body，触发钮能从 document 查到）
+  let trigger = wrapperRef.find('.year-filter-trigger')
+  if (trigger.exists()) {
+    await trigger.trigger('click')
+  } else {
+    const el = document.querySelector('.year-filter-trigger')
+    if (!el) throw new Error('找不到年份选择按钮')
+    el.click()
+  }
   await flushPromises()
   // 菜单里显示的是本地化文案，而测试传的是内部值，这里做一次映射
   const labelText = { '__unclassified__': '未分类', '__all__': '全部年份' }[label] || label
@@ -439,7 +468,7 @@ describe('已看历史 · 搜索与分页', () => {
     await flushPromises()
     expect(dataRows(wrapper)[0].text()).toContain('21')
 
-    await wrapper.find('input[placeholder="搜索作品名称..."]').setValue('作品2')
+    await watchedSearchInput().setValue('作品2')
     await flushPromises()
 
     expect(topbarStatText()).toContain('总计')
@@ -452,7 +481,7 @@ describe('已看历史 · 搜索与分页', () => {
     await selectYear(wrapper, '2025')
     await flushPromises()
 
-    await wrapper.find('input[placeholder="搜索作品名称..."]').setValue('不存在的作品')
+    await watchedSearchInput().setValue('不存在的作品')
     await flushPromises()
 
     expect(wrapper.text()).toContain('没有找到匹配的记录')
@@ -467,14 +496,14 @@ describe('已看历史 · 搜索与分页', () => {
       ],
       byYear: { 2025: many, 2024: [makeItem(99, '作品01')] },
     })
-    await wrapper.find('input[placeholder="搜索作品名称..."]').setValue('作品01')
+    await watchedSearchInput().setValue('作品01')
     await flushPromises()
     await selectYear(wrapper, '2025')
     await flushPromises()
     await selectYear(wrapper, '2024')
     await flushPromises()
 
-    expect(wrapper.find('input[placeholder="搜索作品名称..."]').element.value).toBe('作品01')
+    expect(watchedSearchInput().element.value).toBe('作品01')
   })
 })
 

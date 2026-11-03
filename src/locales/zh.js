@@ -300,6 +300,7 @@ export default {
   'watched.emptyUnclassified': '暂无未分类记录',
   'watched.emptyYear': '{year} 暂无已看记录',
   'watched.searchPlaceholder': '搜索作品名称...',
+  'watched.yearFilter': '按年份筛选',
   'watched.yearLabel': '年份标签',
   'watched.yearLabelPlaceholder': '如: 2025 或 2014~2017',
   'watched.yearLabelHint': '支持单个年份(2025)或年份范围(2014~2017)',

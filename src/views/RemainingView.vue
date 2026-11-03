@@ -1,35 +1,9 @@
 <template>
   <div ref="pageRootRef" class="space-y-5" tabindex="-1">
-    <!-- 顶部信息栏 + 操作面板 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
-      <!-- 需求 B：本页计数就放在**顶部第一张卡片标题行的右侧**。
-           表格卡片里那份重复的「☰ 番剧名称 / 共 N 条」已删除（见下方 table 处注释），
-           分页卡片里那份也一并删除；同一页面只剩这一个计数入口。
-           .topbar-stat 与 App.vue 顶栏徽章是同一套样式（更紧凑），两处观感一致。 -->
-      <!-- 工具栏：只保留搜索框与标签筛选（内容相关控件）。
-           本季新番 / 查看新番 / 添加等番 / 批量添加 / 批量删除 / 全选 / 反选 / 清空
-           已按要求全部移到顶栏（见 setPageActions 注册）。
-           搜索框加长到 28rem 并居中，是这一行的视觉主体。 -->
-      <div class="toolbar-enter toolbar-adaptive flex items-center justify-center gap-3 flex-wrap">
-        <!-- 左侧透明占位：TagFilter 在搜索框右边，
-             左侧补同宽占位后，整个 flex 居中的结果是搜索框正好落在正文中心。 -->
-        <span class="w-[7.3rem] shrink-0" aria-hidden="true"></span>
-        <div class="relative w-[28rem] max-w-full shrink-0">
-          <input v-model="searchQuery" type="text" :placeholder="tt('remaining.searchPlaceholder')"
-            :aria-label="tt('remaining.searchPlaceholder')"
-            class="w-full pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-          <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <button v-if="searchQuery" @click="searchQuery=''" :aria-label="tt('common.clear')"
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
-            <AppIcon scale="xs" name="close" />
-          </button>
-        </div>
-        <TagFilter v-model="tagFilter" />
-      </div>
-      <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
-
-      <!-- 拖动提示已移到页面右上角的「帮助」弹窗中，此处不再占位 -->
-    </div>
+    <!-- 视觉审计 A-01：原「第一卡」（搜索框 + 标签筛选）已整卡迁入顶栏 ——
+         搜索与 TagFilter 经 pageControls 注册（见下方 watch），由 App.vue 顶栏渲染；
+         状态（searchQuery/tagFilter）与过滤逻辑仍在本 view。正文不再保留这张卡。 -->
+    <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
 
     <!-- 列表视图 -->
     <!-- 拖放监听挂在整个表格容器：tbody 底边恰好等于末行底边，表格下方无任何可放置区，
@@ -540,7 +514,8 @@ import { remainingApi, batchApi } from '../db/api'
 import { compareDateKey, todayStr, validateDate, normalizeDate } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
-import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions, setPageControls, clearPageControls } from '../composables/usePageStats'
+import RemainingTopControls from './RemainingTopControls.vue'
 import { defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -1501,6 +1476,34 @@ function hideCoverZoom() {
 
 const ROUTE_KEY = '/remaining'
 
+/**
+ * 顶栏内容控件（视觉审计 A-01：第一卡的搜索 + 标签筛选迁入顶栏）。
+ *
+ * 与上面 pageActions 的 watch 同一模式：immediate 写入、数据变化重写。
+ * 控件组件只做渲染入口（App.vue 顶栏用 <component :is> 渲染），
+ * searchQuery / tagFilter 的单一来源仍是本 view —— props 带当前值，
+ * onUpdate 回调写回，等价于 v-model。组件不必在此 markRaw：
+ * setPageControls 写入点会统一 markRaw（防 reactive 代理组件实例）。
+ */
+watch(
+  [searchQuery, tagFilter],
+  () => {
+    setPageControls(ROUTE_KEY, [
+      {
+        key: 'remaining-controls',
+        component: RemainingTopControls,
+        props: {
+          search: searchQuery.value,
+          tagFilter: tagFilter.value,
+          'onUpdate:search': (v) => { searchQuery.value = v },
+          'onUpdate:tagFilter': (v) => { tagFilter.value = v },
+        },
+      },
+    ])
+  },
+  { immediate: true },
+)
+
 /** 本季新番：外链，新标签打开 */
 const openSeasonLink = () => {
   if (typeof window !== 'undefined' && currentSeasonLink.value?.url) {
@@ -1582,6 +1585,10 @@ watch(
 
 onUnmounted(() => {
   clearPageSelection(ROUTE_KEY)
+  // 补齐既有隐患：等番页此前漏清 pageActions（已看页 1580 行有清），跨页会残留旧按钮
+  clearPageActions(ROUTE_KEY)
+  // 顶栏内容控件随页卸载清空，避免残留（App.vue 的 route watch 还有第二层兜底）
+  clearPageControls(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
 })

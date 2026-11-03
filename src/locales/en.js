@@ -303,6 +303,7 @@ export default {
   'watched.emptyUnclassified': 'No unclassified records',
   'watched.emptyYear': 'No records for {year}',
   'watched.searchPlaceholder': 'Search title...',
+  'watched.yearFilter': 'Filter by year',
   'watched.yearLabel': 'Year label',
   'watched.yearLabelPlaceholder': 'e.g. 2025 or 2014~2017',
   'watched.yearLabelHint': 'A single year (2025) or a range (2014~2017)',

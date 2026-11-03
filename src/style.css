@@ -3824,6 +3824,61 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 .dark .record-table tbody tr.is-selected { background-color: rgb(var(--c-primary) / 0.3); box-shadow: inset 3px 0 rgb(var(--c-primary-light)); }
 .dark .record-table tbody tr.is-checked { background-color: rgb(var(--c-danger) / 0.26); }
 .card-progress-pct { margin-left: 0.375rem; flex-shrink: 0; }
+
+/* ===== 顶栏页面内容控件（视觉审计 A-01：等番/已看页第一卡迁入顶栏） =====
+ * 各 view 经 pageControls 写入控件组件（搜索/标签筛选/已看页年份），App.vue 用
+ * <component :is> 渲染进 .topbar-controls。
+ *
+ * 布局：位于标题与操作按钮之间；margin:0 auto 让控件在「标题 | 操作钮」之间的
+ * 富余空间里水平居中（原第一卡就是居中观感），同时富余不足时控件可被压缩
+ * （min-width:0），批量/选中态追加徽章时优先收窄搜索框而不是把顶栏撑出溢出。
+ * 内部 gap 0.75rem 与原第一卡（gap-3）一致；rem 基随根字号缩放，
+ * 1440(root 14) 下三件套宽与审计实测（28rem=392px、gap 10.5px）吻合。 */
+.topbar-controls {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 auto;
+}
+/* 搜索框（TopbarSearchBox）：宽档显示 28rem 内联输入框，窄档钮默认隐藏。
+   两块显示切换只在下方 ≤1100 的 D1 段做，档位样式集中一处维护。
+   窄档钮尺寸显式 36px（w-9 是 2.25rem，根字号 14 下只有 31.5px，与标签/年份
+   的 36px icon-only 钮不成排——D1 的「36px」按审计口径取绝对像素）。 */
+.topbar-controls .tb-search-btn { display: none; width: 36px; height: 36px; }
+/* 顶栏高度固定 h-14，chips 排（已选标签快捷移除）放不下也不允许换行：
+   筛选状态由触发钮的「已选 N」表达，移除入口仍在下拉菜单里（正文实例不受影响）。 */
+.topbar-controls .tag-filter-chips { display: none; }
+.topbar-controls .tag-filter { flex-wrap: nowrap; }
+
+/* ===== D1 降级（≤1100，与上方 topbar 图标化断点对齐） =====
+ * 28rem 搜索 + 标签 + 年份在 1024/768 档实测放不下（缺 26~198px），降级为：
+ *   · 搜索折叠成 36px 放大镜钮，点开 Teleport 浮层面板输入（TopbarSearchBox 内实现）；
+ *   · 标签 / 年份触发钮 icon-only（36px），语义靠 v-tip 气泡与 aria-label。
+ * 实测折叠态三件套 ≈ 36×3 + 2×gap(10.5) ≈ 129px，
+ * 1024 档 free 286~377px、768 档 free 214~305px 全部为正余量（审计 A-01 measurements）。 */
+@media (max-width: 1100px) {
+  .topbar-controls .tb-search-inline { display: none; }
+  .topbar-controls .tb-search-btn { display: inline-flex; }
+  /* 触发钮统一 36px 方钮：文字与箭头隐藏，只留图标。
+     高度对齐搜索钮的 36px（w-9 h-9），窄档一排三个钮同高同节奏。 */
+  .topbar-controls .filter-trigger {
+    width: 36px;
+    height: 36px;
+    padding-left: 0;
+    padding-right: 0;
+    justify-content: center;
+  }
+  .topbar-controls .filter-trigger .filter-trigger-label,
+  .topbar-controls .filter-trigger .filter-trigger-caret { display: none; }
+}
+
+/* 窄档搜索浮层面板：Teleport 到 body 后的定位由 JS（fixed + clamp）给出，
+   这里只定外观尺寸 —— 与 28rem 同宽带来一致的输入预期，超窄视口由 min() 收缩。
+   皮肤复用 .app-menu-panel（玻璃面板 + pop 过渡 + 深色规则全套现成）。 */
+.tb-search-panel {
+  width: min(28rem, calc(100vw - 16px));
+  padding: 0.5rem;
+}
+
 @media (max-width: 1100px) {
   .topbar-actions { display: none; }
   .topbar-more { display: block; margin-right: auto; flex-shrink: 0; }

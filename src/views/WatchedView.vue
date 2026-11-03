@@ -1,115 +1,10 @@
 <template>
   <div ref="pageRootRef" class="space-y-5" @keydown="handleKeydown" tabindex="-1">
-    <!-- 顶部信息栏 + 操作面板合并 -->
-    <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
-      <!-- 需求 B：本页两个计数（本年 N 部 / 总计 N 部）就放在**顶部第一张卡片标题行的右侧**。
-           表格卡片与分页卡片里那些重复的「共 N 条」标题行已全部删除。
-           .topbar-stat 与 App.vue 顶栏徽章同一套样式（更紧凑），两处观感一致。 -->
-      <div class="toolbar-enter toolbar-adaptive flex items-center justify-center gap-3 flex-wrap">
-        <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2">
-            <!-- 年份选择：改用与「标签筛选」完全一致的下拉样式
-                 （原来是一个原生 <select>，与旁边的 TagFilter 观感割裂）。 -->
-            <div class="relative inline-block">
-              <button ref="yearTriggerRef" type="button" @click="toggleYearMenu"
-                class="filter-trigger year-filter-trigger transition"
-                :class="{ 'is-active': selectedYear !== '__all__' }"
-                :aria-expanded="showYearMenu" aria-haspopup="menu"
-                :aria-label="tt('watched.yearSelect')"
-                v-tip="tt('watched.yearLabelHint')">
-                <AppIcon scale="sm" name="book" />
-                <span>{{ yearMenuLabel }}</span>
-                <AppIcon scale="xs" :name="showYearMenu ? 'caretUp' : 'caretDown'" class="ml-0.5" />
-              </button>
-
-              <Teleport to="body">
-                <div v-if="showYearMenu" class="fixed inset-0 z-[100]" @click="showYearMenu = false"></div>
-                <transition name="pop">
-                  <div v-if="showYearMenu" ref="yearMenuRef" role="menu"
-                    class="fixed z-[110] app-menu-panel min-w-[10rem] max-h-[60vh] overflow-y-auto"
-                    style="--pop-origin-y: top; --pop-from-y: -6px"
-                    :style="yearMenuStyle"
-                    :aria-label="tt('watched.yearSelect')">
-                    <!-- 全部年份 -->
-                    <button type="button" role="menuitemradio"
-                      :aria-checked="selectedYear === '__all__' ? 'true' : 'false'"
-                      @click="pickYear('__all__')"
-                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
-                      :class="selectedYear === '__all__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
-                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-primary"></span>
-                      <span class="flex-1">{{ tt('watched.allYears') }}</span>
-                      <span :class="selectedYear === '__all__' ? 'text-primary' : 'text-gray-300'">
-                        <AppIcon v-if="selectedYear === '__all__'" scale="xs" name="check" />
-                      </span>
-                    </button>
-
-                    <!-- 各年份 -->
-                    <button v-for="y in sortedYears" :key="y.year_label" type="button" role="menuitemradio"
-                      :aria-checked="selectedYear === y.year_label ? 'true' : 'false'"
-                      @click="pickYear(y.year_label)"
-                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
-                      :class="selectedYear === y.year_label ? 'font-semibold text-gray-800' : 'text-gray-600'">
-                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-sakura"></span>
-                      <span class="flex-1">{{ y.year_label }}</span>
-                      <span :class="selectedYear === y.year_label ? 'text-primary' : 'text-gray-300'">
-                        <AppIcon v-if="selectedYear === y.year_label" scale="xs" name="check" />
-                      </span>
-                    </button>
-
-                    <!-- 未归类 -->
-                    <div class="menu-sep"></div>
-                    <button type="button" role="menuitemradio"
-                      :aria-checked="selectedYear === '__unclassified__' ? 'true' : 'false'"
-                      @click="pickYear('__unclassified__')"
-                      class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
-                      :class="selectedYear === '__unclassified__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
-                      <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-warning"></span>
-                      <span class="flex-1">{{ tt('watched.unclassified') }}</span>
-                      <span :class="selectedYear === '__unclassified__' ? 'text-primary' : 'text-gray-300'">
-                        <AppIcon v-if="selectedYear === '__unclassified__'" scale="xs" name="check" />
-                      </span>
-                    </button>
-
-                    <!-- 年份 CRUD 收进本菜单：用户要求不再保留三个独立按钮。
-                         放在菜单底部、分隔线之后，与「选择年份」区分开。 -->
-                    <div class="menu-sep"></div>
-                    <button type="button" role="menuitem" @click="openAddYearDialog"
-                      class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
-                      <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watched.addYear') }}</span>
-                    </button>
-                    <button v-if="selectedYear && selectedYear !== '__unclassified__' && selectedYear !== '__all__'"
-                      type="button" role="menuitem" @click="editYearLabel"
-                      class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
-                      <AppIcon scale="xs" name="edit" /><span class="flex-1">{{ tt('watched.editYear') }}</span>
-                    </button>
-                    <button v-if="selectedYear && selectedYear !== '__unclassified__' && selectedYear !== '__all__'"
-                      type="button" role="menuitem" @click="openDeleteYearDialog"
-                      class="flex items-center gap-2 text-left transition hover:bg-danger/10 text-danger whitespace-nowrap">
-                      <AppIcon scale="xs" name="trash" /><span class="flex-1">{{ tt('watched.deleteYear') }}</span>
-                    </button>
-                  </div>
-                </transition>
-              </Teleport>
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <!-- 计数 chip：与卡片标题行的 .stat-chip 同一套（主色淡底 + 主色深字） -->
-          </div>
-          <div class="relative">
-            <input v-model="searchQuery" type="text" :placeholder="tt('watched.searchPlaceholder')"
-              class="pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80 w-48" />
-            <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <button v-if="searchQuery" @click="searchQuery=''" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition" :aria-label="tt('common.clear')">
-              <AppIcon scale="xs" name="close" />
-            </button>
-          </div>
-          <!-- 按标签筛选（多选 OR），与搜索框并列 -->
-          <TagFilter v-model="tagFilter" />
-        </div>
-      </div>
-      <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
-
-    </div>
+    <!-- 视觉审计 A-01：原「第一卡」（年份选择 + 搜索 + 标签筛选）已整卡迁入顶栏 ——
+         三件控件经 pageControls 注册（见下方 watch），由 App.vue 顶栏渲染；
+         selectedYear / searchQuery / tagFilter 的状态、按年 fetch 与年份增删改
+         的弹窗逻辑仍在本 view。正文不再保留这张卡。 -->
+    <!-- 「已选择 N 项」已移到顶栏（见 setPageSelection 的批量分支） -->
 
     <!-- 列表视图 -->
     <div class="tbl-scroll glass rounded-2xl shadow-lg border border-white/30 overflow-hidden">
@@ -578,7 +473,8 @@ import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, extractYear, extractAllYears, compareDateKey, todayStr } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
 import { showToast } from '../composables/useToast'
-import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
+import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions, setPageControls, clearPageControls } from '../composables/usePageStats'
+import WatchedTopControls from './WatchedTopControls.vue'
 import { openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
 import { useDialogFocus } from '../composables/useDialogFocus'
@@ -596,69 +492,21 @@ const loadFailed = ref(false)
 const selected = ref(null)
 const selectedYear = ref('')
 
-// ===== 年份下拉菜单（与 TagFilter 同一套交互与样式）=====
-const showYearMenu = ref(false)
-const yearTriggerRef = ref(null)
-const yearMenuRef = ref(null)
-const yearMenuPos = ref({ left: 0, top: 0 })
-
-const yearMenuStyle = computed(() => ({
-  left: `${yearMenuPos.value.left}px`,
-  top: `${yearMenuPos.value.top}px`,
-}))
-
-/** 触发按钮上的文案：当前年份 / 全部 / 未归类 */
-const yearMenuLabel = computed(() => {
-  if (selectedYear.value === '__all__') return tt('watched.allYears')
-  if (selectedYear.value === '__unclassified__') return tt('watched.unclassified')
-  return selectedYear.value || tt('watched.allYears')
-})
-
-const measureYearMenu = () => {
-  const btn = yearTriggerRef.value
-  const menu = yearMenuRef.value
-  if (!btn) return
-  const b = btn.getBoundingClientRect()
-  const w = menu?.offsetWidth || 160
-  const h = menu?.offsetHeight || 200
-  const gap = 6
-  const margin = 8
-  const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
-  let top = b.bottom + gap
-  if (top + h > window.innerHeight - margin) top = b.top - h - gap
-  yearMenuPos.value = { left: Math.round(left), top: Math.round(Math.max(margin, top)) }
-}
-
-const toggleYearMenu = async () => {
-  showYearMenu.value = !showYearMenu.value
-  if (showYearMenu.value) {
-    await nextTick()
-    measureYearMenu()
-  }
-}
+// ===== 年份选择 =====
+// 视觉审计 A-01：年份下拉（触发钮 + Teleport 菜单）已迁入 WatchedTopControls
+// （pageControls 顶栏渲染），本 view 只保留状态与数据逻辑。
+// 菜单的开合/定位/外点与 Esc 关闭跟着 refs 走，所以也搬进了控件组件。
 
 /**
  * 选择某年：切换后重新拉数据。
  * 注意：即使选的是当前已选中的年份也要重新拉——
  * 首次挂载时 selectedYear 可能已经是默认值但数据还没加载完，
  * 早退会让"再点一次当前年份"什么都不发生（测试里正是这个场景）。
+ * 由 WatchedTopControls 的年份菜单项经 onPickYear 回调到这里。
  */
 const pickYear = async (label) => {
-  showYearMenu.value = false
   selectedYear.value = label
   await fetchData()
-}
-
-// 点击外部 / Esc / 滚动时关闭
-const onYearDocClick = (e) => {
-  if (!showYearMenu.value) return
-  if (yearTriggerRef.value?.contains(e.target)) return
-  if (yearMenuRef.value?.contains(e.target)) return
-  if (e.target.closest?.('[role="menu"]')) return
-  showYearMenu.value = false
-}
-const onYearKeydown = (e) => {
-  if (e.key === 'Escape' && showYearMenu.value) showYearMenu.value = false
 }
 
 const yearCount = ref(0)
@@ -1443,9 +1291,6 @@ onMounted(async () => {
   await fetchData()
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', onDocClick)
-  // 年份下拉的关闭监听（点击外部 / Esc）
-  document.addEventListener('click', onYearDocClick)
-  document.addEventListener('keydown', onYearKeydown)
 })
 
 
@@ -1521,6 +1366,40 @@ function hideCoverZoom() {
 const ROUTE_KEY = '/watched'
 
 /**
+ * 顶栏内容控件（视觉审计 A-01：第一卡的年份选择 + 搜索 + 标签筛选迁入顶栏）。
+ *
+ * 与 pageActions 的 watch 同一模式：immediate 写入、依赖变化重写。
+ * 控件组件（WatchedTopControls）只做渲染入口 + 年份菜单的纯 UI 机制；
+ * selectedYear / searchQuery / tagFilter 的单一来源仍是本 view ——
+ * props 带当前值，回调写回，等价于 v-model / 事件。
+ * 组件不必在此 markRaw：setPageControls 写入点会统一 markRaw。
+ */
+watch(
+  [searchQuery, tagFilter, selectedYear, () => sortedYears.value],
+  () => {
+    setPageControls(ROUTE_KEY, [
+      {
+        key: 'watched-controls',
+        component: WatchedTopControls,
+        props: {
+          search: searchQuery.value,
+          tagFilter: tagFilter.value,
+          selectedYear: selectedYear.value,
+          years: sortedYears.value,
+          'onUpdate:search': (v) => { searchQuery.value = v },
+          'onUpdate:tagFilter': (v) => { tagFilter.value = v },
+          'onPickYear': (label) => pickYear(label),
+          'onAddYear': () => openAddYearDialog(),
+          'onEditYear': () => editYearLabel(),
+          'onDeleteYear': () => openDeleteYearDialog(),
+        },
+      },
+    ])
+  },
+  { immediate: true, deep: true },
+)
+
+/**
  * 顶栏操作按钮。
  *
  * 用户要求把工具栏按钮从页面内移到顶栏；年份 CRUD 已收进年份下拉菜单，
@@ -1580,10 +1459,10 @@ watch(
 onUnmounted(() => {
   clearPageSelection(ROUTE_KEY)
   clearPageActions(ROUTE_KEY)
+  // 顶栏内容控件随页卸载清空，避免残留（App.vue 的 route watch 还有第二层兜底）
+  clearPageControls(ROUTE_KEY)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', onDocClick)
-  document.removeEventListener('click', onYearDocClick)
-  document.removeEventListener('keydown', onYearKeydown)
 })
 
 // ========== 工具栏离场元素「原地淡出」定位（说明见 WatchingView.vue） ==========

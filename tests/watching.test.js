@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 import { pageStats, pageSelection, pageActions } from '../src/composables/usePageStats'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { mountTopbarControls } from './helpers/topbarControls'
 import { nextTick } from 'vue'
 
 vi.mock('../src/db/api.js', () => ({
@@ -486,7 +487,9 @@ describe('RemainingView 搜索 / 分页 / 迁移 / 新增', () => {
       remainingItem({ id: 2, name: 'Beta', expected_date: '2026/12' }),
       remainingItem({ id: 3, name: 'Gamma', expected_date: '2027/01' }),
     ])
-    await wrapper.find('input[placeholder="搜索番剧名称..."]').setValue('beta')
+    // 视觉审计 A-01：搜索框已迁入顶栏（pageControls），单测用同构宿主挂出控件
+    const controls = mountTopbarControls('/remaining')
+    await controls.find('input[placeholder="搜索番剧名称..."]').setValue('beta')
     await nextTick()
     expect(tableRows(wrapper)).toHaveLength(1)
     expect(wrapper.text()).toContain('Beta')
@@ -595,9 +598,11 @@ describe('RemainingView 批量选择 / 分页边界缺陷', () => {
   it('缺陷证据：搜索后隐藏页的选择仍会被批量删除', async () => {
     batchApi.batchDeleteRemaining.mockResolvedValue(actionOk())
     const wrapper = await mountRemaining(makeRows(25))
+    // 视觉审计 A-01：搜索框已迁入顶栏（pageControls），单测用同构宿主挂出控件
+    const controls = mountTopbarControls('/remaining')
     await enterBatchClean(wrapper)
     await tableRows(wrapper)[0].trigger('click')
-    await wrapper.find('input[placeholder="搜索番剧名称..."]').setValue('Item 25')
+    await controls.find('input[placeholder="搜索番剧名称..."]').setValue('Item 25')
     await nextTick()
     expect(tableRows(wrapper)).toHaveLength(1)
     await tableRows(wrapper)[0].trigger('click')

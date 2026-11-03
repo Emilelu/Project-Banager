@@ -12,7 +12,7 @@
  * 用模块级 reactive 而不是 provide/inject，是因为 App.vue 与各 view 之间隔了
  * router-view，provide 需要穿透多层；模块级单例更直接，也便于测试。
  */
-import { reactive, computed } from 'vue'
+import { reactive, computed, markRaw } from 'vue'
 
 /**
  * @typedef {{ text: string, tone?: 'primary'|'neutral' }} PageStat
@@ -90,6 +90,61 @@ export function clearPageActions(key) {
  */
 export function usePageActions(keyRef) {
   return computed(() => (keyRef?.value ? pageActions[keyRef.value] || [] : []))
+}
+
+/* ==================== 页面内容控件（顶栏） ==================== */
+
+/**
+ * 各页要显示在**顶栏**的内容控件（搜索框 / 标签筛选 / 年份选择）。
+ *
+ * 背景（视觉审计 A-01）：等番/已看页的第一张卡片只承载「搜索 + 标签筛选（+年份）」，
+ * 单独占一整卡把正文往下顶。这批控件要迁进共享顶栏 —— 但控件是**有状态的组件**
+ * （输入框、下拉菜单），不像 pageActions 那样能用纯数据描述，所以 store 里存组件。
+ *
+ * 结构：
+ *   { key: string, component: Component, props: object }
+ *   · component 必须是「页内定义的控件组件」——状态（searchQuery/tagFilter/selectedYear）、
+ *     过滤、fetch、年份 CRUD 逻辑全部留在 view，控件只做渲染入口，
+ *     经 props 进、事件出与 view 通信（v-model 同构：props.xxx + onUpdate:xxx）。
+ *   · markRaw 必须加：component 若被 reactive 代理，渲染性能与 devtools 都会异常。
+ *     这里在写入点统一 markRaw，调用方忘写也不会出错（markRaw 幂等）。
+ *
+ * 为什么与 pageStats/pageActions 同构：同一文件、同一读写形状、同一测试方式，
+ * 心智上就是「顶栏四件套」的第 4 件。跨页残留由两层兜底：
+ *   1. 各 view onUnmounted 里 clearPageControls（与 clearPageActions 同一先例）；
+ *   2. App.vue 的 route.path watch 里 clearPageControls(旧路径)（忘清也不残留）。
+ */
+export const pageControls = reactive({
+  '/watching': [],
+  '/remaining': [],
+  '/watched': [],
+  '/tags': [],
+})
+
+/**
+ * 写入某页的顶栏内容控件。
+ * @param {string} key 路由 path，如 '/watched'
+ * @param {Array<{key:string, component:object, props?:object}>} controls
+ */
+export function setPageControls(key, controls) {
+  if (!pageControls[key]) return
+  pageControls[key] = (controls || []).map((c) => ({
+    ...c,
+    component: markRaw(c.component),
+  }))
+}
+
+/** 清空某页内容控件（页面卸载时调用，避免残留上一页的控件） */
+export function clearPageControls(key) {
+  if (pageControls[key]) pageControls[key] = []
+}
+
+/**
+ * 当前路由对应的内容控件（App.vue 顶栏用）。
+ * @param {import('vue').Ref<string>} keyRef
+ */
+export function usePageControls(keyRef) {
+  return computed(() => (keyRef?.value ? pageControls[keyRef.value] || [] : []))
 }
 
 /* ==================== 当前选中信息 ==================== */

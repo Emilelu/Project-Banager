@@ -303,6 +303,7 @@ export default {
   'watched.emptyUnclassified': '未分類の記録はありません',
   'watched.emptyYear': '{year} の記録はまだありません',
   'watched.searchPlaceholder': '作品タイトルを検索...',
+  'watched.yearFilter': '年で絞り込む',
   'watched.yearLabel': '年ラベル',
   'watched.yearLabelPlaceholder': '例: 2025、2014~2017',
   'watched.yearLabelHint': '単一年(2025)または年範囲(2014~2017)に対応',

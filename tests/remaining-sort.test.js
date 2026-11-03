@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { mountTopbarControls } from './helpers/topbarControls'
 import RemainingView from '../src/views/RemainingView.vue'
 
 vi.mock('../src/db/api', () => {
@@ -192,7 +193,9 @@ describe('等待更新：拖动排序', () => {
       makeItem(1, 'Alpha', '2026/03'),
       makeItem(2, 'Beta', '2026/07'),
     ])
-    const search = wrapper.find('input[type="text"]')
+    // 视觉审计 A-01：搜索框已迁入顶栏（pageControls），单测用同构宿主挂出控件
+    const controls = mountTopbarControls('/remaining')
+    const search = controls.find('input[type="text"]')
     await search.setValue('alpha')
     await flushPromises()
 

@@ -8,11 +8,14 @@
         class="filter-trigger tag-filter-trigger transition"
         :class="{ 'is-active': selected.length > 0 }"
         :aria-expanded="open" aria-haspopup="menu"
-        :aria-label="tt('tags.filterLabel')">
+        :aria-label="tt('tags.filterLabel')"
+        v-tip="tt('tags.filterLabel')">
         <AppIcon scale="sm" name="filter" />
-        <span v-if="selected.length === 0">{{ tt('tags.filter') }}</span>
-        <span v-else>{{ tt('tags.filterCount', { count: selected.length }) }}</span>
-        <AppIcon scale="xs" :name="open ? 'caretUp' : 'caretDown'" class="ml-0.5" />
+        <!-- filter-trigger-label / filter-trigger-caret：给「顶栏 icon-only 降级」用的语义钩子
+             （style.css ≤1100 段据此隐藏文字与箭头，只留 36px 图标；正文里的实例不受影响） -->
+        <span v-if="selected.length === 0" class="filter-trigger-label">{{ tt('tags.filter') }}</span>
+        <span v-else class="filter-trigger-label">{{ tt('tags.filterCount', { count: selected.length }) }}</span>
+        <AppIcon scale="xs" :name="open ? 'caretUp' : 'caretDown'" class="ml-0.5 filter-trigger-caret" />
       </button>
 
       <Teleport to="body">
@@ -52,8 +55,11 @@
       </Teleport>
     </div>
 
-    <!-- 已选标签：可快速移除 -->
-    <div v-if="selected.length" class="flex items-center gap-1 flex-wrap">
+    <!-- 已选标签：可快速移除。
+         tag-filter-chips：顶栏实例（pageControls）在 ≤1100 与宽档都不渲染这排 chips ——
+         顶栏高度固定 56px 放不下换行，筛选状态已由触发钮的「已选 N」表达，
+         移除入口仍在下拉菜单里（正文实例不受影响）。 -->
+    <div v-if="selected.length" class="tag-filter-chips flex items-center gap-1 flex-wrap">
       <button v-for="name in selected" :key="name" type="button"
         class="tag-filter-chip"
         :aria-label="tt('tags.removeFilterLabel', { name: displayTagNames(name, allTags, tt)[0] })"
