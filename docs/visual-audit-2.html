@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>视觉审计报告（第二轮 A-01~A-70）· Project Banager</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --red: #dc2626;
+    --amber: #d97706;
+    --green: #059669;
+    --blue: #2563eb;
+    --code-bg: #f1f3f6;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1c1f26;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #2d323b;
+      --code-bg: #23272f;
+      --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  /* ---------- 头部 ---------- */
+  header.top { margin-bottom: 28px; }
+  h1 {
+    font-size: 26px; line-height: 1.35; margin: 0 0 10px;
+    letter-spacing: -.01em; font-weight: 700;
+  }
+  .meta {
+    color: var(--muted); font-size: 12.5px; line-height: 1.9;
+  }
+  .meta strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- 统计卡 ---------- */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin: 20px 0 26px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .stat .n { font-size: 22px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .stat.red .n { color: var(--red); }
+  .stat.amber .n { color: var(--amber); }
+  .stat.green .n { color: var(--green); }
+  .stat.blue .n { color: var(--blue); }
+
+  /* ---------- 工具栏 ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); padding: 12px 0 14px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 5px 13px; font-size: 12.5px; cursor: pointer;
+    transition: all .15s ease; font-weight: 500;
+  }
+  .chip:hover { border-color: var(--muted); }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- 分组 ---------- */
+  .group-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 700; margin: 28px 0 12px;
+    letter-spacing: -.005em;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .dot.red { background: var(--red); }
+  .dot.amber { background: var(--amber); }
+  .dot.green { background: var(--green); }
+  .dot.blue { background: var(--blue); }
+
+  /* ---------- 条目 ---------- */
+  .item {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 10px; box-shadow: var(--shadow);
+    transition: border-color .15s ease;
+    scroll-margin-top: 70px;
+  }
+  .item:hover { border-color: var(--muted); }
+  .item.picked { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.15), var(--shadow); }
+  .item.flash { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.3), var(--shadow); }
+
+  .item-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cb {
+    flex: 0 0 auto; width: 17px; height: 17px; margin-top: 3px;
+    border: 1.5px solid var(--line); border-radius: 5px; background: var(--card);
+    cursor: pointer; position: relative; transition: all .15s ease;
+  }
+  .item.picked .cb { background: var(--blue); border-color: var(--blue); }
+  .item.picked .cb::after {
+    content: ''; position: absolute; left: 4.5px; top: 1.5px;
+    width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .id {
+    flex: 0 0 auto; font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    letter-spacing: .02em; margin-top: 1px;
+  }
+  .title { font-size: 14.5px; font-weight: 600; line-height: 1.45; flex: 1; min-width: 220px; }
+  .orig {
+    flex: 0 0 auto; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, Consolas, monospace; margin-top: 2px;
+  }
+
+  .body { padding-left: 27px; }
+  .body ul { margin: 0; padding-left: 18px; }
+  .body li { margin: 5px 0; color: var(--text); }
+  .body li::marker { color: var(--muted); }
+  .suggest { color: var(--blue); font-weight: 500; }
+
+  code {
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  b, strong { font-weight: 700; }
+  .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* ---------- 第二轮新增：徽章 / 字段块 / 来源 ---------- */
+  .badge {
+    flex: 0 0 auto; font-size: 10.5px; line-height: 1.5; padding: 1px 8px;
+    border-radius: 999px; border: 1px solid var(--line); color: var(--muted);
+    margin-top: 2px; white-space: nowrap; font-weight: 600;
+  }
+  .badge.conf { color: var(--green); border-color: var(--green); }
+  .badge.reg { color: var(--amber); border-color: var(--amber); }
+  .badge.sev-red { color: var(--red); border-color: var(--red); }
+  .badge.sev-amber { color: var(--amber); border-color: var(--amber); }
+  .badge.sev-green { color: var(--green); border-color: var(--green); }
+  .area-line { padding-left: 27px; color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
+  .blk { display: flex; gap: 8px; margin: 8px 0; align-items: flex-start; }
+  .blk-k {
+    flex: 0 0 auto; background: var(--code-bg); color: var(--muted);
+    border-radius: 5px; padding: 1px 7px; font-size: 11.5px; font-weight: 700; margin-top: 2px;
+  }
+  .blk-v { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.78; overflow-wrap: break-word; }
+  .blk-v.suggest { color: var(--blue); }
+  .src-line {
+    padding-left: 27px; margin-top: 8px; color: var(--muted); font-size: 11.5px;
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  }
+  .src-line .orig { margin-top: 0; }
+
+  /* ---------- 面板（排除表 / 顺序 / 说明） ---------- */
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 10px; box-shadow: var(--shadow);
+  }
+  .excl2 th, .excl2 td { font-size: 12px; }
+  .ex-n { font-family: ui-monospace, Consolas, monospace; color: var(--muted); white-space: nowrap; }
+  .ex-src { font-family: ui-monospace, Consolas, monospace; color: var(--muted); text-align: center; white-space: nowrap; }
+  .fo-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .fo-n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .fo-ids { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  button.orig { cursor: pointer; font: inherit; font-size: 10.5px; padding: 1px 5px; }
+  button.orig:hover { border-color: var(--blue); color: var(--blue); }
+  .fo-why { color: var(--text); font-size: 13px; line-height: 1.8; }
+  .cov-h { font-weight: 700; margin: 12px 0 4px; }
+  .cov-h:first-child { margin-top: 0; }
+  .cov-p { margin: 0 0 8px; font-size: 13px; line-height: 1.85; overflow-wrap: break-word; }
+  .stats-raw { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.9; overflow-wrap: break-word; }
+
+  /* ---------- A-01 方案表与选择器 ---------- */
+  table.mini.plans th:not(:first-child), table.mini.plans td:not(:first-child) {
+    text-align: left; font-variant-numeric: normal;
+  }
+  .plans td.rec { color: var(--green); font-weight: 700; white-space: nowrap; }
+  .plans td.no { color: var(--muted); white-space: nowrap; }
+  .plan-pick {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    margin: 12px 0 2px; padding: 10px 12px; background: var(--code-bg); border-radius: 8px;
+  }
+  .pp-label { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .pp {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+    font-weight: 700; font-family: inherit;
+  }
+  .pp:hover { border-color: var(--muted); }
+  .pp.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .pp-clear { color: var(--muted); font-weight: 500; }
+  .reply-preview { margin-top: 6px; font-size: 12px; color: var(--muted); }
+
+  /* ---------- 内嵌小表 ---------- */
+  table.mini {
+    width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px;
+  }
+  table.mini th, table.mini td {
+    border: 1px solid var(--line); padding: 6px 9px; text-align: left;
+  }
+  table.mini th { background: var(--code-bg); font-weight: 600; }
+  table.mini td:not(:first-child), table.mini th:not(:first-child) {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- 排除表 ---------- */
+  table.excl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  table.excl th, table.excl td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  table.excl th { background: var(--code-bg); font-weight: 600; }
+  table.excl tr:hover td { background: var(--code-bg); }
+
+  /* ---------- 复制条 ---------- */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--card); border-top: 1px solid var(--line);
+    padding: 11px 20px; display: flex; gap: 12px; align-items: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.08);
+  }
+  .bar .info { font-size: 12.5px; color: var(--muted); }
+  .bar .info b { color: var(--text); }
+  .btn {
+    border: 0; border-radius: 8px; padding: 8px 16px; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: all .15s ease;
+  }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .btn.ghost:hover { color: var(--text); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .hidden { display: none !important; }
+
+  @media print {
+    body { padding: 0; background: #fff; }
+    .toolbar, .bar, .cb, .plan-pick, .reply-preview, .fid { display: none !important; }
+    .item, .panel { break-inside: avoid; box-shadow: none; }
+    table.excl tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>视觉审计报告（第二轮）· Project Banager</h1>
+  <div class="meta">
+    <div>审计日期 <strong>2026-11-03</strong> · 编号 <strong>A-01 ~ A-70</strong>（共 <strong>70</strong> 项问题 + <strong>92</strong> 条实测排除）· 上一轮报告 <strong>docs/visual-audit.html</strong>（V-01~V-27，保留未动）</div>
+    <div>覆盖：等番 remaining / 已看 watched / 追番 watching / 标签 tags / 传输 transfer / 外观 appearance 六区 + 共享组件（顶栏、侧栏、Toast、Tooltip、ClockPicker、DatePicker、ColorPicker、TagFilter、TagSelector、右键菜单、批量模式、首帧加载）× 浅色 / 深色 × zh / en / ja × 768 / 1024 / 1440 / 1920（缩放近似见文末「覆盖矩阵与口径说明」）</div>
+    <div style="margin-top:6px">每条附实测数值与证据路径。勾选要修的条目 → 底部「复制回复」生成「改 A-xx A-yy」；<strong>A-01 请先在卡内选方案</strong>（承载 A/B/C ＋ 降级 D1~D4，可组合如 A+D1），未选时回复文本会附「（A-01 方案待定）」。</div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat blue"><div class="n">70</div><div class="l">问题项总数</div></div>
+  <div class="stat red"><div class="n">6</div><div class="l">高</div></div>
+  <div class="stat amber"><div class="n">31</div><div class="l">中等</div></div>
+  <div class="stat green"><div class="n">33</div><div class="l">轻微</div></div>
+  <div class="stat blue"><div class="n">92</div><div class="l">实测排除</div></div>
+  <div class="stat green"><div class="n">2</div><div class="l">用户已确认</div></div>
+  <div class="stat"><div class="n">0</div><div class="l">目测项</div></div>
+</div>
+
+<div class="toolbar">
+  <div class="filters">
+    <button class="chip on" data-f="all">全部 70</button>
+    <button class="chip" data-f="red">🔴 高 6</button>
+    <button class="chip" data-f="amber">🟡 中 31</button>
+    <button class="chip" data-f="green">🟢 低 33</button>
+    <span class="count" id="visibleCount">显示 70 / 70</span>
+  </div>
+</div>
+
+<main id="list">
+  <noscript><div class="panel">本报告条目由内嵌数据渲染，需要启用 JavaScript（数据完全内嵌于本文件，无任何外部请求）。</div></noscript>
+</main>
+
+<!-- ================= 目测分区 ================= -->
+<div class="group-title">🙈 目测分区（eyeballOnly）</div>
+<div class="panel">
+  <div style="color:var(--muted);font-size:12.5px;margin-bottom:4px">
+    本轮目测项（eyeballOnly=true，无实测数值、注明目测，不与实测项混排、但参与上方严重度筛选）：<b class="num" id="eyeballCount">0</b> 项。
+  </div>
+  <div id="eyeballList"></div>
+</div>
+
+<!-- ================= 实测排除 ================= -->
+<div class="group-title">✅ 实测排除的疑点（<span id="exclCount">0</span>）</div>
+<div class="panel">
+  <div style="color:var(--muted);font-size:12.5px;margin-bottom:4px">
+    以下 <b class="num" id="exclCount2">0</b> 条为本轮各区域 suspectsExcluded（怀疑过但实测不成立 / 复核未复现 / 工具伪影 / 旧报告已修已排除）。列出以避免误以为要改。EX-nn 为本报告按原表顺序追加的编号；「来源」为区域证据目录名。
+  </div>
+  <table class="excl excl2">
+    <thead><tr><th style="width:52px">编号</th><th style="width:26%">疑点</th><th>实测结论（为何排除）</th><th style="width:56px">来源</th></tr></thead>
+    <tbody id="exclRows"></tbody>
+  </table>
+</div>
+
+<!-- ================= 建议修复顺序 ================= -->
+<div class="group-title">📋 建议修复顺序</div>
+<div id="fixOrderBody"></div>
+
+<!-- ================= 覆盖矩阵说明 ================= -->
+<div class="group-title">🧭 覆盖矩阵与口径说明</div>
+<div class="panel">
+  <div class="body" style="padding-left:0">
+    <div class="cov-h">① 主矩阵与种子</div>
+    <p class="cov-p">主题（light / dark）× 语言（zh / en / ja）× 视口（768 / 1024 / 1440 / 1920）为主组合（多数区域为 24 组合），另按条目设专项探针；种子态 {watching:7, remaining:5, watched:8, watched_years:4, tags:14}、视口高 900、devicePixelRatio 1。数值均为页面内 getBoundingClientRect / getComputedStyle / CSSOM 扫描 / 截图像素采样实测；复测端口 5368~5391（各条目标注具体端口）；证据文件在 <code>tmp/</code>（*.json / *.ndjson / *.mjs），截图在 <code>tmp/audit-shots/&lt;区域&gt;/</code>。</p>
+    <div class="cov-h">② 浏览器缩放近似（css-zoom / viewport-only）</div>
+    <p class="cov-p">Ctrl+= 实测（冒烟内自动探测，按 Control+= 与 Control+Add 前后对比）：devicePixelRatio 1→1、innerWidth 1440→1440 零变化，headless 下不生效 → 走 CSS zoom 近似（默认 css-zoom：html{zoom:level} + 视口 resize 为 W/1.25×H/1.25 补偿）。实测语义（探针 <code>tmp/_probe-zoom.mjs</code> 可复跑）：① innerWidth=1152，媒体查询与真实缩放一致；② getBoundingClientRect 值已含 zoom 因子（=屏幕物理像素）：aside.app-sidebar 210→262.5=210×1.25；③ fixed-px 元素渲染确实放大：注入 200px 洋红探针条，截图像素实测 200→250 物理px；④ 已知局限：flex/grid 均分元素在 root 空间被 fixed-px 兄弟挤占，物理尺寸小于真实 125% 缩放——.day-head-0 实测 119.28px vs 真实约 158.6px（126.9×1.25），故另提供 setZoom(level,{mode:'viewport-only'})：纯视口补偿不写 zoom，CSS-px 几何与真实缩放完全一致、gBCR 无需换算，适合纯布局/溢出审计；css-zoom 适合看放大观感。reload 后 lib 在 domcontentloaded 自动重放 zoom 样式；resetZoom(=setZoom(1)) 实测恢复 1440/169.42。全部写进 README 第 6 节。</p>
+    <div class="cov-h">③ 本轮口径（原样收录）</div>
+    <p class="stats-raw" id="statsRaw"></p>
+  </div>
+</div>
+
+<p style="color:var(--muted);font-size:11.5px;margin:20px 0 8px">单文件自包含 · 零外链 / 零外字体 / 零外图 · 浅深色跟随系统（prefers-color-scheme）· 支持打印（自动隐藏底栏与交互控件）</p>
+
+</div><!-- /wrap -->
+
+<!-- ================= 底部条 ================= -->
+<div class="bar">
+  <span class="info">已选 <b id="pickCount">0</b> 项<span id="pickList"></span></span>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn ghost" id="clearBtn">清空</button>
+    <button class="btn primary" id="copyBtn" disabled>复制回复</button>
+  </div>
+</div>
+
+<script type="application/json" id="audit-data">{"items":[
+{"id":"A-01","area":"顶栏迁移（任务B：等番/已看页第一卡控件上顶栏）","title":"任务B 顶栏迁移：承载机制与 ≤1100 断点降级方案设计（用户已确认，回复格式：改 A-01（方案N））","problem":"设计决策项（非缺陷）。等番/已看页第一卡（搜索框+标签筛选，已看页另有年份触发钮）需迁入共享顶栏。实测约束：28rem 搜索框（+标签+年份）只在 1920/1440 档放得下；1024/768 连 28rem 单独都放不下，且 header 无滚动、.app-content overflow:hidden（App.vue:157），硬塞必被裁切——两档必须降级。本轮仅设计未改码；「迁完两页 main 不残留第一卡、不横向溢出」属实施验收项，机制上由所选方案的清理机制+删卡实现。","measurements":"【条件】端口5371；脚本 tmp/audit-topbar-design.mjs（node scripts/run.mjs 执行），矩阵 24 组 = {zh,en,ja}×{1920,1440,1024,768}×{/remaining,/watched}，视口高 900、dpr1、light 为主，另 dark 抽查 zh@1440 两页（Δ=0，几何与主题无关）；种子态 remaining=5/watched=8/4 个年份/14 标签；无选中项、非批量（pageSelection 未渲染、pageActions 为基态：等番 5 图标/已看 2 图标——批量或选中会再加宽，本组数值为基态）。全部数值 getBoundingClientRect 实测，落盘 tmp/topbar-matrix.json（26 行）+ tmp/topbar-analysis.json，截图 tmp/audit-shots/TOPBAR/（7 张）。free=顶栏 contentW−可见子块宽和−gap×(块数−1)。【1920】root16，header 1680.02（侧栏 239.98 在流内），pad 24×2，gap 12，contentW=1630。zh 等番 heading 165.58+actions 183.86+utilities 245.22→free=1011.34；zh 已看 heading 253.98+actions 69.95+utilities 245.22→free=1036.85；三语两页 free=1011~1056。28rem=447.97。统一28rem+标签：ja 最大 447.97+155.84+2×12=627.8 ✓；已看再加年份：447.97+155.84+104.09+3×12=744.0 ≤ 1036.85 ✓。全放得下。【1440】root14，header 1230（侧栏 210），pad 21×2，gap 10.5，contentW=1186。zh 等番 free=644.05；zh 已看 free=666.13；en 644.57/682.53，ja 656.3/678.38（ja 标签钮 136.75、zh/en 112.25/112，年份 91.44）。统一28rem+标签：zh 525.25/en 525/ja 549.8 ≤ 各自 free ✓；已看三件套：zh 627.2（余38.9）/en 626.9（余55.6）/ja 651.7（余26.7）✓。全放得下，最紧 26.7px（ja 已看）。【1024】root14，header 814（侧栏 210 仍在流，≤900 才收），⋯菜单 28px 已替换图标组（≤1100），utilities 214.7，contentW=770。free：等番 364.55(zh)/365.07(en)/376.8(ja)，已看 286.88/303.28/299.13。统一 28rem 单独放需 402.5 → 三语两页全部放不下（缺 25.7~115.6px）。已看页现行 w-48(168px) 搜索框单独可容但与 28rem 统一设计不符。【768】root14，header 711.53（≤900：pad 14×2、侧栏收窄 56.47），⋯菜单 28px，时钟仍显（≤640 才藏），utilities 186.7~198.95，contentW=682。free：等番 292.3/292.82/304.55，已看 214.63/231.03/226.88。28rem 放不下（缺 98~198px）。【垂直】搜索框高 37.97@1920 / 33.5@≤1440，均 < h-14 顶栏 55.98/49，垂直无碍。【噪声】zh 等番@768 两次运行 free 287.3 vs 292.3（±5px），不影响任何档位结论。【结论】28rem 搜索框（+标签+年份）只在 1920 与 1440 档放得下；1024/768 必须降级。","severity":"medium","suggestion":"【承载方案（选一）】A（推荐）·pageControls store + markRaw 组件，与 pageActions 四件套同构｜idea：usePageStats.js 增设与 pageActions 完全同构的 pageControls = reactive({'/watching':[], '/remaining':[], '/watched':[], '/tags':[]}) + setPageControls/clearPageControls/usePageControls（仿 usePageStats.js:65-93）；两页用现有 watch(immediate,deep) 模式写入 {key, component: markRaw(页内定义的控件组件), props}：等番页一个含 28rem 搜索框+TagFilter 的控件组件，已看页含年份触发钮+搜索+TagFilter；v-model 仍绑 view 自己的 searchQuery/tagFilter/selectedYear——状态、过滤、fetch、年份 CRUD 逻辑全留 view（WatchedView.vue:599-660 原样不动），只把渲染入口移进顶栏；App.vue 在 .topbar-heading 与 .topbar-actions 之间（App.vue:193/197 之间）用 <component :is> 渲染，外套与 title-swap 同语言的 out-in 过渡；弹层继续 Teleport 到 body（现状已满足）；view onUnmounted 统一 clearPageControls（仿 WatchedView.vue:1581-1582；实施时顺手补上 RemainingView.vue:1583-1587 未清 pageActions 的既有隐患）。｜pros：与 pageStats/pageActions/pageSelection 心智完全一致（同一文件、同一读写形状、同一测试方式）；route key 天然隔离跨页残留；控件状态单一来源在 view，无状态提升/同步成本；「迁完 main 不残留第一卡」由 view 直接删卡实现。｜cons：store 里传组件比传纯数据重，必须 markRaw 防 reactive 代理组件实例；忘 clear 会跨页残留（可用 App.vue:870-873 现成 route.path watch 兜底清空）。‖ B ·Teleport 到顶栏挂载点 #topbar-controls｜idea：App.vue header 内加一个 <div id='topbar-controls'>（.topbar-heading 之后），两页把第一卡整行控件几乎原样包 <Teleport to='#topbar-controls'> 移过去；路由 fade out-in 时控件 DOM 随 view 自动卸载，无需清理代码。｜pros：生命周期零管理；view 模板改动最小、状态与菜单逻辑零搬家；不需要新 store API。｜cons：与 pageActions「view 写数据、App 渲染」模式不同构，顶栏两套并存；依赖 header 先于 router-view 渲染的 DOM 顺序（App.vue:159 早于 :349-355，成立但属隐式约定）；控件出现/退场跟随 view 的 fade，与 title-swap 动画不同步；「不残留」完全押在 Teleport 行为上，验收点隐蔽。‖ C ·具名插槽反转（不成立，仅记录排除理由）｜idea：让 view 通过 router-view 具名插槽把控件上插到 App.vue 顶栏。｜pros：无。｜cons：Vue3 <router-view v-slot> 是父→子方向（App 传插槽给路由组件），view 无法反向把自己的内容插进 App 的布局；强做只能靠 provide/emit 变通，本质又回到 A 的 store 传递且更复杂、更不可测。‖ 【≤1100 降级方案（选一）】D1（推荐）·搜索折叠 36px 图标、标签/年份 icon-only，展开走 Teleport 面板｜idea：断点与现有图标化断点对齐（style.css:3827-3828）：≤1100 搜索框换 36px 放大镜钮，TagFilter/年份触发钮 icon-only（36px），点搜索后用 Teleport 浮层面板展开输入（复用 pageActionsMenu 的 fixed+clamp 定位 App.vue:838-851 与 TagFilter 焦点归还模式 TagFilter.vue:198-204）。实测折叠态宽度=搜索36+标签36+年份91.44+3×10.5gap≈195px → 1024 档等番 free 364.55~376.8 ✓（余 170+）、已看 286.88~303.28 ✓（余 92+）；768 档等番 292.3~304.55 ✓、已看 214.63~231.03 ✓（余 20~36）。若标签钮保留文字（112.25~136.75），已看@1024 ja 295.69 ≈ free 299.13（余 3.4，太紧）——窄档标签必须 icon-only。｜pros：与现有「≤1100 图标化 + ⋯ 菜单」交互语言一致；1024/768 全语种两页实测都有正余量；搜索/筛选入口仍常驻可见，只多一次点击展开输入层。｜cons：搜索从直接输入变「点图标→面板输入」，高频路径变长；浮层面板需处理键盘焦点进出与 Esc 归还（有现成模式可抄）；已看页 768 档余量 20~36px，后续加控件就会溢出。‖ D2 ·≤1100 收进现有「⋯ 更多」菜单，扩展为筛选面板｜idea：把搜索/标签/年份并入 topbar-more 的 Teleport 菜单（App.vue:207-229 已有容器、键盘循环、Esc、外点关闭）：菜单顶部放搜索输入框，下方放标签多选与年份组（或二级面板）。实测 ⋯ 按钮 28px 常驻，1024/768 的 free 不受影响（214~377px 全部可用），全部档位可行。｜pros：复用现成菜单容器与全套 a11y；改动集中在 App.vue 一处；不占常驻宽度。｜cons：搜索变「先开菜单再打字」，与 28rem 主搜索心智落差大；menu 内嵌 menuitemcheckbox/年份 CRUD 层级深，读屏与焦点管理复杂；面板受菜单形态限制，放 28rem 输入框观感突兀。‖ D3 ·响应式双停靠（窄档控件回落正文第一卡）｜idea：>1100 控件在顶栏（承载A/B 任一），≤1100 时渲染回页面第一卡（matchMedia 或容器查询切换挂载目标/渲染分支）；「迁完 main 不残留第一卡」放宽为「>1100 不残留」。实测 768 档现状卡内控件行放得下——等番 392+112.25+2×10.5=525.25 ≤ 卡内可用约 653px，已看 ≈386px 更宽裕；卡内还有 toolbar-adaptive 容器查询三档兜底（style.css:1848-1885）。｜pros：窄屏搜索/筛选体验与现状完全一致、零退化；复用卡内已调好的布局与容器查询。｜cons：双渲染位置两套断点长期维护；与「main 区不得残留第一张卡」字面要求冲突，需产品侧确认放宽；承载A 下等于维护两个渲染分支，测试矩阵翻倍。‖ D4 ·压缩常驻（≤1100 搜索缩到 12rem=168px + 触发钮 icon-only）｜idea：所有控件保留在顶栏但压缩。等番@1024 zh 301.25 ≤ 364.55 ✓（ja 325.75 ≤ 376.8 ✓）；已看@1024 需年份也 icon-only（236.94 ≤ 286.88 ✓）；但已看@768 free 214.63~231.03 < 236.94 ✗，须连时钟一起让位（时钟 88.7px，≤640 才自动隐藏，768 属提前隐藏 style.css:3840）。｜pros：全部控件常驻可见、零点击成本；实现只是 CSS 宽度/显示切换。｜cons：168px 搜索框可见词元极少，与「28rem 视觉主体」产品设定直接冲突；768 已看页仍放不下要再牺牲时钟；三个 icon-only 钮全靠 v-tip 辨义，可发现性差。‖ 【recommendation】承载机制选【A：pageControls store + markRaw 组件】：与 pageStats/pageActions/pageSelection 构成同构四件套，状态与年份逻辑留守 view、只移渲染入口，弹层沿用既有 Teleport-to-body 纪律（header 是 .glass=fixed 包含块，控件内不得出现 fixed 子元素——现状三个控件弹层都已在 body，照旧即可）；卸载清理对齐 WatchedView.vue:1581-1582 先例并补齐等番页缺 clear 的隐患。断点策略与现有 ≤1100 图标化断点对齐：>1100（实测 1440/1920 档）两页完整控件组常驻顶栏——统一 28rem+标签在等番页最宽 ja 549.8px、已看页三件套最紧 ja 651.7px vs free 678.38（余 26.7px，可行但紧；若要求更稳，可在 ≤1536 隐藏已看页第二个计数徽章再释放约 55px）；≤1100（实测 1024/768 档，28rem 常驻差 26~198px、硬塞必被 overflow-hidden 裁切）采用【D1】：搜索折叠 36px 图标 + 标签/年份 icon-only，输入层走 Teleport 面板（全部 24 个组合实测余量为正：1024 档余 92~170px、768 档余 20~36px；标签钮此档必须 icon-only）。D2 作为追求最小改动的备选；D3 仅当产品确认「窄屏搜索体验零退化」优先于「main 区不残留卡片」；D4 不推荐（168px 输入体验差且 768 已看页仍放不下）。遗留说明：①「迁完两页 main 不得残留第一卡、不得横向溢出」属实施验收项，本轮只设计未改码；②实测基准为无选中/非批量态，批量模式会向 pageActions 追加 3~4 个图标（约 +106~138px）、选中项会在 heading 内追加徽章行——实施后需复测批量态宽度（>1100 档 1920/1440 有 644~1056px 富余，风险低）；③zh 等番@768 存在 ±5px 运行间噪声，不影响任何档位结论。‖ 【回复格式】改 A-01（方案N）","userConfirmed":true,"sourceTempIds":[],"eyeballOnly":false},
+{"id":"A-02","area":"等番/已看·分页栏","title":"「每页 XX 条」下拉菜单内容横向溢出玻璃面板右缘 60/68px，确定按钮伸出面板外（24/24 组合全复现，用户已确认）","problem":"light 主题、zh/en/ja × 1920/1440/1024/768 × RemainingView/WatchedView 全部 24 组合打开菜单后均复现：菜单盒 168×223（根字号 14px）/ 192×226（1920、16px），但 scrollWidth 226/258 > clientWidth 166/190，自定义行「数字输入框+确定按钮」横向溢出面板 60px/68px。根因：确定按钮被统一菜单规则 .app-menu-panel > div > button { width:100% }（src/style.css:3718-3719）命中，与固定宽输入框同排 nowrap（RemainingView.vue:264-267 / WatchedView.vue:288-291）：width:100% 按行内容盒宽解析（145/166px）且 shrink-0，行内容 10.5+63+7+145=225.5px（ja@1920: 12+72+8+166=258px）必然超出面板盒宽。.app-menu-panel 未设 overflow（实测 visible），确定按钮连同 hover 底色与点击热区伸出圆角面板右缘压在表格上，菜单开启期间该区域点击被按钮拦截。视口级四方向实测均无溢出；fixed 参照系偏差 0/0，Teleport 到 body 生效。附带实测：① ja 触发器内容 scrollWidth 189 > 内宽 184，被 .page-size-trigger overflow:hidden（style.css:3411-3425）裁 5px（zh/en 184/184 零余量）；② 菜单无条件向上展开（RemainingView.vue:867 / WatchedView.vue:806），注释声称「上方放不下就翻到下方」（RemainingView.vue:846 / WatchedView.vue:785）但翻转逻辑未实现——矮视口（复核探针 h=280 顶边 −1px、h=220 −61px，阈值随触发器滚动位置约 vh≲281；原测 h280 −28/h220 −88）菜单顶越出视口，常览权重（h≥350）不触发。severity=medium：24/24 复现、可视伪影明确且按钮热区覆盖表格，但交互仍可用。","measurements":"【条件】端口 5370（portChanged=false×3，复核端口 5391 同）、theme light、seed {watching:7, remaining:5, watched:8, watched_years:4, tags:14}、h=900、dpr1 headless Chromium；数据 tmp/pcs-matrix.json（第二轮 24/24、0 error）+ tmp/pcs-matrix-round1.json（含探针）+ 复核 tmp/verify-pcs-result.json；截图 tmp/audit-shots/PCS/ 共 43 张 + VPCS/。【根字号14px 组：1440/1024/768 × zh/en/ja × 两页 = 18 组数值全同】触发器 186×50（remaining 页实测 189.72×51 系点击后鼠标停留触发 .btn-base:hover scale(1.02) 的视觉缩放，布局宽仍 186）；菜单 168×223，remaining 页 rect=(262,186)（768 时 left=101），watched 页 rect=(262,22)；menu.scrollWidth/clientWidth=226/166 → 内部横向溢出 IX=60px；min-width:168px（style.css:3696）；overflow:visible；inlineStyle='left: 262px; bottom: 491px; --pop-origin-y: bottom; --pop-from-y: 6px'（watched 页 bottom=655px）。【1920 组（16px）：6 组全同】菜单 191.95~191.98×225.9~225.94，sw/cw=258/190 → IX=68px；min-width:191.99px。【视口溢出四方向】24 组全为负值（如 w1440-zh-watched：L−262/T−22/R−1010/B−655），无视口溢出；fixedRefDevBottom/Left 全部 0/0（含 ≤0.01 亚像素）→ Teleport 正确。【触发器内部溢出】ja 189/184 裁 5px（全宽度两页同）；zh/en 184/184 零余量。【菜单子元素解剖（zh@1440）】4 个菜单项 w=166 恰满；自定义行 w=166 scrollWidth=226：输入框 63px（w-[4.5rem]）+gap 7+确定按钮 145（width:100% 命中 style.css:3719，padding 11px 14px、font 12.25px，覆盖 btn-sm/btn-link 字号；高度仍 34px 来自 style.css:3375-3382）；ja@1920 行 sw=258（输入框 72+gap 8+按钮 166）。复核补充：按钮右端超出面板边框盒右缘 58.5px/内容盒 59.5px、溢出纯向右；菜单开启时在按钮伸出区 elementFromPoint 命中该按钮（点击被拦截），关闭后同一点命中 TABLE.record-table 的 TD/TR——确实压在表格上。【高度阈值探针】原测 h350 top=+50 贴合、h280 −28、h220 −88；复核（触发器 scrollIntoView 贴底）h350 +69、h280 −1、h220 −61——翻转缺失成立，具体阈值随触发器滚动位置变化。收尾 3 次 close 全部 {browserClosed:true, serverKilled:true, portClosed:true}。","severity":"medium","suggestion":"文件级修复思路（本阶段不执行）：1) 根因（一处 CSS）：src/style.css:3712-3731 的 .app-menu-panel > div > button { width:100% } 误伤分页菜单自定义行内确定按钮——为该按钮加专门类（如 .page-size-menu .pager-confirm-btn）并补规则 { width:auto; height:34px; padding:0 8px; font-size:11.5px }（复核修正：按当前级联实际为 34px 而非 30px，来自 style.css:3375-3382 后置 .btn-sm,.btn-link{height:34px}），或收窄原规则选择器；修后行内容≈141px < 168px，60/68px 溢出两视图同时消失。2) 可选互补：.page-size-menu 设 width:max-content（保留 min-width:12rem、加 max-width:calc(100vw - 16px)）；此时须把 RemainingView.vue:857 / WatchedView.vue:796 硬编码 MENU_W=200 改为打开时实测菜单宽度（实测 168/192，常量偏大 32/8px，当前因触发器在左未触发右缘贴边分支，属隐患）。3) src/style.css:3412：.page-size-trigger 的 width:186px 改 min-width:186px + width:auto，消除 ja +5px 裁切并给 zh/en 留余量。4) RemainingView.vue:846-868 / WatchedView.vue:785-806：按注释补齐「上方放不下翻到下方」——打开时若 r.top−8−实测菜单高（nextTick offsetHeight，勿用常量）<0 则改 top=r.bottom+8 向下展开，并同步内联 --pop-origin-y/--pop-from-y（RemainingView.vue:831-843）为向下方向。","userConfirmed":true,"sourceTempIds":["PCS-1"],"eyeballOnly":false},
+{"id":"A-03","area":"深色 chip 配色（TagFilter / TagSelector 组件）","title":"深色模式标签 chip 沿用浅色配色、文字 1.3~2.6:1 接近不可读：:global(.dark) 前缀规则被 Vue scoped 编译丢弃（TagFilter.vue:254 与 TagSelector.vue:212 同根因）","problem":"两个组件的深色反色规则都写成 `:global(.dark) .xxx` 前缀形式，被 scoped 编译丢弃（项目已知坑，DatePicker.vue:807-808 注释明确「scoped 里必须直接写 .dark .xxx，写 :global(.dark) 会被编译成空选择器」），深色下沿用浅色公式，深字压深底几乎不可读：① 等番页第一卡工具栏 TagFilter：选中标签后的可移除筛选 chip（.tag-filter-chip）浅色声明原样生效（--c-primary-dark 文字压 --c-primary/0.12 底），9.625px 文字在深色底上接近不可见；chip 是查看/移除当前筛选的唯一入口（REM-1）。② 各业务弹窗内 TagSelector：14 个「未选标签」chip 深字（color-mix 标签色 55% black，fg=color(srgb 0.5155 0.1467 0.1467)=rgb(131,37,37)）压深紫玻璃底，标签行肉眼不可辨（DLG-1）。","measurements":"REM-1（dark/zh/1440/种子，端口5382）：chip computed color=rgb(148,91,51)、backgroundColor=rgba(194,127,78,0.12)；截图像素采样 2.59:1（首轮 1.4~2.28:1——chip 内合成底随随机壁纸/玻璃层浮动，两次独立实测均远低于 4.5:1）。CSSOM 扫描 11 个 <style> 中含 tag-filter-chip 的规则恰 5 条（组件 2 条+style.css is-on/is-active），无任何非 active 的 .dark chip 规则。DLG-1（dark/zh/1440×900 与 768×1024/种子，端口5387，watching-add 等弹窗）：14 个 .tag-chip-off「计算前景 vs 渲染众数底」1.35~2.29:1（热血1.56/日常2.04/恋爱1.66/悬疑1.35/剧场版2.29），渲染极值法 1.32~2.12:1，768 同暗（1.36~1.80）；fontSize=9.625px。CSSOM 遍历 hasDarkChipRule=false。light 对照：TagSelector chip 3.79~4.97:1（日常 3.82、科幻 3.79 亦 <4.5，复核修正：原报 4.17~5.80 偏高，底色采样位差所致，不改变结论）；TagFilter chip 浅色对比另见 A-15。截图 tmp/audit-shots/REMV/chip-dark.png、dark-chip-full.png；tmp/audit-shots/DLGV/verify-dlg1-dark-1440.png、verify-dlg1-dark-768.png。","severity":"high","suggestion":"两处同法修复：① TagFilter.vue:254 深色 chip 规则移入 src/style.css（全局 `.dark .tag-filter-chip { color: rgb(var(--c-primary-light)); background: rgb(var(--c-primary-light)/0.16) }`）或改写为整体包裹 `:global(.dark .tag-filter-chip)`；② TagSelector.vue:212 把 `:global(.dark) .tag-chip-off` 改为 scoped 直写 `.dark .tag-chip-off`（照 DatePicker.vue:809 `.dark .dp-trigger` 写法）。同时建议把两类 chip 字号 0.6875rem 提到 ≥0.75rem（10.5px，与 V-13 档一致，与 A-15/A-30/A-47/A-52 一并处理）。","userConfirmed":false,"sourceTempIds":["REM-1","DLG-1"],"eyeballOnly":false},
+{"id":"A-04","area":"外观页（/#/appearance）","title":"自定义壁纸 URL 从 UI 无法应用（applyWallpaperChanges 是死代码，输入/回车均无效）","problem":"图源切到「自定义」后出现 URL 输入框（AppearanceView.vue:241），但输入任何地址（合法或非法）页面都毫无反应：没有应用按钮、无自动应用、无错误提示。注释声称「页面版改为图源/地址变化时自动调用」（AppearanceView.vue:621-623）的 applyWallpaperChanges 在整个 src/ 中只有定义、零调用点（grep 全库仅 1 处命中即定义本身；复核确认输入框只有 v-model、无 @change/@keyup.enter），custom 图源下「换一张」按钮又因 v-if=\"state.bgProvider !== 'custom'\" 被隐藏——自定义壁纸功能从 UI 完全不可达。对照组：引擎直调 applyCustomBackground() 1s 内正常应用（bgUrl 更新、body.with-bg=true），证明只缺 UI 接线。","measurements":"light/zh/1440/种子、外部请求全部拦截（端口5386）。page.fill('.tone-input','javascript:alert(1)') 后 900ms：state.bgUrl 仍为原随机端点（未变）、无新 toast；按 Enter 后同样无变化；改填合法同源地址后 1200ms：state.bgUrl 依旧不变、无 toast（localStorage 里 bgCustomUrl 已写入但 bgUrl 未变）；UI 切自定义后 .tone-input 出现、换一张按钮 count=0。截图 tmp/audit-shots/APP/ 与 VAPP/ 相关会话记录。","severity":"high","suggestion":"src/views/AppearanceView.vue：在输入框上加 @change/@keyup.enter（或对 state.bgCustomUrl 加 watch 防抖）调用 applyWallpaperChanges()；同时保留图源切换时的自动应用逻辑，避免死代码再次脱钩。","userConfirmed":false,"sourceTempIds":["APP-1"],"eyeballOnly":false},
+{"id":"A-05","area":"外观页（/#/appearance）","title":"「图片加载失败，请换一张」提示被 flex 挤压到 0px 宽，错误反馈不可见（768/1024 全语言 0px）","problem":"壁纸加载失败时预览区上方的红色提示 <p class=\"tone-danger … truncate\">（AppearanceView.vue:222）没有 shrink-0，被同一 flex 行（行 221 容器 min-w-0，两个按钮 shrink-0）挤压，在多数「语言×视口」组合下宽度塌缩为 0 或几十像素——用户几乎/完全看不到失败提示。","measurements":"getBoundingClientRect（light 与 dark 数值完全一致；外部图源不可达的降级态）。首轮：zh@768=0、zh@1024=0、zh@1440=115.5、zh@1920=131.89；en@768=159.47、en@1024=0、en@1440=23.36、en@1920=193.75；ja@768=0、ja@1024=0、ja@1440=39.88、ja@1920=323.73。复核 24 组合（个别档因换行临界点对字体度量敏感而不同，均属「被挤到不可读」区间）：zh@768/1024=0、zh@1440=115.5、zh@1920=131.89；en@768=169.67、en@1024=0、en@1440=69.11、en@1920=193.75；ja@768=0、ja@1024=0、ja@1440=85.63、ja@1920=323.73。即 768/1024 三语言均为 0px（元素在 DOM 中但完全不可见），截图中该行无红字。截图 tmp/audit-shots/APP/mx-light-ja-768.png、VAPP/mx-light-ja-768.png。","severity":"high","suggestion":"src/views/AppearanceView.vue:222 给该 <p> 加 shrink-0（或 min-w-max），或将「原链接预览/下载原图」按钮行与错误提示拆成两行（外层已 flex-wrap，利用换行而非挤压）。","userConfirmed":false,"sourceTempIds":["APP-3"],"eyeballOnly":false},
+{"id":"A-06","area":"外观页（/#/appearance）","title":"壁纸卡按钮行 en/ja 在 ≤1024 视口横向溢出约 1~116px，右端「元画像预览/下载」按钮被裁（ja@768 需横滚才可达）","problem":"壁纸卡第三行「原链接 preview/下载原图」容器（AppearanceView.vue:221，flex-1 justify-center min-w-0，无 flex-wrap）内的两个 shrink-0 按钮在 en/ja 文案较长时撑破容器：内容超出卡片右缘被主区裁剪，右侧按钮部分/整体不可见。复核修正溢出为两层：① 行容器内部溢出（scrollW−clientW）；② 下载原图按钮右缘超出卡片右缘——ja@768 按钮中心点在视口外（elementFromPoint 不命中，main 出现横向滚动条 scrollWidth 814 vs clientWidth 712，需手动横滚才能点）；en@1024 按钮超出视口 68.7px 但中心仍可见可点。zh 全矩阵无溢出，light/dark 数值相同。","measurements":"复核（tmp/verify-APP-3-4.mjs + verify-APP-4b.mjs，24 组合降级态）：① 行容器内部溢出：zh@768=+90、zh@1024=+46、en@768=+112、en@1024=+112、ja@768=+139、ja@1024=+166（1440/1920 全语言=0）；② 按钮超出卡片右缘：en@1024=+89.7px（原 +91 ✓）、ja@768=+116.2px（原 +117 ✓）、ja@1024=+1.2px（原 +73 未复现）；溢出幅度随视口/语言在换行临界点附近波动，约 1~116px。文档级 htmlScrollW−clientW=0（被祖先裁剪而非出滚动条）。截图 tmp/audit-shots/VAPP/mx-light-en-1024.png、mx-light-ja-768.png（右端按钮被裁可见）。","severity":"high","suggestion":"src/views/AppearanceView.vue:221 该行加 flex-wrap（或允许按钮换行/缩小 min-w），与同卡其它行的 flex-wrap 策略保持一致。","userConfirmed":false,"sourceTempIds":["APP-4"],"eyeballOnly":false},
+{"id":"A-07","area":"外观页（/#/appearance）","title":"浅色模式配深色壁纸时玻璃卡变中灰底，卡上静态 text-gray-800 标签字底几乎同色（实测 1.21~1.43:1）","problem":"浅色模式下液态玻璃卡是 0.62→0.30 白渐变压在壁纸上；壁纸接近黑色时卡角实测只有 rgb(122~130,119~126,136~144)。材质按钮标签写死 text-gray-800（AppearanceView.vue:21、28，computed color rgb(31,41,55)），不在自适应 --txt-* 体系内，压在中灰底上文字几乎消失。自适应引擎的卡片亮度模型 effYCard=0.3×1.0+0.7×wallY（useAppearance.js:438-440）此时算出 0.303，而实测卡角相对亮度约 0.22，模型高估导致派生的 --txt-card-500/700（实测 40 46 56 / 93 107 131）同样偏深。对照：深色模式同壁纸下浅字压深卡正常（约 14.7:1）。","measurements":"light/zh/1440，引擎应用近黑测试图 wall-dark.png（effYWall=0.00536，with-bg/adaptive 生效）：① 卡右下角空白区像素均值 rgb(122,119,136)（首轮 130,126,144，同一中灰紫区间）；② 「毛玻璃」标签区域像素分级采样 fg #9695a4 / bg #a7a5b1 → 1.21:1（首轮 1.43:1，两簇几乎重叠，本身即不可读佐证）；③ label computed color 仍为静态 rgb(31,41,55)，不随壁纸自适应；引擎派生 --txt-card-500='40 46 56'、--txt-card-700='93 107 131' 与首轮逐字一致。截图 tmp/audit-shots/APP/p3-darkwall-lightmode.png、VAPP/p5-darkwall-lightmode.png。","severity":"high","suggestion":"两类修法（可并用）：① AppearanceView.vue 材质按钮标签改用 --txt-card-700 等自适应变量，并修正 useAppearance.js:439 的线性混合为按 alpha 合成的真实亮度（0.3 白 over 壁纸）；② 给深壁纸场景加 text-gray-800 的自适应覆盖（仿 style.css:568 的 body.adaptive 覆盖法）。","userConfirmed":false,"sourceTempIds":["APP-5"],"eyeballOnly":false},
+{"id":"A-08","area":"首帧加载（TagsView / WatchingView）","title":"V-19 首帧门闩未覆盖标签页与追番页：有数据用户首帧看到「还没有标签/暂无」假空态（TagsView 整页空态+顶栏假 0 计数最重）","problem":"V-19 骨架只加给了 remaining/watched 两页（audit-README §5 明示 TagsView/WatchingView 无骨架）。① 标签页（重）：TagsView 没有 listLoaded 门闩与骨架（src/views/TagsView.vue:35 的 v-if=\"tags.length === 0\" 在数据未返回时即渲染），WASM 数据加载窗口内用户看到「还没有标签」空卡片+顶栏「共 0 个」（计数 watch tags.length，TagsView.vue:99-103），数据到达后整体弹入——既误导（像标签全丢了）又造成布局跳动；生产窗口取决于 WASM 解析与 IndexedDB 读取时长，弱网/首启更长。② 追番页（较轻）：列内「暂无」inline 提示（WatchingView.vue:54-57，v-if 列空即渲染）不受 dataLoaded 门闩保护——首帧窗口内 7 列全部显示「暂无」，数据到位后卡片突然替换；底部空状态引导卡已受 dataLoaded 保护正常。","measurements":"标签页：wasmInline.js 延迟 1.5s 确定性窗口内 firstSeen={emptyShown:true, emptyText:'还没有标签', rowsNow:0}，顶栏「共 0 个」；wall=249ms~1666ms 整个窗口空态可见，1698ms 数据到达 rows=14、顶栏变「共 14 个」；自然窗口 5 次实测 62/109/84/85/97ms（热 dev+暖 IndexedDB 下限，冷启动更长）；captureFirstFrame('/#/tags') captured:false（该路由无 .record-skeleton-row）。截图 tmp/audit-shots/TAGS/i1-firstframe-tags.png、TAGV/v1-firstframe-tags.png。追番页：captureFirstFrame('/#/watching') captured=false、skeletonCount=0、delayedRequests=1；复测窗口中段 empty-inline=7（7 列全「暂无」）、empty-state=0、卡片=0，数据到位后 7 卡、剩 3 列合法「暂无」；对照全新空库 seed:false empty-state=1 正常。截图 tmp/audit-shots/WCH/first-frame-watching.png、WCHV/w8-first-frame-watching.png。","severity":"high","suggestion":"参照 WatchedView/RemainingView 的 listLoaded 门闩做法：① TagsView.load() 加同款门闩，把「还没有标签」显示条件改为 listLoaded && tags.length===0（列表小无需骨架行）；② WatchingView 给周历列加同款门闩（fetchData 完成前列内不渲染 .empty-inline，改渲染细条骨架或占位），复用 V-19 的 .record-skeleton-row 模式（追番列内提示较轻量，也可接受现状）。","userConfirmed":false,"sourceTempIds":["TAG-1","WCH-8"],"eyeballOnly":false,"regressionArea":"首帧骨架（V-19 残余范围）"},
+{"id":"A-09","area":"/#/watched 表格（深色+悬停）","title":"深色悬停选中/勾选行时高亮被 .dark .list-item:hover !important 覆盖：选中 34%→10%、勾选红变主题紫，与斑马纹几乎不可分","problem":"深色主题下鼠标停留在已选中(is-selected)/已勾选(is-checked)行上时（.editable-cell 覆盖行内大部分区域，指针常驻行上），style.css:1547-1549「.dark .list-item:hover{background-color:rgb(var(--c-primary)/0.10)!important}」（及 style.css:1540-1542 的 .dark .editable-cell:hover）压过无 !important 的语义类（style.css:3902-3903：dark 0.34/0.28），勾选行色相由 danger 红变主题色（语义错乱）；左轨 box-shadow 同时翻转为 primary-dark 变体（style.css:3814-3825 与 3892-3903 的 :hover 变体，深底近似不可见）。用户勾选/选中后鼠标未移开时高亮几乎消失。light 有 :hover 变体（style.css:3814-3823、3892-3900）不受影响。V-27 静态值实测精确匹配（0.34/0.28）无回退，被击穿的是深色+悬停这一常态路径。","measurements":"dark/zh/1440×900（种子 8 行+全部年份、默认樱紫无壁纸，端口5383）配对实测：is-selected bg=rgba(124,58,237,0.34)（未悬停）→rgba(124,58,237,0.1)（悬停）→0.34（移开，~300ms 稳定）；is-checked rgba(239,68,68,0.28)→rgba(124,58,237,0.1)→0.28（红变紫确认）；box-shadow inset rgb(167,139,250) 3px→rgb(109,40,217) 3px。页面 styleSheets 实抓证实悬停时 .dark .list-item:hover 与两条语义规则同时命中、!important 胜出；行确有 list-item 类（WatchedView.vue:176）。5 个深色组合（zh/en/ja@1440、zh@1024、en@768）全部复现（壁纸取色主色 RGB 各轮不同、alpha 剧本一致）；light 对照 0.22/0.20 悬停不变。与假设深色基底 rgb(25,20,45) 合成：悬停态 vs 斑马 1.02~1.19:1（不可分辨）。另实测 td.editable-cell 悬停自身 bg=rgb(var(--c-primary)/0.15)（style.css:1542）。截图 tmp/audit-shots/WTD/hover-proof-dark-selected-hovered.png、WTDV/wtd1-dark-selected-hovered.png、wtd1-dark-checked-hovered.png、RGNV/t1-dark-zh-1440-hover-*.png。","severity":"medium","suggestion":"在 style.css 深色表格区补 :hover 变体（如 `.dark .record-table tbody tr.is-selected:hover{background-color:rgb(var(--c-primary)/0.34)}`、`.dark .record-table tbody tr.is-checked:hover{background-color:rgb(var(--c-danger)/0.28)}`），或将 style.css:1547/1540 两条 hover 规则加 :not(.is-selected):not(.is-checked) 排除语义行、或去掉 !important；同时统一深浅两套 .list-item:hover 的层叠策略。","userConfirmed":false,"sourceTempIds":["WTD-1","RGN-1"],"eyeballOnly":false,"regressionArea":"表格选中/勾选语义类（V-27）"},
+{"id":"A-10","area":"追番卡片·选中/勾选态","title":"选中/勾选卡片的 3px 左轨完全不渲染：border-l-3 不在 Tailwind 刻度被静默丢弃（运行时规则数=0）","problem":"卡片选中/勾选时模板写入 border-l-3 border-l-primary / border-l-danger（src/components/WatchingCard.vue:6,8），但 tailwind.config.js 只 extend 了 colors/animation/keyframes/gridTemplateColumns/borderRadius，未扩展 borderWidth（默认刻度 0/1/2/4/8 无 3），该类被静默丢弃——选中/勾选态只剩 15%/10~22% 背景淡色可辨，与表格行 V-27 用 box-shadow 实现的 3px 左轨不一致；与上轮 V-07（/18 被丢）同族。","measurements":"light/zh/1440/seed：选中卡 class 含 'bg-primary/15 border-l-3 border-l-primary'、aria-pressed=true，computed borderLeftWidth=0px（borderLeftColor=rgb(124,58,237) 已解析）、border-top/right=0px、仅 bottom 1px、outline/boxShadow none；勾选卡 borderLeftWidth=0px、borderLeftColor=rgb(239,68,68)、bg=rgba(239,68,68,0.1)。运行时样式表全量扫描含 'border-l-3' 规则数=0、CSSOM 0 条 border-width:3px。dark/zh/1440 复测同为 0px。一次复跑外观引擎给出非默认主色 rgb(156,55,63) 时 borderLeftWidth 仍 0px，不影响结论。对照 /#/remaining 表格行 is-selected：box-shadow inset rgba(109,40,217,~1) 3px 生效。截图 tmp/audit-shots/WCH/int-light-selected.png、int-light-checked.png、WCHV/w1-light-selected.png、w1-light-checked.png、FBKV/fbk4-watching-card-selected.png、fbk4-watching-card-checked.png。","severity":"medium","suggestion":"src/components/WatchingCard.vue:6,8 把 border-l-3 改为 border-l-[3px]（任意值语法），或在 tailwind.config.js extend borderWidth { 3: '3px' }；更稳妥是复用 V-27 表格行方案：选中/勾选用 box-shadow inset 3px 主题色/danger 色，不依赖 Tailwind 刻度，与表格行视觉对齐。","userConfirmed":false,"sourceTempIds":["WCH-1","FBK-4"],"eyeballOnly":false,"regressionArea":"选中/勾选态标识（V-27 卡片侧）"},
+{"id":"A-11","area":"行右键菜单危险项（三页共享 text-danger）","title":"右键菜单「删除/批量删除」危险项红字浅色对比 3.3~3.76:1 < 4.5（深色在 4.5 线两侧波动 4.46~4.67）","problem":"三个页面的行右键菜单危险项都用 text-danger（--c-danger=239 68 68，src/views/RemainingView.vue:310 / WatchingView.vue:346 / WatchedView.vue:330），字号 12.25px（非大字需 4.5:1）：浅色玻璃菜单底上 3.3~3.76:1 不达标；深色 4.46~4.67:1 正处 4.5 边缘随壁纸派生摆动，不构成稳定达标。批量右键菜单「批量删除」与卡片菜单「删除」同一样式族；普通菜单项两主题均正常（light 21:1 / dark ~13.96:1），问题只在 danger 色。","measurements":"light：等番页菜单底像素 (235,240,251)→3.3:1（复核众数底 (253,250,253)→3.63:1）；追番批量菜单 contrastOf 合成白底 ratio=3.76（passesAA=false，真实像素取样 3.56 只会更低）；已看/等番行菜单同 3.76。dark：4.46~4.67:1（bg (29,23,49)/(36,24,49)/(29,20,48) 各轮微差；等番轮 4.67 过线、追番 4.57/4.58——边缘波动）。danger 为固定 token 不随壁纸漂移。三页独立实测（WCH-5/REM-4/FBK-6）交叉一致。菜单几何：批量 167.91×135.43、行菜单 168×175~214.5、项高 37.1~39.5px。截图 tmp/audit-shots/WCH/rp2-card-menu.png、REMV/ctx-menu-light.png、ctx-menu-dark.png、FBKV/fbk6-dark-ja-contextmenu.png。","severity":"medium","suggestion":"浅色主题下菜单危险项文字改用 --c-danger-dark（rgb(220,38,38)，白底 ≈4.83:1；更深档 #b91c1c 估算 ≈5.7:1 更稳），深色保持现色；可在 style.css 给 .app-menu-panel .text-danger 加分主题规则实现，不动全局 token 以免波及实底按钮（「确认删除」白字实测 light 5.87~9.4:1 已达标）。","userConfirmed":false,"sourceTempIds":["REM-4","WCH-5","FBK-6"],"eyeballOnly":false},
+{"id":"A-12","area":"等番/已看·表格序号列与分页省略号","title":"深色模式序号列数字（.dark .text-gray-400=#7c8ba5）对比 3.4~4.26:1 < 4.5（even 亮斑马行最差，壁纸开启时 2.2~3.1 更差）；分页省略号同色","problem":"两页表格序号列未勾选态都用 text-gray-400，深色下解析为 #7c8ba5（与 WatchedView.vue:1634-1636 注释自述一致）。上轮只显式提亮了 .cell-date/.cell-notes（WatchedView.vue:1637-1651），序号列两页都漏掉。序号是可点击控件（点击即勾选该行），10.5px 小字压深色斑马行不达标；等番页分页「...」省略号同为 text-gray-400 同样不达标。浅色两处均正常（6.14~6.72:1）。","measurements":"已看页（dark/zh/1440/默认樱紫，端口5383）：序号 span fg=rgb(124,139,165)=#7c8ba5、fontSize=10.5px；渲染像素法逐行：is-odd 行（0.04 档）bg≈rgb(35,26,61)→4.70~4.74 过、even 亮档行（0.08 档）bg≈rgb(44,35,68)→4.24/4.26/4.25/4.26，min 4.24 <4.5 FAIL（原合成法 4.18 同为 even 档最差）；默认 bgEnabled=true 壁纸开时同列实测仅 2.2~3.1（bg≈rgb(82,73,106)），更差。等番页（dark/zh/1440，端口5382）：序号 fg 同 rgb(124,139,165)、行底采样 (51,41,72)→3.93:1（首轮 3.42:1）<4.5；分页省略号（追加至 40 条+每页 5 条→8 页出「...」）dark 同色、20.84×14、对分页卡底 (57,52,71) 3.47:1 <4.5。light 对照：两页 6.14~6.72:1 PASS。截图 tmp/audit-shots/REMV/idx-dark.png、ellipsis-dark.png、WTDV/wtd4-dark-table.png、wtd4-light-table.png。","severity":"medium","suggestion":"两页序号列（RemainingView.vue:151、WatchedView.vue:200）与等番分页省略号（RemainingView.vue:282）在深色下提亮一档（如 #94a3b8~#a9b6cc，量级 ≥8:1），仿 .cell-date/.cell-notes 的深色显式终值做法（或把 :class 的 text-gray-400 分支换成高对比灰阶）。","userConfirmed":false,"sourceTempIds":["REM-5","WTD-4"],"eyeballOnly":false},
+{"id":"A-13","area":"批量右键菜单/空白处右键菜单（追番页）","title":"Esc 关不掉批量菜单与空白菜单，反而退出批量模式并残留全屏遮罩拦截点击","problem":"handleKeydown（src/views/WatchingView.vue:609-617）的 Escape 分支只处理 showDialog/showDateDialog/showConfirmDialog/contextMenu/batchMode，未处理 batchMenu.show 与 emptyAreaMenu.show。批量菜单打开时按 Esc：批量模式被整体退出（勾选清空），但菜单面板与 z-[199] 全屏遮罩原样残留，之后页面上任何点击都被遮罩拦截，只能再点一次遮罩才能恢复；卡片右键菜单 Esc 可正常关，三套菜单行为不一致。","measurements":"light/zh/1440/seed（tmp/wch-reprobe2.json batchMenuEscAfter；复核 tmp/wchv-2.json）：按 Esc 后 menu=true、overlay=true 仍存在，顶栏按钮 aria-label 已从「取消批量选择」变回「批量选择」（批量模式已退）、勾选清空致菜单文案变「批量删除 (0)」、卡片 aria-pressed true→false；空白菜单按 Esc 后 emptyMenuEscClosed=false，elementFromPoint(720,450) 命中 'fixed inset-0 z-[199]' 遮罩，需再点一次空白才恢复；对照卡片菜单 cardMenuEscClosed=true。实际后果：首轮交互脚本残留遮罩连续拦截 6 个步骤各 30s 超时（tmp/wch-interact-run.log）。截图 tmp/audit-shots/WCH/rp2-batch-menu-esc.png、WCHV/w2-batch-menu-esc.png、w2-empty-menu-esc.png。","severity":"medium","suggestion":"在 WatchingView.vue:610-616 的 Escape 分支里补 closeBatchMenu()/closeEmptyAreaMenu()（并放在退出 batchMode 之前），三套菜单统一「先关菜单再退模式」的次序。","userConfirmed":false,"sourceTempIds":["WCH-2"],"eyeballOnly":false},
+{"id":"A-14","area":"周历·列内时段排序","title":"24:00/24:30 深夜时段不参与排序，周六列顺序颠倒为 23:00→24:30→24:00","problem":"parseTimeSlot（src/views/WatchingView.vue:935-943）对 'HH:mm' 解析后 `if (h > 23 || min > 59) return Infinity`（行 941），而深夜动画惯用的 24:00/24:30（数据层允许录入，保存校验只验 formTime 时钟盘产物）被当成 Infinity，两条 Infinity 相减为 NaN，相对顺序回落到 sort_order 插入序——同列内 24:00 与 24:30 永远乱序，也不排在 23:00 之后应的位置。timeSortAsc 默认 true（localStorage 无 'watching_time_sort'）。","measurements":"light/zh/1440/seed（种子特意含 23:00/24:00/24:30 分层）：周六列渲染顺序 SPY×FAMILY 23:00（pct 48%）→ 僕の心のヤバイやつ 24:30（无 pct）→ Lycoris Recoil 24:00（pct 100%），按时间应为 23:00→24:00→24:30；页面内同逻辑探针 23:00→1380、24:00/24:30→Infinity（Infinity−Infinity=NaN）；DB sort_order 23:00=2 → 24:30=3 → 24:00=7 与渲染顺序一致。截图 tmp/audit-shots/WCH/matrix-light-zh-1440.png、matrix-dark-zh-1440.png、WCHV/w3-light-zh-1440.png。","severity":"medium","suggestion":"parseTimeSlot 支持业界 24+ 时制：h>23 且 h<=29 时按 h*60+min（即 24:00=1440 分钟）参与排序，其余再归 Infinity；两处（WatchingView.vue:935 与可能同构的调用点）同改。","userConfirmed":false,"sourceTempIds":["WCH-3"],"eyeballOnly":false},
+{"id":"A-15","area":"/#/remaining 第一卡片工具栏（TagFilter 组件）","title":"筛选 chip 字号 9.625px 低于 10.5px 档，且浅色对比 2.4~3.85:1 < 4.5","problem":"light 主题下选中标签后的 chip 文字（0.6875rem=9.625px，TagFilter.vue:242）对比不足，且字号低于全站徽章统一后的 10.5px 档（V-13 曾把「内置」徽章从 8.75 提到 10.5，筛选 chip 未跟上）。chip 底为 primary/0.12 压玻璃卡，卡底随随机壁纸派生漂移，两次独立实测均 <4.5:1，不达标结论稳定。","measurements":"light/zh/1440/种子态：chip fontSize=9.625px/400、chip 47.5×23；首轮干净像素底 (237,203,223)/(248,202,232)→3.75/3.85:1；复核（端口5382）fg=rgb(165,82,54)、bg=rgba(195,104,74,0.12)、众数干净底 (209,160,166)→2.41:1——随壁纸浮动但均 <4.5。截图 tmp/audit-shots/REMV/chip-light.png。","severity":"medium","suggestion":"字号提至 ≥10.5px（与 V-13 档位一致）；浅色 chip 底改更淡（primary/0.08）或文字改更深档，使 ≥4.5:1。","userConfirmed":false,"sourceTempIds":["REM-2"],"eyeballOnly":false},
+{"id":"A-16","area":"/#/remaining 表格名称列（RemainingView.vue:177）","title":"浅色主题行悬浮时番剧名变 --c-primary，对比 1.9~2.5:1（选中行叠加悬浮更差）；深色不受影响","problem":"行 group:hover 时名称 span 从 gray-800 变 text-primary（group-hover:text-primary）。浅色下 --c-primary 亮端压浅底严重不达标；鼠标恰好停在选中行上时（is-selected 底 primary/22% + 名称 primary）恶化到 1.76~1.9:1。深色主题因 style.css:1376 `.dark .text-gray-800{…!important}` 压过 hover 类而不受影响（实测深色悬浮名 7.33~8.91:1 ✓）。","measurements":"light/zh/1440/种子：hover 第 2 行（Fantastic Children）后名称 span computed color=当次 --c-primary（首轮 rgb(207,158,89)→2.02:1；复核 rgb(70,161,225)、行底干净像素 (223,243,255)→2.47:1）；点击选中后叠加悬浮 tr bg=primary/0.22、底像素 (172,218,248)→1.9:1（首轮 1.76:1）。即使按默认樱紫 --c-primary(139,92,246) 估算也仅 3.54:1 <4.5。dark 对照：悬浮时名称仍 rgb(226,232,240)（!important 压过 hover 类）、7.33~8.91:1 ✓。截图 tmp/audit-shots/REMV/hover-light.png、hover-selected-light.png。","severity":"medium","suggestion":"浅色下名称 hover 色改用 --c-primary-dark（默认紫量级实测 6.65:1）或去掉换色、仅保留行底色/单元格底色反馈（.editable-cell:hover 已有 primary/8% 反馈）。","userConfirmed":false,"sourceTempIds":["REM-3"],"eyeballOnly":false},
+{"id":"A-17","area":"src/views/WatchedView.vue:390,352 + src/locales/*","title":"「全部年份」下清空弹窗把内部哨兵值 __all__ 直接显示给用户，且按钮实删全部记录、语义与文案不符","problem":"年份筛选为「全部年份」时打开「清空列表」弹窗，「清空当前年份」按钮把 selectedYear 原样插值进文案，显示内部哨兵值 __all__；点击后二次确认文案同样透出（清空后 toast 亦透出「__all__ 已清空」——复核附加发现）。更重的是语义误导：此时该按钮实际删除的是列表里全部记录（WatchedView.vue:1031-1036 yearItems=watchedList.map(i=>i.id)，'__all__' 时 fetchData 走 getAll），并非「当前年份」——用户以为只清一年，实际会清掉所有年份的已看记录（不可撤销）。","measurements":"light/zh/1440（复核端口5383，zh/en/ja 三语均透出）：按钮文本「清空当前年份 (__all__)」；确认弹窗正文「确定要清空「__all__」年份的所有已看记录吗？此操作不可撤销。」；en「Clear current year (__all__)」→「Clear all watch history for __all__? This cannot be undone.」；ja「現在の年を消去 (__all__)」→「__all__ 年の視聴履歴をすべて消去しますか？…」。实际点击确认：db 直查 watched 由 8→0（四个年份组全部被删、watched_years 保持 4），证实实删全部。截图 tmp/audit-shots/WTD/followup-clear-confirm-sentinel.png、WTDV/wtd2-*.png。","severity":"medium","suggestion":"selectedYear 为 '__all__' 时隐藏「清空当前年份」按钮或换用无年份参数的文案；给 i18n 传参前做哨兵→展示名映射（'__all__'→「全部年份」）。改动点 WatchedView.vue:389-391 与 :352（含清空后 toast 文案）。","userConfirmed":false,"sourceTempIds":["WTD-2"],"eyeballOnly":false},
+{"id":"A-18","area":"src/views/WatchedView.vue:170 + src/locales/{en,ja}.js:304","title":"空库（无年份分组）时 en/ja 空态标题句子残缺；__all__+0 条时哨兵再次透出","problem":"全新空库（无任何年份分组，selectedYear=''）时，空态标题直接用 watched.emptyYear 插值空年份：en 渲染成悬空介词句「No records for」，ja 渲染成缺主语的「の記録はまだありません」（句首「{year} 」为空）；zh 因语序碰巧可读。同一传参路径下，selectedYear='__all__' 且 0 条记录时还会渲染「No records for __all__」（哨兵再次透出；WatchedView.vue:170 三元只排除 '__unclassified__'）。","measurements":"seed=false 空库、1440×900（复核端口5383）：.empty-state-title 原文 zh=\" 暂无已看记录\"、en=\"No records for \"（悬空介词）、ja=\" の記録はまだありません\"（缺主语），均单行 h=21px；年份触发器显示兜底文案「全部年份/All Years/すべての年」证实 selectedYear=''。__all__+0 条对照（种子后 clearWatched 保留年份分组再选全部年份）：en 实测渲染 \"No records for __all__\"。截图 tmp/audit-shots/WTD/empty-light-en-1440.png、empty-light-ja-1440.png（ja 肉眼可见残句）、WTDV/wtd3-*.png。","severity":"medium","suggestion":"WatchedView.vue:170 在 selectedYear 为空串或 '__all__' 时改用不带 {year} 的文案键（复用 watched.emptyNoMatch 或新增「暂无已看记录」独立键）。","userConfirmed":false,"sourceTempIds":["WTD-3"],"eyeballOnly":false},
+{"id":"A-19","area":"标签页（TagsView.vue:19）","title":"浅色主题「该标签已存在」错误提示对比 3.5~3.6:1 < 4.5（WCAG AA 不达标）；深色 9.41 达标","problem":"light 主题、新建与已有标签重名时出现的 .tag-error（text-danger #EF4444、10.5px 小字）对比不足；深色下代码已特意提亮（.dark .tag-error #fca5a5，TagsView.vue:270-273 注释「danger 原色在深色底上偏暗」），浅色没有对应处理。错误提示是关键反馈信息，重名校验失败时用户不易读。","measurements":"截图像素实测（fg 取 computed color，bg 为截图 3×3 解码真值；audit-lib contrastOf 在本页不可靠已弃用）：light+默认壁纸 fg=rgb(239,68,68) bg=rgb(255,244,251) ratio=3.51（复核 3.56，patch 取位噪声内）；light+?nobg bg=rgb(253,248,255) ratio=3.59（复核 3.54）；dark+?nobg fg=rgb(252,165,165) bg=rgb(26,17,53) ratio=9.41 ✓。字号 10.5px（text-xs，根字号 14px）。数据 tmp/audit-tags-interact.json、tmp/audit-tags-fill2.json、tmp/verify-TAG-2.mjs；截图 i5-error-light-nobg.png、i4-error-dark.png、TAGV/v2-error-*.png。","severity":"medium","suggestion":"给浅色模式补一条 .tag-error 规则（参照深色的做法反向提深）：改用 danger 的 600/700 档（如 #DC2626/#B91C1C，对白色系卡底 ≥4.5:1），或在 style.css 沿用 text-danger 的自适应变量体系给浅色派生更深的 danger 文字色。","userConfirmed":false,"sourceTempIds":["TAG-2"],"eyeballOnly":false},
+{"id":"A-20","area":"/#/transfer 导入结果面板","title":"导入结果面板语义色文字对比不足 AA：浅色成功绿 2.4、失败红 2.7~3.4、accent 青 1.9~2.25（深色亦不稳，失败数实测 3.31）","problem":"导入/恢复结果面板的语义色数字与标题压在半透明 stat 小格与面板底色上，多处低于 WCAG AA 4.5:1——这些是小字号（12.25~14px）状态数字，是导入结果的关键信息。所用 --c-success(16 185 129)/--c-danger(239 68 68)/--c-accent(6 182 212) 为固定默认变量（src/style.css:28-34）不随壁纸漂移，浅色结论稳定；primary/secondary 随调色板变化（两轮实测 4.89~6.73 / 4.31~5.04）。复核重要修正：深色侧「达标」并不稳健——成功数/标题实测 5.42~5.88 过，但失败数 rgb(252,165,165) vs 小格底实测 3.31 <4.5（失败标题 4.74 勉强过），受壁纸透色影响，修复时不应默认深色安全。","measurements":"条件 light/zh/1440/种子+导入，底色取截图像素众数。浅色（原测/复核）：成功数 rgb(16,185,129) vs 小格底 2.40/2.35:1；失败标题 rgb(239,68,68) vs 面板底 2.94/2.70:1；失败数 vs 小格底 3.39/3.15:1；已看数 text-accent rgb(6,182,212) 2.25/1.93:1——全部 <4.5；等待更新数 text-secondary 4.31/4.89（边缘/过）；追番数 text-primary 6.73/4.89 达标。深色（复核端口5385）：成功数 rgb(110,231,183)=5.88、成功标题 5.42 达标；失败数 vs 小格底 rgb(116,88,106)=3.31 <4.5（原测 5.45/6.72 达标——随壁纸波动）。截图 tmp/audit-shots/TRF/bytable-ok-light.png、bad-panel-probe.png、bytable-ok-dark2.png、TRFV/trf1-*.png。","severity":"medium","suggestion":"src/views/ImportExportView.vue:609-612 的 .xfer-success/.xfer-danger 浅色分支改用已存在的深阶变量（--c-success-dark 5 150 105、--c-danger-dark 220 38 38，src/style.css:29/33）或按 ToastHost.vue:37-54 的 color-mix 压暗做法，并同步检查深色分支（失败数深色亦不稳）；byTable 三色（ImportExportView.vue:76/80/84 的 text-primary/secondary/accent）中 accent 固定值 #06b6d4 建议换 --c-accent 深阶或加深。","userConfirmed":false,"sourceTempIds":["TRF-1"],"eyeballOnly":false},
+{"id":"A-21","area":"外观页（/#/appearance）·壁纸 URL 安全闸","title":"壁纸 URL 安全闸只在启动时生效：运行时输入 javascript: URL 被原样应用与持久化，无任何非法 URL 提示（非 XSS）","problem":"sanitizeImageUrl/sanitizeBackgroundUrl（useAppearance.js:479-506）只在 initAppearance→normalizeAppearance（useAppearance.js:550-551）即「下次启动」时清洗；运行时 applyCustomBackground（useAppearance.js:1067-1072）只 trim 不过滤，非法 scheme 直通 state.bgUrl 并随 deep watch 原样写入 localStorage。UI 上不存在任何「URL 非法」反馈（含空地址：applyCustomBackground 对空串静默 return，pleaseEnterUrl 提示在死代码 applyWallpaperChanges 里永不触发）。注：因走 Image/CSS url() 加载语义，javascript: 不会执行（无 XSS），bg 最终因加载失败被引擎自动关闭——问题是「声明存在安全闸 + 应有输入反馈」与实测不符。","measurements":"light/zh/1440（复核端口5386）：引擎层 state.bgCustomUrl='javascript:alert(1)'; applyCustomBackground() 后 400ms：state.bgUrl === 'javascript:alert(1)'（原样直通）、body.with-bg=false、--bg-image=none，且已被 deep watch 原样写入 localStorage（persistedBgUrl 同值）；1.8s 后 bgFailed=true，toast 仅两条通用文案（「背景图加载失败，已自动关闭背景…」硬编码中文+「背景图片加载失败，请换一张」i18n），无一条提及 URL 非法；空串 applyCustomBackground() 后 600ms 无任何反馈。对照实验证实安全闸确在启动侧：javascript: 写入 localStorage 后 reload，normalizeAppearance 清空之（reload 后 state.bgCustomUrl=''）。","severity":"medium","suggestion":"src/composables/useAppearance.js applyCustomBackground：入口处调用 sanitizeBackgroundUrl，非法时 showToast 特定的「图片地址不合法」错误文案（zh/en/ja 三语补 key）；空串分支补 pleaseEnterUrl 提示。","userConfirmed":false,"sourceTempIds":["APP-2"],"eyeballOnly":false},
+{"id":"A-22","area":"引擎级壁纸失败 Toast（useAppearance.js:766）","title":"引擎级壁纸失败 toast 硬编码中文，en/ja 界面弹出中文提示（i18n key 已存在）","problem":"useAppearance.js:766（复核实抓 765-768）的 showToast(\"背景图加载失败，已自动关闭背景（可稍后在设置中重试）\") 未走 i18n；图源不可达路径（换一张失败后探测失败）必然触发，en/ja 界面直接显示中文，与相邻的 i18n toast 形成中外混杂。","measurements":"light/en/1440 全外部请求拦截（html lang=en 已核实）：点「Change Wallpaper」后 2.5s 页面同时存在 3 条 toast：硬编码中文一条+「Background image failed to load — try another one」+「Background changed」（均 i18n）；light/ja/1440 同测日文两条+同一条硬编码中文并列。i18n key appearance.bgLoadFailedAutoOff 三语均存在（zh.js:566 / en.js:569 / ja.js:569），762 行自愈分支在用。截图 tmp/audit-shots/APP/ 与 VAPP/p6-en-toasts.png、p6-ja-toasts.png。","severity":"medium","suggestion":"src/composables/useAppearance.js:766 改为 showToast(t('appearance.bgLoadFailedAutoOff'), 'warning')（key 已存在），无需新增 locales 文案。","userConfirmed":false,"sourceTempIds":["APP-6"],"eyeballOnly":false},
+{"id":"A-23","area":"外观页（/#/appearance）","title":"图源不可达降级态：预览区渲染 1144×308 空白大块+破图 alt 图标，占屏且无信息","problem":"启动换图失败后 state.bgUrl 仍是随机端点地址（_applyNewBg 先写 URL 再探测），预览块 v-if=\"state.bgUrl\"（AppearanceView.vue:247）照常渲染：<img> 加载失败 naturalWidth=0，浏览器显示破图图标和 alt「背景预览」，整个 tone-preview（aspect-ratio 2.4/1，1144×308）是一片空白色块，把「遮罩与模糊」等控件推到视口外，观感像页面坏了。","measurements":"light/zh/1440、外部请求全拦截、启动后 2.5s（复核一致）：state.bgUrl='https://t.alcy.cc/ycy?t=…'、bgFailed=true、body 无 with-bg、--bg-image=none；.tone-preview rect 精确 1144×308、背景 rgba(255,255,255,0.4)、aspect-ratio 2.4/1；预览 <img> 存在且 complete=true、naturalWidth=0、alt='背景预览'（破图图标可见）；toast「背景图片加载失败，请换一张」。截图 tmp/audit-shots/APP/wp-degraded-startup.png、p3-danger-light.png、VAPP/p7-degraded-startup.png。","severity":"medium","suggestion":"AppearanceView.vue:247 预览块条件改为 v-if=\"state.bgUrl && !bgFailed\"（或 bgFailed 时显示占位说明替代空框）；更根本的是引擎在探测失败后清空/标记 bgUrl，避免「失败 URL 仍驱动 UI」。","userConfirmed":false,"sourceTempIds":["APP-7"],"eyeballOnly":false},
+{"id":"A-24","area":"外观页（/#/appearance）","title":"自定义图源设置在 reload 后丢失：provider 被重置为 alcy，UI 与已存壁纸地址自相矛盾","problem":"PROVIDERS 表（useAppearance.js:45-58）不含 'custom'，normalizeAppearance 的 `raw.bgProvider in PROVIDERS` 校验（useAppearance.js:549）在每次启动时把持久化的 custom 丢回默认 alcy；而 bgUrl/bgCustomUrl 原样保留。结果：刷新后 UI 显示图源=Alcy、显示「换一张」按钮、自定义输入框消失，但背景仍是用户自定义地址——用户点一下「换一张」就会被随机图悄悄覆盖。","measurements":"light/zh/1440（复核端口5386）：引擎设置 provider=custom + 本地图 wall-dark.png 应用成功（with-bg=true，localStorage bgProvider='custom'）后 reload：state.bgProvider 与 localStorage banager_appearance.bgProvider 均回到 'alcy'，bgUrl/bgCustomUrl 仍为自定义地址（失败的自愈换图随后把该地址恢复回来，bgFailed=false）；UI 实测下拉框文本 'Alcy（默认｜图质最佳）'、.tone-input 消失（count=0）、换一张按钮可见（count=1）。","severity":"medium","suggestion":"useAppearance.js:549 白名单加入 'custom'（bgProvider==='custom' 时接受），或在 normalize 时把 custom 连同 bgCustomUrl 一并清除以保持一致；倾向前者，保留用户设置。","userConfirmed":false,"sourceTempIds":["APP-8"],"eyeballOnly":false},
+{"id":"A-25","area":"外观页（/#/appearance）","title":"浅色模式下毛玻璃/液态玻璃按钮 hover 反馈失效（全局 !important 规则压死 hover:border-primary/40），深色正常","problem":"style.css:553-555 `html:not(.dark) body.adaptive .border-primary\\/20 { border-color: rgb(var(--c-primary-dark)/0.28) !important }` 是为表格等场景加的全局兜底，但它同样命中外观页两张材质卡按钮（idle 类含 border-primary/20），带 !important 后 hover:border-primary/40 永远无法生效——浅色模式下悬停两张材质卡毫无视觉反馈（border/背景均无变化）。深色模式不受该规则影响，hover 正常（0.2→0.4）；对照同页 .btn-neutral hover 正常。","measurements":"light/zh/1440（复核以 .frost-preview.closest('button') 精确定位）：page.hover 后 matches(':hover')=true，但 borderColor 前=后=rgba(109,40,217,0.28)（--c-primary-dark/0.28），backgroundColor 前后均透明、backgroundImage 均 none；dark/zh 同测：hover 前 rgba(124,58,237,0.2) → 后 rgba(124,58,237,0.4)（正常）；对照组 .btn-neutral hover 边框 0.18→0.3 正常。","severity":"medium","suggestion":"style.css:553 规则收敛作用域（如排除 .glass 卡片内按钮，或去掉 !important 改为更精确选择器），让模板里的 hover:border-primary/40 在浅色模式恢复生效。","userConfirmed":false,"sourceTempIds":["APP-10"],"eyeballOnly":false},
+{"id":"A-26","area":"外观页（/#/appearance）","title":"降级态红字「图片加载失败」浅色对比 2.3~2.6:1（纯色上限约 3.5:1）< 4.5；深色达标","problem":"tone-danger 用 text-danger（red-500 #EF4444，10.5px 小字）直接压在浅色玻璃卡上，浅色模式下远低于 4.5:1（抗锯齿稀释后实测 2.3~2.6:1，纯 #EF4444 对 bg 理论上限约 3.47:1）；深色模式 .dark .tone-danger 提亮为 #fca5a5 后达标（4.83~6.74:1）。","measurements":"条件同降级态（外部请求全拦截），sharp 像素分级采样：light computed color=rgb(239,68,68)、红度分级 fg #f37375/bg #fddfe7→2.25:1，距离分级 fg #f37375/bg #fef1fa→2.55:1（原测 2.42:1 同区间）；dark computed color=rgb(252,165,165)、像素采样 fg #d58b91/bg #1a1136→6.74:1（红度分级 4.83:1），均 ≥4.5 达标。字体 10.5px 非 WCAG 大字，按 4.5 要求。","severity":"medium","suggestion":"浅色模式把 tone-danger 文字加深（如 red-700 #B91C1C，对白底 5.9:1）或在 style.css 加 html:not(.dark) .tone-danger 覆盖；深色保持现状。","userConfirmed":false,"sourceTempIds":["APP-12"],"eyeballOnly":false},
+{"id":"A-27","area":"ClockPicker.vue / AppSelect.vue / TagFilter.vue（各弹窗内）","title":"选择器面板开着按一次 Esc 会连同宿主弹窗一起关掉（DatePicker 无此问题），焦点不归还触发器","problem":"在业务弹窗里打开 ClockPicker 表盘（或星期 AppSelect 下拉）后按 Esc 想只收起面板，结果整个弹窗（含已填写的表单内容）一并被丢弃：面板的 document keydown 监听不 stopPropagation 且为冒泡级（ClockPicker.vue:224-226、AppSelect.vue:81-83），弹层关闭后事件继续冒泡到各页的 document 级 Esc 处理把 showDialog 也置 false。DatePicker.vue:486-492 有 e.stopPropagation()（capture 阶段注册），行为正确形成同应用内不一致；TagFilter.vue:199-204 是同类未阻断位置（等番页批量模式下 Esc 连批量模式一起退出）。ClockPicker 关闭后焦点丢到页面（未归还触发器）。","measurements":"实测（1440/zh/light+dark×zh/en/ja 6 循环，端口5387，页内 rAF 轮询）：ClockPicker 面板打开按一次 Esc → 6/6 bothClosedByOneEsc=true（panelGoneAt 81~202ms；宿主弹窗元素 456~682ms 移除，重开弹窗后表单内容 formLost=\"\" 证实同一 Esc 已把 showDialog 置 false 并丢弃表单）；焦点落在 DIV 未归还触发器。AppSelect 同样 6/6 true。DatePicker 对照：panelGoneAt=491/566ms、dialogGoneAt=null（弹窗保留）、focusAfter=BUTTON.dp-trigger。TagFilter（等番页批量模式）：Esc 后 tagPanelGoneAt=1ms 且 batchModeStillAfterEsc=false。代码核实：三处均冒泡级 document keydown 无 stopPropagation；DatePicker 有 stopPropagation 且 capture 注册。","severity":"medium","suggestion":"ClockPicker.vue:225 与 AppSelect.vue:82 的 Escape 分支加 e.stopPropagation()（与 DatePicker.vue:489 一致，建议同为 capture 监听），关闭面板后把焦点还给触发器；TagFilter.vue:200 同步处理。","userConfirmed":false,"sourceTempIds":["DLG-2"],"eyeballOnly":false},
+{"id":"A-28","area":"ClockPicker.vue（追番添加/编辑、移至已看弹窗内）","title":"ClockPicker 底部「手动输入/确定/清空」硬编码中文，en/ja 界面显示中文（违反模板文案必须走 tt() 硬规则）","problem":"模板里三个可见按钮直接写死中文（ClockPicker.vue:332 `{{ '手动输入' }}`、:335 `确定`、:338 `清空`），未走 tt()，违反仓库「模板可见文案必须走 tt()」硬规则（AGENTS.md:122；DatePicker.vue:150 注释亦载）。en/ja 用户打开时间表盘面板即看到中文按钮；所需三语 key 均已存在。","measurements":"en 与 ja（light/1440 与 768，12/12 组合一致，端口5387）实测面板底部按钮文本均为 [\"手动输入\",\"清空\"]（确定按钮在手动输入态）；同屏其余文案均为对应语言（弹窗标题 en=Add Show / ja=作品を追加）。可复用 key：'showDialog.manualInput'（zh.js:217/en.js:220/ja.js:220）、'common.confirm'（zh.js:38/en.js:41/ja.js:41）、'common.clear'（zh.js:47/en.js:50/ja.js:50）。截图 tmp/audit-shots/DLG/clock-hardcoded-ja.png、clock-hardcoded-en.png、DLGV/verify-clock-768.png；数据 tmp/audit-dlg-matrix.json footBtns。","severity":"medium","suggestion":"三个按钮改走 tt()：'手动输入'→tt('showDialog.manualInput')，确定→tt('common.confirm')，清空→tt('common.clear')（三语 key 均已存在，无需新增文案）。","userConfirmed":false,"sourceTempIds":["DLG-3"],"eyeballOnly":false},
+{"id":"A-29","area":"ClockPicker.vue 表盘（追番添加/编辑、移至已看弹窗内）","title":"表盘刻度数字对比不足：分钟内圈 light 1.78~1.87 / dark 1.46~1.48:1（渲染态 opacity 实为 0.35），深色小时数字 2.61~2.79:1 同样不达标","problem":"表盘内圈 12 个分钟数字（00~55）为 9px、渲染态 opacity 实为 0.35（ClockPicker.vue:418-421 .clock-num.is-dim 的 0.35 在默认「选小时」段覆盖 :414-417 的 0.55——复核修正），压在 50% 白色底盘上，两主题都远低于 4.5:1，用户读不清分钟刻度值。复核修正②：原报「外圈小时数字正常（dark 14.45:1）」不成立——50% 白盘压深色面板后实际底色≈rgb(140,137,148)，dark 小时数字渲染实测 2.61~2.79:1 同样不达标（问题比原报更广）；light 小时数字 6.38~10.07 正常。未选中时间段大字（.clock-digit opacity 0.45）light 2.32 / dark 3.79:1 亦弱。","measurements":"实测（1440/zh，种子，面板打开态，渲染像素法，端口5387）：dark 分钟数字 1.46~1.48:1（原合成法 2.82:1，opacity 修正后更差）、light 1.78~1.87:1（原 1.90）；fontSize=9px、computed opacity=0.35。dark 小时数字 2.61~2.79:1、light 6.38~10.07。未选中段大字 vs 面板：dark 3.79 / light 2.32。数据 tmp/audit-dlg-clocknum.json、tmp/verify-DLG-4.mjs；截图 tmp/audit-shots/DLG/OPEN-clockpicker-open-dark-1440.png、DLGV/verify-clock-open-dark-1440.png。","severity":"medium","suggestion":"分钟数字不用 opacity 弱化，改用不透明但降饱和的颜色（如 light 用 #4b5563、dark 用 #cbd5e1）保持层级；深色小时数字需同步复核（白盘压深面板后对比不足，可降低白盘不透明度或改数字色）；.clock-digit 未选中态 opacity 从 0.45 提到 ≥0.65 或改用文字色灰阶。","userConfirmed":false,"sourceTempIds":["DLG-4"],"eyeballOnly":false},
+{"id":"A-30","area":"TagSelector 组件（各业务弹窗内，两主题一致）","title":"已选标签 chip 白字压 500 级标签实色仅 3.53~3.76:1（<4.5:1），字号 9.625px","problem":"勾选标签后的 chip-on 是白字压标签自身 color（TagSelector.vue:174-177，font-size 0.6875rem:166），常用标签色为 500 级高饱和色，白字对比不足；两主题数值完全相同（dark/light 同值），属系统性风格问题，非深色独有。与本项目 Toast 的既有修复先例同类（EXCL-03：白字压 400 级渐变曾 1.67~2.77:1，后用 color-mix 压深到 ≥4.7:1）。","measurements":"实测（1440/zh，勾选 热血/恋爱 后，端口5387）：白字 vs rgb(239,68,68)=3.76:1、白字 vs rgb(236,72,153)=3.53:1，fontSize 9.625px（dark/light 同值），与清单数值逐项一致。数据 tmp/audit-dlg-chip3.json、tmp/verify-DLG-1.json onChips 段；截图 tmp/audit-shots/DLGV/verify-dlg1-dark-1440-selected.png。","severity":"medium","suggestion":"chip-on 底色改用 color-mix(in srgb, var(--tag-color) N%, black) 压深（参照 ToastHost.vue 注释里的做法，N 取到最差色相 ≥4.5:1），或文字改深色；字号与 A-03/A-15 一并提到 ≥10.5px。","userConfirmed":false,"sourceTempIds":["DLG-5"],"eyeballOnly":false},
+{"id":"A-31","area":"全局 Toast（src/components/ToastHost.vue + src/style.css:2645-2668）","title":"Toast 入场动画双重播放（Vue enter + animate-slide-down 竞态）：首帧/程序触发时高概率「滑入→闪没→再淡入」；离场节点多滞留约 150ms","problem":"toast-item 同时挂着 Vue <transition-group name=\"toast\"> 的 enter（0.4s spring）和 Tailwind animate-slide-down（0.3s，keyframes 含 opacity 0→1，tailwind.config.js:36,62-65）。复核修正触发条件：「每次通知必现」不成立——是触发时序竞态：全新 reload 后首次 toast、经 page.evaluate 直呼 showToast 时 11 次中 9 次复现（Vue enter 跑完后 slide-down 才起播，把 opacity 拉回 0 再放一遍）；真实 UI 事件路径（4 次）动画自元素创建即应用、opacity 单调无闪没。6 矩阵格中 5 格清晰复现 dip。离场滞留子声明成立但量级修正：removeToast 后节点 352ms 才从 DOM 消失，总时长 300ms vs 设计 200ms，即多滞留约 150ms（非 300ms）。","measurements":"light/zh/1440（端口5388，getAnimations+getComputedStyle 每 60ms 采样）：复现时序 t≈401-469ms opacity 首达 0.95（期间元素带 .toast-enter-active 且 animationName='none'）→ t≈505-541ms .toast-enter-active 被 Vue 移除的同一采样帧 CSSAnimation slide-down 以 ct=0 起播、opacity 瞬间回落 0.000 → 772-864ms 重新到 1.0，入场总时长约 0.77-0.86s（设计 0.4s）；首轮采样 13ms op=0 → 460ms 0.998 → 525ms 0.000 → 910ms 1.000。因果验证：注入 .toast-item{animation:none!important} 后 opacity 单调 0→1（0.95 于 231ms，无二次淡入）。真实 UI 路径（remaining 行内编辑非法日期回车 4 次）：animationName 首帧即 slide-down、opacity 单调。源码 ToastHost.vue:14、style.css:2645-2668、tailwind.config.js 均核实。","severity":"medium","suggestion":"二选一：① 删掉 ToastHost.vue:14 toast-item 上的 animate-slide-down 类，入场只留 Vue transition-group（enter-from 已含位移+透明度）；② 反之去掉 .toast-enter-active/.toast-enter-from，只留 animation。保留两套必然存在竞态窗口。","userConfirmed":false,"sourceTempIds":["FBK-1"],"eyeballOnly":false},
+{"id":"A-32","area":"全局 Toast（src/components/ToastHost.vue:14-16）","title":"长无空格 token（URL/英文长词）撑破 toast：文字越界视口最高 1470px，关闭按钮被推出视口不可点","problem":"toast 消息 span 是 flex-1 且未设 min-w-0/换行兜底，overflow-wrap/word-break 均为 normal：遇到无空格长 token（典型：错误信息里的 URL、长英文词）不换行，把 span 撑到 ~1500-1809px，文本画出 336px 的 toast 盒子直抵视口外被裁掉，关闭按钮（DOM 上排在 span 之后）被推到视口外完全不可点。中文/日文长句正常（CJK 可断行）。","measurements":"light/zh/1440（端口5368/5388）：首轮 toast 盒 w=336、right=1419（视口内）；span w=1809.1、right=2909.6（越视口 1469.6px）；close 按钮 x=2920.1、visibleInViewport=false；computed overflow-wrap:normal、word-break:normal、overflow:visible。复核：span w=1480.9、right=2581.4、越出 1141.4px（消息更短故比例一致）、close x=2591.9 不可见。对照：中文 204 字折 10 行、日文 225 字折 11 行，均锁在 336px 内 spanOverflowX=0；768×dark×ja 亦不溢出。截图 tmp/audit-shots/FBK/toast-longtext-settled-light-zh.png、FBKV/fbk2-longtoken-light-zh.png（红 toast 文字越过右缘）。","severity":"medium","suggestion":"给 .toast-item 的消息 span 加 min-w-0 并在 ToastHost.vue:14 追加 break-words（overflow-wrap:anywhere 最稳），使长 token 在 336px 内强制断行；注意勿用 opacity 式弱化（沿用现有对比度结论）。","userConfirmed":false,"sourceTempIds":["FBK-2"],"eyeballOnly":false},
+{"id":"A-33","area":"批量模式表头勾选框（RemainingView.vue:58-64 / WatchedView.vue:132-136）","title":"表头「全选」勾选框没有半选态：勾了 2/5 与 0 勾选视觉完全相同","problem":"表头 checkbox 的类与 aria-checked 只按 isAllChecked 二态切换（'bg-primary border-primary' : 'border-gray-300 bg-white/80'；aria-checked true/false），未实现 indeterminate/半选。部分勾选时用户无法从表头分辨「全没选」和「选了一部分」，只能逐行数（顶栏「批量删除 (N)」是唯一线索）。","measurements":"light/zh/1440 钉住外观（banager_appearance 置 bgEnabled:false/paletteMode:manual，端口5368/5388）：勾 2/5 时表头 aria-checked=\"false\"、bg=rgba(255,255,255,0.8)、border=rgb(209,213,219)、无内部 svg——与 0 勾选逐项相同；全选后 aria=\"true\"、bg=rgb(124,58,237)、svg=1。aria-indeterminate 属性全程无值（role=checkbox 的是 div）。768×light-zh 同表现（14×14px）。watched 页默认年份筛选下仅 1 行无法摆出部分勾选态（运行时验证 1/1=全选态正常；两处源码级一致）。截图 tmp/audit-shots/FBK/batch-half-pinned.png、batch-3of5-remaining.png、FBKV/fbk3-remaining-2of5-light-zh.png。","severity":"medium","suggestion":"表头（remaining/watched）与顶栏「全选」动作一致化：checkedIds 非空但非全选时置 aria-checked=\"mixed\" 并补视觉短横线（如 bg-primary 内嵌 8×2px 白条），保持全选=对勾、半选=横线、空=空白。","userConfirmed":false,"sourceTempIds":["FBK-3"],"eyeballOnly":false},
+{"id":"A-34","area":"行右键菜单键盘导航（三页 + 空白/批量菜单）","title":"三个行右键菜单无菜单语义、无焦点管理、无方向键导航（同站顶栏菜单两套标准）","problem":"行右键菜单面板无 role=\"menu\"、菜单项无 role=\"menuitem\"，打开后焦点不移入菜单（仍在页面根/BODY），方向键不做项间移动，键盘用户只能靠 Tab 穿过整页控件。而同站顶栏「更多」菜单（App.vue:838-869：role=menu+打开即 focus 第一项+ArrowUp/Down 循环+Esc 还焦）、年份菜单、每页条数菜单都是完整实现——同一「菜单」交互两套标准。空白区右键/批量右键菜单（WatchingView.vue:359-390）项上有 role=\"menuitem\" 但面板 role 仍缺（源码级核实）。Esc 关闭本身可用。","measurements":"light/zh/1440、dark/ja-1440、light/zh-768 三格一致（端口5388）：watching 行菜单面板 getAttribute('role')=null、5 项 role=null；打开后 document.activeElement=BODY/页面根 DIV；按 ArrowDown 后焦点仍在 BODY；Escape 3/3 次关闭（~400ms 含离场动画）。dark/ja-1440 独立实例同结果。remaining/watched 行菜单面板 role=null 亦实测。对照顶栏更多菜单（1024 视口实测）：role=menu、打开即 focus 首项、ArrowDown 正常移动。截图 FBKV/fbk6-dark-ja-contextmenu.png。","severity":"medium","suggestion":"对齐 App.vue 顶栏菜单的做法：面板加 role=\"menu\"，placeContextMenu 后 focus() 第一项，菜单容器加 @keydown 处理 ArrowUp/Down（循环）+ Escape（还焦到触发行）；三个行菜单 + 空白区/批量菜单统一补齐。","userConfirmed":false,"sourceTempIds":["FBK-5"],"eyeballOnly":false},
+{"id":"A-35","area":"侧栏收起态气泡可达性（src/App.vue:60-63,143-152）","title":"≤900px 图标模式下导航项无可访问名称，侧栏气泡从未用 aria-describedby 关联触发元素","problem":"收起/窄屏时导航项只渲染图标（nav-label span 由 v-if 移除，App.vue:74），且 router-link 无 aria-label——读屏得到一个空名链接。悬浮气泡 #sidebar-tip 有 role=tooltip 但触发元素从不设置 aria-describedby（App.vue:425；v-tip 与时钟气泡都有关联，唯独侧栏气泡没有，对照 useHoverTip.js:230-232）。回归重点「≤900px 气泡方向」本身实测正确（见实测排除），本条是同一区域残留的可访问性缺口。","measurements":"768×dark-zh（端口5388）：6 个 a.nav-item 抽样前 3 个均 textContent=\"\"、aria-label=null、aria-describedby=null、querySelector('span.nav-label')=null；对照底部主题按钮有 aria-label。1440 展开态 textContent=\"正在追番\"、nav-label 存在。气泡方向/几何回归通过：768 下 navTip 方向 right、gapH=8.0px、tip 右缘 121.5 < 768、字号 11.5px。截图 FBKV/fbk7-tip-768-dark-zh.png。","severity":"medium","suggestion":"收起态给导航 router-link 绑定 :aria-label=\"tt(item.labelKey)\"（或 showSidebarTip 时同步 aria-describedby=sidebar-tip 并在 hide 时还原，与 v-tip 的 releaseDescribedby 同法）。","userConfirmed":false,"sourceTempIds":["FBK-7"],"eyeballOnly":false},
+{"id":"A-36","area":"语言菜单（src/App.vue:294-296）","title":"语言菜单是全站唯一未接入统一 app-menu-panel 规范的下拉菜单（明显更小更挤）","problem":"style.css:3658-3755 建立了全站菜单唯一视觉规范（app-menu-panel：min-width 168px、字号 12.25px、项 padding 11px 14px、项高约 39.5px），实测其余面板全部对齐，唯独语言菜单仍用旧的 app-menu-surface rounded-xl py-1 min-w-[8.5rem] 拼装，导致它比其他菜单明显更小更挤。","measurements":"light/zh/1440（端口5368/5388）逐一实测开启态面板：语言菜单 w=119px、font=14px、首项 h=31.5px、pad=7px 10.5px、class=app-menu-surface rounded-xl border py-1 min-w-[8.5rem]；对照 remaining 行右键 168/12.25/39.5/11px 14px、watched 行右键同、顶栏更多 168/12.25/39.5（1024 视口实测，>1100 时 display:none）、watching 行右键 167.3/12.25/39.3、空白区右键 168/12.25/39.5。唯一未测：remaining「每页条数」AppSelect 面板（触发选择器未命中，属复核方触发缺口；已有 4 类面板对照，语言菜单是唯一离群者）。截图 FBKV/fbk8-langmenu-light-zh.png、fbk8-topbarmore-light-zh-1024.png。","severity":"medium","suggestion":"App.vue:294 语言菜单面板类改为 app-menu-panel fixed z-[110]（保留现有 role=menu/menuitemradio 与 pop 过渡），删除手拼的 rounded-xl/py-1/min-w-[8.5rem]。","userConfirmed":false,"sourceTempIds":["FBK-8"],"eyeballOnly":false},
+{"id":"A-37","area":"/#/remaining 表头（en）","title":"en「Expected Date」表头在 8.5rem 定宽日期列被整体省略号替换（列名完全不可读）且无 title/aria-label 全称","problem":"等番页日期列被 V-04 定宽为 8.5rem（=119px），en 表头「Expected Date」+日历图标+信息图标共需 151px，在 768/1024/1440（root 14px）全部截断；1920（root 16px，列宽 136px）仍截断。复核修正视觉细节：Chromium 的 text-overflow 把整个 inline-flex 原子内联盒替换为省略号，表头实际渲染为「📅 …」——列名一字都不可见（比原报「Expected…」更严重），且 th 及其子元素无任何 title/aria-label 全称（内层 span 的 v-tip 是日期格式提示，非列名）。zh「预计日期」、ja「予定日」均不截断。属上轮固定列宽改动区域的新问题（非数值回退）。","measurements":"重测（修正等待条件后直连 /#/remaining，行数=5、6 td 确认真页面；复核端口5389）：light/en/1440 th#2 clientWidth=118.9/119、scrollWidth=151、text-overflow=ellipsis、trunc=true；dark/en/768 同值；1920 rootFs=15.9994px、clientWidth=136/scrollWidth=172 仍截断；zh/ja 768/1440 均 scrollWidth==clientWidth=119 不截断 ✓。th 无 title/aria-label（namedAttrs=[]）；1x/2x 截图（tmp/audit-shots/RGNV/t2-en-1440-date-th-2x.png）证实渲染为「📅 …」。数据 tmp/rgn-1-remaining.mjs 输出 + tmp/rgn-1-results.ndjson(run B 段)。","severity":"medium","suggestion":"方案A：i18n 把 en 的 remaining.colDate 缩短（如 \"Due Date\"，估约 110px 可放下）；方案B：.record-table .col-date 在 ≥1440 提到 10rem 并把 notes 相应减 1.5rem；无论哪种，给该 th 补 title 属性或 aria-label 全称作兜底。","userConfirmed":false,"sourceTempIds":["RGN-2"],"eyeballOnly":false},
+{"id":"A-38","area":"追番卡片·标签独立行","title":"无标签卡片「占位行」比有标签卡片矮 2px（min-height 17.5px < 徽章实高 19.5px），同列集数/备注行错位","problem":"标签独立行的设计承诺是「恒定高度占位，有/无标签的卡片等高，周历列内不错位」（src/components/WatchingCard.vue:66-69、339-346 .card-tags-row min-height:1.25rem），但 compact 徽章实际渲染高度 19.5px（line-height 1.25rem+上下 1px 边框）高于 1.25rem=17.5px 占位，无标签卡片整行塌到 min-height，集数行/备注行比同列有标签卡上移 2px，混排列内相邻卡片行不对齐，与代码注释「保证同列卡片文字基线不错位」（WatchingCard.vue:102、338）意图相悖。卡片总高不受影响（flex-1 等高 ✓）。上轮 V-09 改徽章时未同步占位高度。","measurements":"light/zh/1440（root14）：无标签 tagsRow h=17.5px（=min-height）vs 有标签 19.5px（徽章实高），Δ=2.00px；epRow 顶差 2.0（54.5 vs 52.5）、备注行差 2.0（102.5/102.6 vs 100.5/100.6）；卡高同列相等（147.9 vs 147.9，差 0）。1920（root16）：minH 20.0 vs 22.0，Δ=2.02px、epRow Δ=2.01——各视口均不等高。复核 4 组合（light/dark zh@1440、light en@1440、light ja@1024）全部 Δ=2.0 一致（原报 12 组合）。徽章 30×19.5。截图 tmp/audit-shots/WCH/p4-no-tags.png、WCHV/w4-no-tags-1440.png、w4-no-tags-1920.png、RGNV/t5-light-zh-1440-cards.png。","severity":"low","suggestion":"把 .card-tags-row 的 min-height 从 1.25rem 提到与徽章实高一致：calc(1.25rem + 2px)（=19.5px）或直接给徽章行固定 height，无标签占位行即与有标签行同高。","userConfirmed":false,"sourceTempIds":["WCH-4","RGN-5"],"eyeballOnly":false,"regressionArea":"卡片标签独立行（V-09）"},
+{"id":"A-39","area":".gradient-text 渐变标题（追番分组标题/外观页卡标题等全站复用）","title":"浅色模式 .gradient-text 渐变标题对比不足：auto 取色最差 1.86~3.77:1、静态下 3.3~4.34:1（粉/副色端更低），AA 需 4.5；深色达标","problem":".card-head-title.gradient-text（14px/700，非大字号，style.css:2951-2955+2571-2575）在浅色模式用 --c-primary→--c-secondary 135° 渐变：① 追番页未排期分组标题（WatchingView.vue:85-86）：paletteMode 默认 auto 从粉调壁纸取出的浅色端点压在玻璃白瓷底上不足 4.5:1；复核修正：静态紫调下主色端 5.32-5.45 达标，但副色端 #EC4899 仅 3.29-3.4 也不达标——不只 auto 模式有问题。② 外观页三卡标题同模式：静态 light 实测 4.09~4.34:1 均低于 4.5。同一 gradient-text 模式全站复用（顶栏页标题等），如修需全站统筹。深色实测 5.67~6.14:1 达标。","measurements":"追番页（light/zh/1440/seed，取色落定 4s）：首轮渐变端点 rgb(199,96,105)→rgb(191,96,199)，按玻璃 white/70+底图渐变三端点取最差合成：端点1 worst=3.77、端点2 worst=3.5；复核（每轮壁纸不同）端点 rgb(194,81,90)/rgb(94,157,202)：真实渲染像素两端点 2.88/1.86、标题下方净底条带复算 2.56/1.65——比首轮更严重，两次实测均 <4.5；对照静态紫 #7C3AED 端点 5.32 ✓、#EC4899 粉端点 3.29 ✗。外观页（light/zh/1440/种子，像素分级采样）：「玻璃风格」4.34/4.13、「配色」4.33/4.30、「随机壁纸背景」4.32/4.09（两轮，fg≈rgb(177,69,200)/#b145c8）；dark 5.81~6.14 ✓。截图 tmp/audit-shots/WCH/p4-no-tags.png、WCHV/w6-auto-region.png、w6-static-region.png。","severity":"low","suggestion":"浅色下 gradient-text 端点改用 --c-primary-dark/--c-secondary-dark（或给 .gradient-text 加浅色兜底 color），auto 取色时对取出的主色做亮度下限约束（useAppearance 已有深浅变体推导可复用）；全站统筹（顶栏页标题等同模式）。","userConfirmed":false,"sourceTempIds":["WCH-6","APP-13"],"eyeballOnly":false},
+{"id":"A-40","area":"追番页整体","title":"任务书重点「拖拽排序跨列」在追番页不存在：无任何拖拽实现（预期落差，需产品确认）","problem":"任务书矩阵含交互态「拖拽中」、重点含「拖拽排序跨列」，但追番页周历卡片没有拖拽排序能力：WatchingView.vue/WatchingCard.vue 无任何 dragstart/dragover/drop/draggable 处理，全项目拖拽仅等番页表格有（src/views/RemainingView.vue:38-128），HANDOFF.md 无追番页拖拽记录。「拖拽中」交互态无对象可测——如实上报该预期落差，不编造拖拽数值。","measurements":"24/24 矩阵组合实测所有 .watching-card 的 draggable 属性均为 null（tmp/wch-matrix.json draggableAttrs 全集 ['null']）；复核（light/zh/1440，端口5381）：7 张 .watching-card draggable 全 null、全文档 [draggable=true]=0，对照 /#/remaining 5 行 [draggable=true]；grep -cE 'dragstart|dragover|@drop|draggable|ondrop' 于 WatchingView.vue 与 WatchingCard.vue 均 0 命中，全 src 仅 RemainingView.vue 与 style.css:345（表格行样式）命中；docs/HANDOFF.md grep『拖拽/drag』0 命中。","severity":"low","suggestion":"如产品需要周历跨列拖拽改星期，需新增实现（建议 HTML5 DnD + placeContextMenu 同款边界处理）；否则请把任务书该格视为预期落差而非页面缺陷。","userConfirmed":false,"sourceTempIds":["WCH-7"],"eyeballOnly":false},
+{"id":"A-41","area":"/#/remaining 表头（RemainingView.vue:57-85，text-primary-dark）","title":"浅色表头文字对比随自动配色漂移：auto 橙/暖系实测 2.4~4.07:1（<4.5），紫系过线","problem":"paletteMode 默认 auto（useAppearance.js:17，随壁纸取色），--c-primary-dark 色相不定：橙/棕系派生值在浅色玻璃表头底上低于 4.5:1；默认樱紫时通过。深色表头（primary-light）实测 5.99~10.87:1 无问题。复核描述修正：当前代码 <thead>（RemainingView.vue:56）并无 primary/10 渐变类（那只在注释里），浅色表头底实为玻璃卡合成底——不影响对比度结论。","measurements":"light/zh/1440/种子：日期表头 fg 恒等于当次 --c-primary-dark、12.25px/700；首轮橙系 fg=rgb(138,97,40)、底 (236,218,213)→4.07:1 <4.5；复核 4 轮 reload×随机壁纸实测 3.69 / 4.91 / 2.4 / 4.88——暖色相轮次（199 139 96 橙、199 156 96）不达标、紫色轮次过线，漂移机制成立。dark 表头 4 轮 5.99~10.87 全过 ✓。截图 tmp/audit-shots/REMV/thead-light-1..4.png。","severity":"low","suggestion":"浅色下把表头文字再钳暗一档（如 color-mix(in srgb, rgb(var(--c-primary-dark)) 85%, black)），或将「浅底 ≥4.5」纳入 --c-primary-dark 派生约束。","userConfirmed":false,"sourceTempIds":["REM-6"],"eyeballOnly":false},
+{"id":"A-42","area":"/#/remaining 标签筛选触发器激活态（style.css:3210）","title":"深色「标签筛选」触发器激活态白字 4.02~4.43:1（<4.5，随 auto 配色大幅波动 4.05~8.82）","problem":"选中标签后触发器 `.dark .filter-trigger.is-active` 用白字压 rgb(var(--c-primary)/0.7) 半透明底：对比稳定性依赖 auto 配色结果，能低于 4.5。","measurements":"dark/zh/1440/种子态：触发器 143.8×33.5；首轮橙系底实测 4.43/4.02:1（另一粉系会话 5.29 ✓）；复核 5 个独立 dark 抽样 4.05 / 5.39 / 7.77 / 7.82 / 8.82——随 auto 配色大幅波动且能低于 4.5（蓝色系 96 156 199 那轮 4.05，橙系 151 94 53 那轮反而 7.77），与首轮波动区间一致，「随配色波动、应改用 dark 系实色」结论成立。","severity":"low","suggestion":"深色激活底改用 --c-primary-dark 系实色（与 .btn-primary 的「白字必须压 dark 端、全色相 ≥5.43」约束对齐）。","userConfirmed":false,"sourceTempIds":["REM-7"],"eyeballOnly":false},
+{"id":"A-43","area":"/#/remaining 第一卡片搜索框+标签筛选（任务B迁移基线，RemainingView.vue:13-16）","title":"「搜索框正好落在正文中心」声明漂移：zh -5.0px / ja -11.3~-19.5px / 选中标签后 -47.2px","problem":"左侧占位 span 固定 w-[7.3rem]=102.17px（RemainingView.vue:16），但右侧 TagFilter 实际宽度随语言（112.2 zh / 136.7 ja）与已选 chip 数量变化，flex 居中结果偏离正文中心；模板注释声明「搜索框正好落在正文中心」不成立。任务B迁移前留档：搜索盒 392×33.5（w-[28rem]，max-w-full shrink-0）、输入框高 33.5、pl-8/pr-8、触发器 33.5 等高、间距 10.5、清除按钮 10.5×21；搜索与标签筛选为 AND 叠加（搜索「机动战士」+科幻 → 1 行；改「夏日」→ 空匹配且分页栏隐藏）。","measurements":"种子态 1440（复核 6 会话端口5382，数值几乎逐位吻合）：searchCenterOffset zh@1440=−5.03、en@1440=−4.91、ja@768=−11.31、ja@1024=−17.28、ja@1440=−17.28、ja@1920=−19.54；选中 1 个 chip（47.5×23，TagFilter 112.25→196.55）→ −47.19；80% 缩放（viewport-only）−5.26 量级一致；占位 span 102.19×0（高度 0 不占行高）；@1920 根字号 16px 整体放大（搜索盒 447.97×37.97）。","severity":"low","suggestion":"迁移顶栏时以实测几何为准；若保留页内居中，改用对称双占位/grid 三栏（左右占位同宽）代替固定 7.3rem。","userConfirmed":false,"sourceTempIds":["REM-8"],"eyeballOnly":false},
+{"id":"A-44","area":"/#/remaining 表格行内编辑（RemainingView.vue:156-158）","title":"行内编辑时行高 41→50.5px（+9.5px），下方行整体下移抖动","problem":"双击进入行内编辑后 .inline-edit-input（py-1.5 + border-2 → 32px 高）高于单元格常态内容 18px，行高被撑高 ~9.5px，列表下半部瞬时下移，编辑结束又弹回。编辑流程本身正常（自动聚焦/Escape 取消/非法日期警告/保存落库）。","measurements":"light/zh/1440/种子态（复核端口5382）：常态行高 41px、编辑中 50.5px（+9.5px）、下一行 y 259→268.5 瞬时下移；Escape 取消后还原 41px、input 移除；input 实测 648.3125×32（py 5.25×2+border 2×2，与 py-1.5+border-2 相符）、td 宽 661 无溢出、自动聚焦（activeElement===input）；非法日期「abc」回车 toast 警告且输入框保持打开；正常保存与 DB（SELECT notes）一致。截图 tmp/audit-shots/REMV/inline-edit-open.png。","severity":"low","suggestion":"输入框改 py-0.5~py-1（高度 ≤26px）或给 td 锁定高度（height 不随 input 变化），消除编辑抖动。","userConfirmed":false,"sourceTempIds":["REM-9"],"eyeballOnly":false},
+{"id":"A-45","area":"/#/remaining 表格行悬浮背景（style.css:2677 与 3889 特异性冲突）","title":"浅色主题行悬浮背景反馈失效（hover 规则被斑马纹特异性覆盖，深色正常）","problem":"`.list-item:hover`（primary/0.04，特异性 0,2,0）被 `.record-table tbody tr:not(.is-odd)` 斑马纹（白 0.4，特异性 0,2,2）压过，浅色主题行悬浮没有任何底色反馈；深色因 style.css:1547 用 !important 正常。浅色悬浮反馈只剩名称变色——而它对比又不达标（见 A-16），链条完整。","measurements":"light/zh/1440/种子态（复核端口5382）：hover 第 2 行后 tr computed backgroundColor 仍为 rgba(255,255,255,0.4)（斑马原值，无任何 primary 分量）；dark 同操作 tr bg=rgba(当次主色,0.10)（.dark .list-item:hover !important 生效；首轮 rgba(199,96,122,0.10) 为其当次粉色派生值，结构相同）。","severity":"low","suggestion":"补一条同/更高特异性浅色规则（如 `.record-table tbody tr.list-item:hover { background-color: rgb(var(--c-primary)/0.06) !important }`），与深色行为对齐。","userConfirmed":false,"sourceTempIds":["REM-10"],"eyeballOnly":false},
+{"id":"A-46","area":"/#/remaining 顶栏（App.vue title-swap，共享组件）","title":"直接载入 /#/remaining 时顶栏 h1 先显示「追番管理」约 0.3~1.2s 再切换为路由标题","problem":"直载/刷新等番页时，顶栏 h1 先渲染应用级标题「追番管理」，路由标题「等待更新」就绪后经 out-in 过渡（~0.4s）才替换；期间顶栏短暂显示错误标题。计数徽章「共 N 条」随新分支一并出现，稳态无缺失。属共享顶栏行为（App.vue:165-178 title-swap），非本页样式，但在本页复现并留证。澄清：document.title 全程为「Project Banager」不随路由变，现象为顶栏 h1。","measurements":"直载时间采样：首轮 1440 t=196ms「追番管理」→1204ms「等待更新」、768 218→448ms；复核（context 级 init 脚本 25ms 轮询，端口5389）1440 h1 于 t=214ms 首现「追番管理」、529ms 切换（窗口 ≈0.32s）、768 254→616ms（≈0.36s）——窗口取决于当次模块加载速度，0.3s 端复现。稳态 h1 87.5×24.5 opacity=1、徽章「共 5 条」47.25×23 与首轮逐位一致。元素截图 tmp/audit-shots/REM/topbar-title-elshot.png。","severity":"low","suggestion":"App.vue 对「首次挂载即匹配的路由」跳过 title-swap 的 out-in（首帧直接渲染最终标题），或用路由 meta 同步解析标题，消除错误标题闪现。","userConfirmed":false,"sourceTempIds":["REM-11"],"eyeballOnly":false},
+{"id":"A-47","area":"src/components/ItemTags.vue:140（已看表格行内标签 chip）","title":"表格行内标签 chip 字号 9.625px，低于 V-13 确立的 10.5px 徽章规格（常规档反而是最小档）","problem":"已看表格名称列的标签 chip（.item-tag 常规档）字号 0.6875rem，1440 视口（root 14px）下仅 9.625px，两字 CJK 标签整体宽约 32px，可读性差。V-13 已把「内置」徽章从 8.75 提到 10.5px，ItemTags 的紧凑变体 .item-tags-compact 也是 0.75rem（10.5px@1440，实测同页对照 10.5px/30×19.5px），常规档反而是最小的，规格不齐。","measurements":"light/zh/1440 有数据：.item-tag 实测 31.75×18.09px、fontSize=9.625px；1920（root16）35.95×20.41px、10.9996px≈11px（tmp/wtd-1b-matrix.json tagChip 字段 24 格一致；复核一致）。代码 ItemTags.vue:140 font-size:0.6875rem（常规）、:159 0.75rem（compact）。截图 tmp/audit-shots/WTDV/wtd5-chips-1440.png、wtd5-chips-1920.png。","severity":"low","suggestion":"ItemTags.vue:140 font-size 0.6875rem→0.75rem（与 compact 档及 V-13 的 10.5px 对齐），注意 max-width 6.5rem 相应复核。","userConfirmed":false,"sourceTempIds":["WTD-5"],"eyeballOnly":false},
+{"id":"A-48","area":"标签页（TagsView.vue:24-25）","title":"列表卡标题与内容间距比新建卡多一档（嵌套双 mb-3，21px vs 10.5px）","problem":"src/views/TagsView.vue:24 外层 div 已有 mb-3，:25 内层 div 又有一个 mb-3；flex 容器内子项 margin 不塌陷，两层叠加。同页两张卡的「标题→内容」间距不一致：新建卡 10.5px（单 mb-3），列表卡 21px（双 mb-3），标题与内容 visibly 脱节。","measurements":"实测（tmp/audit-tags-fill3.json header-gap-create-vs-list；复核端口5384）：新建卡标题行单 mb-3（computed marginBottom=10.5px）、header.bottom→输入容器 top=10.48px、→input.top=16.46px（45.39px min-h 容器内垂直居中偏移 5.98px）；列表卡外层/内层 header class 均含 mb-3、外层 flex 容器高比内层高 10.48px、innerHeader.bottom→grid.top→firstRow.top 均=20.95px（≈21）。同锚点差=10.48px 恰为一个 mb-3；按 input-top vs row-top 口径=16.46 vs 20.95=4.49px，与原报 diff=4.5px 吻合。","severity":"low","suggestion":"删除 TagsView.vue:24 或 :25 中一层 mb-3（保留外层即可），使列表卡标题间距与新建卡及其他页面卡片一致为 10.5px。","userConfirmed":false,"sourceTempIds":["TAG-3"],"eyeballOnly":false},
+{"id":"A-49","area":"标签页（TagsView.vue:51）","title":"768 视口下 20 字标签名被截断且无任何查看全名的途径（无 v-tip/title）","problem":"条件：light/zh、新建 20 个 CJK 字符标签（输入框 maxlength=20，可达）。.tag-name 使用 truncate（src/views/TagsView.vue:51）但未挂 v-tip 或 title——768 视口下名字被截断后，用户在日常浏览中无法看到完整名称（也不知有截断），全名仅在创建后的瞬时 toast 里出现过。1440 下不截断。行内其他元素（改名/删除按钮）都有 v-tip，唯独名称本身没有任何兜底。","measurements":"实测（tmp/audit-tags-interact.json long-name-truncation；复核端口5384）：1440 scrollW=455 clientW=455 truncated=false；1024 247/247；768 scrollWidth=245 / clientWidth=199~203 truncated=true，hasTitle=false、aria-describedby=null；悬停名称无任何气泡（唯一 [role=tooltip] 是顶栏时钟 #clock-tip，与本页无关），悬停同行改名按钮则出现「改名」气泡且 aria-describedby=hover-tip-1。种子 14 短标签在矩阵全部组合无截断（trunc=0）。截图 tmp/audit-shots/TAGS/i1-longname-768.png、TAGV/v4-longname-768.png（省略号可见）。","severity":"low","suggestion":"给 .tag-name 补 v-tip=\"tagLabel(tag, tt)\"（复用全站气泡），或最低限度加 :title；改动在 TagsView.vue:51 一处。","userConfirmed":false,"sourceTempIds":["TAG-4"],"eyeballOnly":false},
+{"id":"A-50","area":"标签页新建卡（TagsView.vue:13）","title":"新建卡取色块 35×35px 比相邻输入框/按钮（33.5px）高 1.5px；中心对齐下上下各外扩 0.75px，底边不齐","problem":"新建标签卡一行三个控件：ColorPicker size=\"2.5rem\"（TagsView.vue:13，computed=35px）vs 输入框/按钮 33.5px（.btn-base 与 tag-input：0.5rem×2 padding + 1.25rem line-height + 2px 边框），高度差 1.49px≈1.5px。复核修正对齐口径：容器是 items-center（中心对齐）而非顶对齐——取色块 top 比输入框/按钮高 0.75px、bottom 低 0.75px（对称外扩），「底边多出 1.25px」的原表述不成立（其自身数据 111.25+35=146.25 vs 112+33.5=145.5 亦算得 0.75px）；gBCR 值（34.89/33.40）因页面入场 transform 有亚像素缩水，CSS 层 35 vs 33.5 才是精确值。旧报告 EXCL-14（输入框 vs 按钮对齐）维持成立；与已修 V-23（外观页色圆改 34px 与按钮同高）同类。","measurements":"light/zh/1440（root14，复核端口5384）：cpRect 35×35（y=111.25）、inputRect.h=33.5（y=112）、btnRect.h=33.5（y=112）；中心对齐实测取色块 top −0.75px、bottom +0.75px；css-zoom 1.25/0.8 下差值 2.37px/1.01px 等比大体保持。数据 tmp/audit-tags-matrix.json（12 组合 base 一致）、tmp/verify-TAG-5.mjs。","severity":"low","suggestion":"把新建卡 ColorPicker 的 size 从 2.5rem 改为 34px（对齐 V-23 先例），或统一改用与 .btn-base 相同的高度变量，三控件底边齐平。","userConfirmed":false,"sourceTempIds":["TAG-5"],"eyeballOnly":false},
+{"id":"A-51","area":"/#/transfer 导出五按钮（ja）","title":"日语导出按钮「データベースのバックアップ (.db)」在 768~1440 视口被省略号截断（扩展名信息丢失）","problem":"ja 语言下第五个导出按钮标签需 188px 宽，但按钮内可用宽度在 768/1024/1440 下只有 144/173~174/158px，truncate 生效显示「データベースのバックアッ…」，扩展名 (.db) 信息被截掉；1920（可用 236~310px）不截断。zh/en 全视口无截断。按钮本身等宽（223.19px），是 5 列栅格下标签过长所致。","measurements":"条件：light/ja，种子态。label scrollWidth=188 vs clientWidth：768→144（溢出 44px 截断）、1024→173~174、1440→158（溢出 30px）、1920→不截断；text-overflow=ellipsis、white-space=nowrap 实测；按钮等宽 223.19px@1440（1920 为 310.03）。zh/en 全部组合 trunc=false（复核 60 组合，tmp/verify-trf2-matrix.json）。截图 tmp/audit-shots/TRF/matrix-light-ja-1440.png、TRFV/trf2-ja-1440.png（目测省略号）。","severity":"low","suggestion":"缩短 ja 文案（如「データベース (.db)」）或对该按钮允许两行/加 min-width，也可给标签 span 加 title 提示完整名。","userConfirmed":false,"sourceTempIds":["TRF-2"],"eyeballOnly":false},
+{"id":"A-52","area":"/#/transfer 导入结果面板统计标签","title":"结果面板小标签字号 9.625px，低于本项目既有最小可读档 10.5px","problem":"导入结果面板中「成功/失败/总计」与「正在追番/等待更新/已看历史」6 个说明标签用 text-[0.6875rem]，在 1440 视口（根字号 clamp 下限 14px）实算 9.625px。上轮审计已把同类微字号修到 10.5px（V-13 徽章、V-24 气泡 11.5px），本页这组字比既有下限还小，中英文长标签下可读性差。","measurements":"light/zh/1440/种子态（复核端口5385）：成功与失败面板内全部 6 个说明标签 class 均含 text-[0.6875rem]、getComputedStyle().fontSize 实测均 9.625px；根字号实测 14px（style.css:208 clamp(14px,0.8333vw,28px) 在 1440 取下限，0.6875×14=9.625 吻合）；同面板「各表分布」与错误明细 text-xs=10.5px、状态数字 text-base=14px、byTable text-sm=12.25px。截图 TRFV/trf3-*.png。","severity":"low","suggestion":"src/views/ImportExportView.vue:59/64/68/77/81/85 的 text-[0.6875rem] 提升到 0.75rem（10.5px@14 根字号）及以上。","userConfirmed":false,"sourceTempIds":["TRF-3"],"eyeballOnly":false},
+{"id":"A-53","area":"/#/transfer 整库恢复","title":"恢复成功 Toast 文案「恢复完成，页面将刷新」与实际行为不符：实测页面不刷新","problem":"确认整库恢复后 Toast 承诺「页面将刷新」，但 doRestore 全流程没有任何 reload 调用（ImportExportView.vue:435 仅 showToast，整文件 grep reload/location 零命中），实测页面未刷新（注入的 window 标记在恢复后仍存活、URL 不变）。数据经响应式面板已可见（byTable 7/5/8 正确），刷新并非必需，但文案会让用户误以为界面即将重载而等待/重复操作。回滚快照机制本身正常：快照文件实际下载（81920 字节、SQLite magic 有效）、文件名展示在结果面板。","measurements":"light/zh/1440/种子库（复核端口5385）：确认恢复前设 window.__noReloadMarker='alive'，恢复完成后 markerAlive=true；Toast 实测文本「恢复完成，页面将刷新」（toast-success 类）；快照下载 suggestedFilename=bangumi_pre_restore_20261103_*.db；结果面板显示「数据库已恢复 …db」、byTable 7/5/8、总计 20。代码 src/views/ImportExportView.vue:435、文案 src/locales/zh.js:79。截图 TRFV/trf4-*.png。","severity":"low","suggestion":"二选一：改文案为「恢复完成」（zh/en/ja 三语同步），或在 toast 后真正执行 location.reload()（若执行需保留当前结果面板信息则改文案更稳妥）。","userConfirmed":false,"sourceTempIds":["TRF-4"],"eyeballOnly":false},
+{"id":"A-54","area":"全局 Toast（ToastHost.vue 关闭按钮）","title":"Toast 关闭按钮 × 命中区仅 16.7×14px，低于 WCAG 2.5.8 最小 24×24","problem":"Toast 的关闭按钮是纯文字 ×（font-size 1rem、line-height 1、padding 0 0.25rem），实测命中区 16.73×14px；组件注释自称「稍微放大命中区」，但仍不到 WCAG 2.2 AA 2.5.8 的 24×24 CSS px（或等效间距）目标；错误类 Toast 虽停留 4.5s，但小命中区在时间压力下难点准。测量注意：Toast 入场动画 slide-down 0.3s 含 scale 0.8→1，动画中量会得到 13.39×11.2 的假小值，须等 ≥0.6s 再测（不影响结论）。","measurements":"light-zh/1440、dark-en、dark-ja 三格一致（端口5368/5385/5388）：.toast-close getBoundingClientRect=16.73×14px（error 与 success/warning toast 同值，light/dark 同值）；closeStyle fontSize 14px/line-height 14px/padding 0 3.5px、box-sizing border-box、无 min-width/height；error Toast 本体 settle 后 336×73.5px（max-w-24rem 吻合）。功能正常：点击后 400-500ms 内 DOM 清空。代码 src/components/ToastHost.vue:61-74 块内（原引 56-66/65-74 同一块）。截图 TRFV/trf5-toast-*.png、FBKV。","severity":"low","suggestion":"给 .toast-close 加 min-width/min-height 24px（或 -m-1 负 margin 补偿视觉），保持居中；背景 hover 高亮已有，纯扩命中区不影响观感；勿用 opacity 弱化。","userConfirmed":false,"sourceTempIds":["FBK-9","TRF-5"],"eyeballOnly":false},
+{"id":"A-55","area":"/#/transfer 导入错误反馈（src/db/structuredImporter.js:155）","title":"错误反馈把 V8 原始英文报错透出到 zh 界面（Toast 与错误明细同文）","problem":"导入损坏 JSON 时，错误明细与 Toast 都显示「JSON 解析失败：Expected property name or '}' in JSON at position 2 (line 1 column 3)」——前缀已本地化，但主体是 V8 原始英文 message，中文用户难读，且与全站中文文案不协调。错误反馈的其余表现正常（面板失败计数、danger 配色、max-h-140px 滚动区、可清除）。代码出处复核修正为 src/db/structuredImporter.js:155（`result.errors.push(`JSON 解析失败：${e.message}`)`，原报 :157 偏差 2 行，机制一致）。","measurements":"light/zh/1440/种子库（复核端口5385），输入 '{ this is not valid json !!'：Toast 实测「导入失败: JSON 解析失败：Expected property name or '}' in JSON at position 2 (line 1 column 3)」（error 类）；结果面板 errors 区同文（fontSize 10.5px、maxHeight 140px、overflowY auto、failed=1），清除按钮有效；页内同输入直接 JSON.parse 的 V8 message 与之一致。截图 tmp/audit-shots/TRF/toast-settled-light.png、import-error-light.png、TRFV/trf6-*.png。","severity":"low","suggestion":"structuredImporter.js:155 对 JSON.parse 异常给本地化短文案（如「JSON 文件内容无效，请检查格式」），原始 message 仅入 console 或折叠展示。","userConfirmed":false,"sourceTempIds":["TRF-6"],"eyeballOnly":false},
+{"id":"A-56","area":"/#/transfer 首帧","title":"首帧主区短暂空白（dev 实测挂载前 171~421ms），本页无骨架","problem":"首次进入传输页时，domcontentloaded 后主区（两张卡片）尚未挂载，只有侧栏/顶栏壳。原因是路由懒加载（src/router/index.js:48-49 component: () => import('../views/ImportExportView.vue')）。本页无数据依赖、无骨架（与 tmp/audit-README.md 第 5 节一致，captureFirstFrame captured=false 属预期）。dev 数值不代表 prod（prod chunk 更小），但慢网络下同样存在空白窗。","measurements":"light/zh/1440/dev/种子态（复核端口5385）：domcontentloaded 立即 evaluate：importCard=false、exportCard=false、exportBtns=0、sidebar=true（只有壳）；dcl→[data-test=export-db] 出现耗时首轮 421ms、复核 cold 312ms/warm 171~180ms（dev 数值随 chunk 状态漂移）；goto→卡片共 332~475ms；本次导航 wasmInline.js 请求 0 次；captureFirstFrame('/#/transfer')={captured:false, skeletonCount:0, delayedRequests:0}。截图 tmp/audit-shots/TRF/first-frame-immediate.png、TRFV/trf7-*.png。","severity":"low","suggestion":"可接受（懒加载固有、无数据依赖）；若要消除空白可在路由级加全局 loading 条，或在进入设置区时预加载 /transfer chunk。","userConfirmed":false,"sourceTempIds":["TRF-7"],"eyeballOnly":false},
+{"id":"A-57","area":"外观页（/#/appearance）","title":"「跟随壁纸取色」不可用时的警告文案与实际原因不符：代理已配置但连续失败，文案却说「未配置跨域代理」","problem":"providerBlocksPalette（useAppearance.js:591-601）在「代理配置了但连续失败 ≥2 次」时也返回 true，此时页面显示 theme.noCorsDetail 文案，开头断言「未配置跨域代理」——与事实（已配置、但不健康）不符，误导用户排查方向。","measurements":"light 与 dark/zh/1440（复核端口5386）：两次「换一张」令 getProxyHealth() 返回 {configured:true, healthy:false, consecutiveFails:3}（与原报逐字一致），切换图源后 .tone-warning 渲染文本「未配置跨域代理：当前图源不返回跨域许可，取色、下载与「预览一致」均不可用 —— …」，rect 1144×16.8 @ y=758.5（两主题数值相同，与原报完全一致）。","severity":"low","suggestion":"AppearanceView.vue:258 依 providerBlocksPalette 的失败原因分支文案（新增「代理不可达/连续失败」变体），或把开头改为「跨域取色当前不可用」中性表述。","userConfirmed":false,"sourceTempIds":["APP-9"],"eyeballOnly":false},
+{"id":"A-58","area":"外观页（/#/appearance）","title":"预设色圆选中态在悬浮时反而从 1.1 缩到 1.02，小于未选中圆悬浮的 1.05（缩放语义反转）","problem":"选中圆类名含 scale-110，但 .btn-press:hover（style.css:2208-2210，样式表中后于 Tailwind utilities）把悬浮时的 transform 覆盖为 scale(1.02)；未选中圆悬浮走模板的 hover:scale-105=1.05。于是「已选中的圆悬停时比未选中的圆悬停时更小」，且选中圆悬停瞬间从 1.1 缩到 1.02，观感像被点掉。","measurements":"light/zh/1440（复核 light+dark 均复现）：点击预设圆后鼠标停留在圆上（点击后自然位置）transform=matrix(1.02)、尺寸 34.7px；鼠标移开 900ms 后=matrix(1.1)、37.4px；未选中圆悬浮实测 matrix(1.05)。即「选中+悬浮(1.02) < 未选中悬浮(1.05) < 选中静止(1.1)」的反转在两主题均复现，数值与原报告一致。","severity":"low","suggestion":"给选中态加更高优先级的 hover 规则（如 .scale-110:hover 保持 1.1 或 .btn-press:hover 仅在无 scale-110 时生效），统一「选中=1.1、悬浮=1.05、选中+悬浮=1.1」的梯度。","userConfirmed":false,"sourceTempIds":["APP-11"],"eyeballOnly":false},
+{"id":"A-59","area":"外观页（/#/appearance）","title":"深色模式下壁纸开关「关」态仍是浅灰底（bg-gray-300 未被 .dark 覆盖），白旋钮对轨道对比仅约 1.47:1","problem":"开关关闭态类名 bg-gray-300（AppearanceView.vue:157），style.css 深色区段只反转了 bg-white/20~40 系（grep 无 .dark .bg-gray-300），gray-300 被遗漏——深色模式下开关底是 rgb(209,213,219) 亮灰块，白色旋钮对亮灰轨对比约 1.47:1（原报约 1.4:1），与深卡 rgba(30,22,58,.72) 反差刺眼，靠阴影才能辨认位置。开启态两主题均为主题色渐变 ✓。","measurements":"dark/zh/1440（复核端口5386）：点击开关关闭后 computed backgroundColor=rgb(209,213,219)、bgImage=none、旋钮 left=1.79px、旋钮白底——与浅色同态数值完全相同；开启态两主题均 rgb(124,58,237)→rgb(109,40,217) 渐变 ✓。截图 tmp/audit-shots/VAPP/p14-dark-toggle-off.png。","severity":"low","suggestion":"style.css 深色区段补 `.dark .bg-gray-300`（或给开关加语义类）在深色下改用深灰半透明底（如 rgba(255,255,255,0.14)），旋钮保持白/亮灰。","userConfirmed":false,"sourceTempIds":["APP-14"],"eyeballOnly":false},
+{"id":"A-60","area":"全局顶栏时钟气泡（App.vue:335-340 #clock-tip）","title":"body 上常驻一个 opacity:0 的 #clock-tip（role=tooltip，0,0 处 63×30，内容为当前时间且每秒更新）——归属修正：非 useHoverTip 幽灵","problem":"顶栏时钟的 tooltip 单例在未显示时仍以 display:block + opacity:0 常驻 body 顶左角，文本实时刷新为当前时间。视觉无影响，但每次 hover 触发的 waitForSelector/辅助技术查询都会先命中这个幽灵元素（对读屏器是持续的不可见噪音节点）。复核机制修正：该元素不是 useHoverTip 的 v-tip 单例——v-tip 隐藏即销毁、DOM 不留幽灵（useHoverTip.js:190-193 有注释佐证，hover 验证行为正常）；它是顶栏时钟自己的 #clock-tip（App.vue:335-340，Teleport 到 body、无 v-if 常驻渲染，仅靠 opacity-0/100 切换，clockTipPos 初始 {0,0}），且时钟在顶栏 header 而非原报所称侧栏。因此修复应落在 App.vue 的 clock-tip 标记，改 useHoverTip.js 无法消除该节点。","measurements":"light/zh/1440 干净会话（复核端口5386）：hover 前即存在 body>[role=tooltip]：id=clock-tip、text='04:00:50'、display:block、opacity:0、visibility:visible、rect(0,0,63.4×30)、fontSize 11.5px；1.2s 后 text='04:00:52'（每秒刷新）；hover「恢复默认」按钮后第二个 tooltip 正常出现（id=hover-tip-1、text=恢复默认、rect 1293,244,65.5×30，位于触发器左侧翻转位、垂直居中）——所有数值与原报告一致，仅归属修正。","severity":"low","suggestion":"App.vue 的 #clock-tip：隐藏态改为 display:none 或 visibility:hidden（或挪出屏/加 v-if），避免常驻不可见 live 节点；显示/隐藏用 opacity 过渡时保留 aria-hidden 切换。","userConfirmed":false,"sourceTempIds":["APP-15"],"eyeballOnly":false},
+{"id":"A-61","area":"ClockPicker.vue 面板定位","title":"面板实际高度 321px 与定位常量 PANEL_H=338 不符，下方展开时与触发器间隙 25px（设计 8px）","problem":"toggle() 用硬编码 PANEL_H=338 计算 bottom（ClockPicker.vue:186、196-199），实测面板高 321px（12/12 组合一致），「下方展开」分支的 bottom 按虚高 17px 计算，面板顶边与触发器底边实际间隙 25px（代码意图 MARGIN=8px），视觉上面板与触发器脱开；仅影响下方展开分支（上方展开分支用触发器 top 定位不受影响）。","measurements":"实测（light+dark × zh/en/ja × 1440/768 全 12 组合，端口5387，watching-add 弹窗内）：panel offsetHeight=321（cssHeight 321px）、heightDeltaVs338=−17、gapTopIfBelow=25.0（期望 8）、leftDelta=0 水平对齐正确；12/12 组合均走「下方展开」分支（spaceBelow 601.9~663.9 ≥338）。截图 tmp/audit-shots/DLG/clock-hardcoded-ja.png、DLGV/verify-clock-768.png（明显空隙可见）。数据 tmp/audit-dlg-matrix.json、tmp/verify-DLG-236.json。","severity":"low","suggestion":"用 nextTick 后 panelRef.offsetHeight 实测替换常量（或把 PANEL_H 修正为 321），与 DatePicker placePanel(true) 的实测思路对齐。","userConfirmed":false,"sourceTempIds":["DLG-6"],"eyeballOnly":false},
+{"id":"A-62","area":"等番拖拽排序（src/views/RemainingView.vue:661-670 onDragStart→enterManualOrder, 612-627）","title":"在名称/日期排序下开始拖拽，列表瞬间整体重排为手动序，被拖行位置跳变","problem":"onDragStart 无条件 enterManualOrder()（RemainingView.vue:665）：用户在「按名称/按日期」排序时抓起某行的一瞬间，整表立即按 sort_order 重排，被拖行与目标行全部移位——指针下的落点指示（ring）作用在重排后的另一行上，极易放错位置。拖拽结束后提供「恢复按日期排序」按钮，但拖拽瞬间的跳变没有任何缓冲或提示。拖拽视觉与落库本身正常（见实测排除）。","measurements":"light/zh/1440（端口5368）：名称排序下顺序=[机动战士高达, 无日期条目, 夏日重现, 长标题条目, Fantastic] → 合成 dragstart（带 DataTransfer）后 250ms 内顺序变为手动序、aria-sort=none、5 行 y 全部重排，被拖行从指针下移走。复核（端口5388，行 id 按 data-row-id）：初始（日期序）=[1,2,3,5,4]→名称序=[5,4,1,3,2]（与原报名称序完全一致）→dragstart 后=[1,2,3,4,5]=精确 sort_order 序（原报此处首行记录为 Fantastic 属其记录小误）；核心声明（dragstart 瞬间整表无条件重排、无缓冲提示）成立。真实 dragAndDrop 行1→行3 落库成功且 reload 保持。截图 FBKV/fbk10-after-dragstart-light-zh.png。","severity":"low","suggestion":"拖拽期间锁定当前排序视图、只在 drop 成功后切手动序（drop 时统一重排并滚动到落点）；或至少在排序态下首次 dragstart 时给 tbody 加一次性 transition 缓冲 + 顶栏提示「已切换为手动排序」。","userConfirmed":false,"sourceTempIds":["FBK-10"],"eyeballOnly":false},
+{"id":"A-63","area":"行右键菜单「打开链接」禁用态（三页）","title":"无链接时「打开链接」三页禁用语义不一致：watching 真禁用，remaining/watched 仅淡化仍可点","problem":"WatchingView.vue:342 用 :disabled + disabled:cursor-not-allowed（无 URL 项真不可点）；RemainingView.vue:303-305/WatchedView.vue:328 只挂 :class opacity-40，按钮仍 enabled，点击后仅关菜单、无任何动作——同一交互在相邻两页行为不同，弱化态也会被误读为可点。","measurements":"light/zh/1440（端口5388）：/#/watching 行菜单「打开链接」disabled=true、cursor=not-allowed、opacity=0.4（种子 watching 均无 url）；/#/remaining 选中「无日期条目」（无 url）后同按钮 disabled=false、opacity=0.4、cursor=pointer，点击后菜单 400ms 内关闭、无 dialog、无新 tab（popup 监听未触发）。对照关系与源码一致。","severity":"low","suggestion":"三页统一为 :disabled + aria-disabled（照 WatchingView 写法），或统一仅弱化但点击给出 toast 说明；建议前者，读屏与视觉一致。","userConfirmed":false,"sourceTempIds":["FBK-11"],"eyeballOnly":false},
+{"id":"A-64","area":"行内编辑校验错误态（RemainingView.vue:1262-1286 saveEdit；WatchingCard 同构）","title":"行内编辑校验失败只有 toast，无输入框错误边框/aria-invalid，错误源不指示","problem":"空名称、非法日期提交时只弹警告 toast（toast 位于右上角，与正在编辑的单元格无空间关联），输入框本身边框色、aria-invalid 均无变化；用户视线停在单元格时感知不到是哪一个字段出错（多字段连续编辑时更明显）。提交/取消/Esc/blur 流程本身实测全部正常。","measurements":"light/zh/1440（端口5368/5388）：非法日期「不是日期」回车 → toast「格式不正确，支持: 2025、2025/07、2025/07/15、2025/07/15 14:30、2014~2017」出现、输入框仍开、aria-invalid=null、borderTopColor=rgb(124,58,237)/rgb(61,53,151)（两轮分别为编辑态主色/焦点色，均为非错误色）；空名回车 → toast「请输入番剧名称」+ inputStillOpen=true。对照全部通过：正常提交后输入框关闭且单元格更新（提交后按日期重排属正常行为）、Esc 取消后日期格保持原值、blur 提交备注落库成功。768 下输入框不溢出 td（max-width:100% 生效）。截图 FBKV/fbk12-invalid-date-light-zh.png。","severity":"low","suggestion":"校验失败时给出错单元格的 .inline-edit-input 加错误描边（border-danger + focus:ring-danger/30）并置 aria-invalid=\"true\"，保存成功/取消时清除；可在 showToast 的同时把警告文案也镜像到输入框旁的 title/sr-only。","userConfirmed":false,"sourceTempIds":["FBK-12"],"eyeballOnly":false},
+{"id":"A-65","area":"/#/watched 表格斑马纹（light/dark）","title":"新斑马纹在浅色下完全不可分辨（1.0:1），深色下也只有 1.05~1.17:1","problem":"上轮引入的语义斑马纹 is-odd rgba(255,255,255,0.2) / 非 odd rgba(255,255,255,0.4)（style.css:3888-3891，深色 0.04/0.08）在浅色玻璃+浅色壁纸上合成后两条纹底色相同，奇偶行视觉无差异；深色下 1.05~1.17:1（假设基底 1.12）也远低于可感知阈值。斑马纹失去分区作用（选中态 3px 左轨仍在，状态可辨，故定 low）。","measurements":"24 组合实测 raw：light odd=rgba(255,255,255,0.2) notOdd=rgba(255,255,255,0.4)；dark odd=rgba(255,255,255,0.04) notOdd=rgba(255,255,255,0.08)（与原报逐字一致）。合成比值：light oddVsNotOdd=1.00~1.03（zh/en/ja×4 视口一致，浏览器祖先链实际合成底同为白）；dark 假设基底 rgb(25,20,45)=1.12:1、实际链合成 1.05~1.17（随动态壁纸色）。均远低于可感知阈值 ≥1.3。数据 tmp/rgn-1-results.ndjson、tmp/verify-RGN-3-results.json。","severity":"low","suggestion":"把两条纹的 alpha 拉开到可感知档（如 light 0.12/0.32、dark 0.02/0.10），或改用 rgb(var(--c-primary-dark)/0.04) 这类有色相的条纹；改完用同样的双基底合成法复测 ≥1.3:1。","userConfirmed":false,"sourceTempIds":["RGN-3"],"eyeballOnly":false},
+{"id":"A-66","area":"/#/watched 表格（1024 视口）","title":"1024 视口横向溢出仅 14px，出现一条只能滚 14px 的滚动区（观感近似卡住）","problem":"表格 min-width:56rem=784px（style.css:3865），1024 视口下侧栏 210px+页边距后容器约 770px，仅溢出 14px：滚动条出现、可拖量却只有 14px，观感近似『卡住/坏了』。768 视口溢出 102px 属正常横滚。","measurements":"复核 24 组合矩阵（端口5389）：/#/watched .tbl-scroll overflowXpx：768→102（682/784）、1024→14（770/784）、1440→0（1186/1186）、1920→0（1630/1630），24/24 与原报完全一致；/#/remaining 抽查 light/zh/1024 也是 14px。::-webkit-scrollbar 计算样式 height=8px、thumb=rgba(主题色,0.35)、radius=4px（style.css:3882-3886 生效；色相随动态主题色，alpha 与原报一致）。数据 tmp/rgn-1-results.ndjson、tmp/verify-RGN-4-results.json。","severity":"low","suggestion":"为 901-1100 区间把 min-width 降到约 52rem（或让备注列 15rem→12rem）使 1024 下免滚；或维持现状但在文档注明该区间是刻意横滚。","userConfirmed":false,"sourceTempIds":["RGN-4"],"eyeballOnly":false},
+{"id":"A-67","area":"追番卡片时间行（WatchingCard）","title":"无 time_slot 卡片的时间行塌缩为 0 高，备注行上移 21px，与标签行的『恒定占位』策略不一致","problem":"时间单元格内容为空时高度为 0（无 min-height 占位），有/无时段的卡片备注行起始 y 相差 21px。标签行已用恒定占位解决同类问题（另见 A-38），时间行漏掉了。备注多为空所以日常不显眼，一旦填了备注，同列卡片底部两行不对齐。","measurements":"light/zh/1440：有 time_slot 卡（SPY×FAMILY，23:00）时间单元格 .editable-cell 实高 21px（复核口径：内层 text-sm 行高盒 17.5+单元格内边距；原报记 17.5 为内层盒），无 time_slot 卡（史莱姆/无职转生）为 0，备注行 dTime 102.5/102.6 vs 81.5/81.6，Δ=21.0px；dark/zh/1440、light/en/1440、light/ja@1024 同值（复核 4 组合，原报 12 组合）。数据 tmp/rgn-2-results.ndjson、tmp/verify-RGN-5.mjs。","severity":"low","suggestion":"给时间行容器加 min-height:1.25rem（与集数行一致），空时段时保留占位，备注行基线即对齐。","userConfirmed":false,"sourceTempIds":["RGN-6"],"eyeballOnly":false},
+{"id":"A-68","area":"顶栏「更多操作」菜单（键盘）","title":"Tab 从菜单末项逃逸后菜单滞留且 Esc 失效（keydown 绑在菜单元素上）","problem":"更多菜单（≤1100px）无焦点陷阱：Tab 从最后一个菜单项移出后焦点落到 body，此时按 Esc 无法关闭菜单——因为 Escape 处理器 @keydown 绑在菜单面板元素上（App.vue:221，onPageActionsKeydown App.vue:857-867），焦点不在菜单内就不触发；菜单会一直悬留到点击外部或切路由。WAI-ARIA 菜单惯例是 Tab/Shift+Tab 应关闭菜单。焦点在菜单内时一切正常（开菜单自动聚焦首项、↑↓ 循环、Esc 关闭并归还焦点到触发器均已实测通过）。","measurements":"light/zh/1024（复核端口5389，/#/watched）：鼠标开菜单→activeElement=item#0；↓→#1、↓↓ 回绕、↑ 正常；Tab→#1（仍在菜单内）→再 Tab→activeElement=BODY（idx=-1）逃逸；随后 Esc→menuOpen 仍=true 且焦点不在触发器（滞留）；对照（焦点在菜单内）Esc→menuGone=true+focusBackOnTrigger=true；纯键盘 Enter 开菜单→首项聚焦 ✓；点击外部可关闭 ✓。菜单项数随页面不同（watched 2 项、768 更多菜单 3 项），无矛盾。数据 tmp/rgn-3-kb.mjs、rgn-3-kb2.mjs、tmp/verify-RGN-7-results.json。","severity":"low","suggestion":"在 onPageActionsKeydown 增加 Tab/Shift+Tab 分支：关闭菜单并把焦点交还触发器（或让触发器按钮也监听 Esc）；更简单的兜底是把 Esc 监听挂到 document（菜单开着时）。","userConfirmed":false,"sourceTempIds":["RGN-7"],"eyeballOnly":false},
+{"id":"A-69","area":"弹层过渡（prefers-reduced-motion:reduce）","title":"reduce 下菜单/Toast 滞留 enter-from 态（opacity 0）约 150~300ms 才显形——反馈可感知但迟到","problem":"全局兜底把过渡压到 0.01ms（style.css:3846-3856，实测 universal transition/animation-duration=1e-05s ✓ V-22 生效），但 Chromium 对 1e-05s 过渡不触发 transitionend，Vue 靠超时兜底摘类，导致年份菜单和 Toast 在出现后的约 150~300ms 里停留在 .pop-enter-from/.toast-enter-from（opacity:0），用户看到的是『点了没反应→突然弹出』（复核修正：滞留窗口实测 150~300ms，略短于原报 80~500ms 上限）。最终都能显示、Toast 自动消失/拖拽落点/确认弹窗/骨架加载态全部仍可感知，故定 low；但与『0.01ms 即时反馈』的目标不符。","measurements":"light/zh/1440+emulateMedia reduce（复核端口5389）：年份菜单 6 次试验：30ms 时 5/6 opacity=0 且带 pop-enter-from，150ms 5/6 恢复，500ms 6/6 恢复；单次明细 0/30/80/150ms opacity=0、300ms=1（显形滞后约 150~300ms）。右键菜单与确认弹窗 80ms op=0、150ms=1。Toast：30ms op=0+toast-enter-from、150ms=1、autoDismiss ✓（实测 ~2569ms 自动消失）。拖拽重排 ✓、骨架条可见 ✓。数据 tmp/rgn-5-results.ndjson、tmp/verify-RGN-8-results.json；截图 tmp/audit-shots/RGN/t5-light-zh-1440-toast-reduced.png、RGNV/t8-light-zh-1440-toast-reduced.png。","severity":"low","suggestion":"给 .pop-enter-active/.toast-enter-active 这类过渡类显式写一个非 0 但极短的 duration 兜底（如 1ms，避开 1e-05s 科学计数让 Vue/Chromium 的 transitionend 判定失效），或对 reduce 模式直接用 opacity 无过渡显形（transition:none + 终态），保证首帧即可见。","userConfirmed":false,"sourceTempIds":["RGN-8"],"eyeballOnly":false},
+{"id":"A-70","area":"侧栏 ≤900px 展开态","title":"≤900px 点 logo 展开侧栏为 absolute 覆盖层，主内容整体左移 56px 重排","problem":"≤900px 侧栏默认收起 56px 占流式布局；点 logo 展开时侧栏变为 position:absolute 覆盖层（z-index 90，style.css:3833-3834），主内容失去 56px 偏移整体左移并重排（文本回流）。抽屉式交互通常要求底下的内容保持不动；当前实现展开瞬间正文会跳动一次。其余项目全部通过：768/900 收起 56px ✓、901 恢复 210px ✓（边界翻转正确）、气泡方向右侧 gap=8px 垂直居中 ✓、底部按钮气泡带实时状态文案 ✓、更多菜单在 768 下入视口 ✓。","measurements":"768（light/dark×zh/en/ja 6 组合，复核 light/zh、dark/en、light/ja 三组合一致）：收起 aside w=56 x=0 position=relative；点 .logo-toggle 展开后 w=210 position=absolute zIndex=90，main x 56→0（mainShift=−56）；900 视口=56px 收起、901=210px 展开（narrowSidebar 判定 innerWidth<=900，App.vue:790/903-907）。气泡：nav0 tip gapFromIconRight=8、verticalDelta=0.5px、inViewport=true，文案 zh『正在追番』/en『Watching』/ja『視聴中』；底部按钮文案『壁纸 · 已开启』/『Wallpaper · On』/『壁紙 · オン』。更多菜单@768：168×127.5 @(83,45) inVP=true items=3（en/ja 仅 x 不同）。数据 tmp/rgn-6-results.ndjson、tmp/verify-RGN-9-results.json；截图 tmp/audit-shots/RGN/t6-*-768-tip.png、RGNV/t9-light-zh-768-expanded.png。","severity":"low","suggestion":"覆盖态改为 transform:translateX(0) + 主区不参与布局（如展开时给 .app-content 加 padding-left:var(--sb-w) 的过渡，或侧栏用 fixed+transform 抽屉），使主内容在展开/收起间不回流。","userConfirmed":false,"sourceTempIds":["RGN-9"],"eyeballOnly":false}
+],"measuredExclusions":[
+{"title":"卡片名称行/时间/备注行比标签行/进度行左移 3.5px（行X差 3.5~11.5px）","reason":"盒级 x 偏移源于 .editable-cell 的 margin-left:-3.5px + padding-left:3.5px 补偿（表格时代遗产）；文字级实测各行完全对齐（1440 下各行起始 x 全部=920.03，1920 同），仅焦点轮廓盒左伸 3.5px，视觉无错位，不报。","source":"WCH"},
+{"title":"批量勾选卡片背景不生效（首次测得 cardBg=transparent 而 aria-checked=true）","reason":"复测（点击后等 700ms）勾选视觉正常应用：卡片 bg rgba(239,68,68,0.1)+复选框实色+aria true，768 下同样正常；首次为测量时机/状态污染，非页面缺陷。","source":"WCH"},
+{"title":"+/- 按钮 hover 时位置漂移 0.21px 导致自动化点击不稳定","reason":".btn-press 的设计内微动效：悬浮 scale 1.02（src/style.css:2194-2205 注释明确），21px×0.02=0.42px 即实测位移；静止时 12 次采样盒完全不动——非缺陷。","source":"WCH"},
+{"title":"键盘焦点环读到黑色 3px 描边","reason":"Tab 后 120ms 取样落在 outline-color 0.25s 过渡中；等 600ms 落定后实测 2px solid rgba(80,159,216,0.55) offset 2px，与全局 :focus-visible 规则（style.css:279-284）一致，卡片/字段焦点环正常。","source":"WCH"},
+{"title":"深色模式 contrastOf 全线 1.06~1.84（卡片文字/表头看似严重不达标）","reason":"工具带 chainBg 对「祖先全透明」链把余 alpha 当不透明色再压白，深底读数系统性失真（README §7.8 已知限制）；改用手动合成（玻璃层链+底图渐变三端点取最差）后深色全部 ≥5.03:1 达标——是工具读数问题非页面问题。","source":"WCH"},
+{"title":"深色 − 按钮白字对比 4.03:1 < 4.5","reason":"btn-mini 内是纯图标（svg），按 WCAG 1.4.11 非文本 3:1 标准达标（+按钮 6.21、−按钮 4.03 均 ≥3）；浅色 + 按钮 7.10 同过。","source":"WCH"},
+{"title":"周历七列列头与列错位/列宽不齐","reason":"24 组合实测：七列列头宽差 ≤0.02px（亚像素），列头与列 x 偏差全 0px，768/1024/1440/1920 与三语言下均成立；en 'Wed'/ja '月曜日' 在 768 列宽 97px 下无溢出、行高与中文一致不换行。","source":"WCH"},
+{"title":"≥1024 顶栏标题与「共 N 条」计数徽章缺失","reason":"矩阵扫描采样落在 title-swap 过渡窗口的瞬态假象；专项复测（DOM 探针+元素截图）稳态下 h1 87.5×24.5 opacity 1、stats 47.25×23 齐全（1440 与 768 一致）。","source":"REM"},
+{"title":"Esc 退出批量模式后顶栏残留批量按钮（实测到 11 个）","reason":"sel-anim transition-group 离场动画 0.22s 内旧按钮仍在 DOM；+500ms 复测顶栏按钮为 5 个、batchMode=false、勾选清空、无残留。","source":"REM"},
+{"title":"Tooltip 看不清或位置错误","reason":"实测 light 8.74:1 / dark 13.1:1（11.5px，V-24 生效），挂 body、245.67×30，位于「预计日期」列下缘完整可见；初次测到的是时钟 tooltip（隐藏态 x=0,y=0）为取样误差。","source":"REM"},
+{"title":"首帧把加载中误显示为「暂无记录」","reason":"captureFirstFrame('/#/remaining') 实测 captured:true、skeletonCount:1（wasmInline 延迟窗口内），V-19 骨架门闩在本页生效，截图 first-frame-remaining.png。","source":"REM"},
+{"title":"分页按钮尺寸不一 / 省略号异常","reason":"每页 3 条×10 页（dark）与 25 条状态实测：页码/前后按钮全部 50×50，'...' 为 20.8×14 文本 span 属正常文本；与 EXCL-09 同类复核通过。","source":"REM"},
+{"title":"拖拽排序不落库 / 顺序回退","reason":"专项探针：拖第 1 行到第 3 行 → 显示 [2,1,3,4,5]，DB sort_order 同步（2:so=1,1:so=2），reload 后保持，toast「排序已保存」；拖到末尾放置带为追加语义。初轮脚本读到的回退为事件时序测试误差，非产品缺陷。","source":"REM"},
+{"title":"dark 组 contrastOf 全线 1.06~1.76「不达标」","reason":"contrastOf 在深色玻璃上沿祖先 backgroundColor 合成、全透明按白底（assumedWhite:true）——系统性失真（工具带已知限制）；所有深色对比结论已改用截图像素采样复核，不以 assumedWhite 数值为准。","source":"REM"},
+{"title":"确认删除弹窗「确认删除」白字压 danger 渐变对比不足","reason":"实测按钮渐变两端深档：light 底 (184,52,52)/(138,25,25) → 5.87~9.4:1，dark → 5.94~9.33:1，均通过（弹窗 331.5×210.9）。","source":"REM"},
+{"title":"768 批量模式勾选列把表格挤出卡片","reason":"实测 .tbl-scroll 内部横向滚动 ox=102px（V-03 机制生效），col-check 38.5px、复选框 14×14、顶栏批量图标收进「更多」菜单（≤1100 media，topbar-actions 0×0 隐藏）。","source":"REM"},
+{"title":"en/ja 表头换行（EXCL-19 同类）","reason":"thead 全部 whitespace-nowrap 且 th scrollWidth==clientWidth（en 'Expected Date' 118.89px 单行、ja '予定日' 正常），24 组合矩阵无换行。","source":"REM"},
+{"title":"空数据态残留分页栏或骨架","reason":"全新 context（不灌种子）：空态「暂无等番记录」+图标、分页卡片 v-if 正确隐藏、skeletonRows=0、顶栏「共 0 条」、标签筛选正常显示，768 下 bodyOx=0 无溢出。","source":"REM"},
+{"title":"light 备注列 #6b7280 对比不足（首轮合成算得 4.25:1）","reason":"首轮合成漏了 .glass 的 background-image 白色渐变（style.css:2520-2527 的 liquid 简写把 background-color 重置为透明）；把 rgba(255,255,255,0.62→0.30) 渐变层计入后重算为 4.51~4.75 ≥4.5，PASS。","source":"WTD"},
+{"title":"深色 is-selected/is-checked 静态背景与规格不符（首轮悬停态测得 0.098/0.1）","reason":"静态值 0.34/0.28 与 style.css:3902-3903 精确一致，无静态回退；首轮测到的是鼠标停在行上时被 .dark .list-item:hover !important 覆盖的悬停态，已作为深色悬停覆盖缺陷单独上报（A-09）。","source":"WTD"},
+{"title":"深色勾选/选中行与新斑马纹无区分（回归重点核对）","reason":"实测合成有效背景对比：dark chkVsEven 1.11~1.16、chkVsOdd 1.24~1.29、selVsEven 1.10~1.14；另有 3px 左轨（is-checked inset rgb(239,68,68) 3px 实测存在）与主色/红色复选框冗余编码，与斑马纹自身差异同量级，静态可辨，V-27 无回退。","source":"WTD"},
+{"title":"en/ja 长表头截断或换行","reason":"24 格全测：thead th clipX 全 0、th 高全 35.5px（root14）/40.5px（root16）单行，EXCL-19 维持。","source":"WTD"},
+{"title":"表格数据行行高不一","reason":"8 行高度全 41px（1440，set=[41]）/全 47px（1920，set=[47]），唯一值。","source":"WTD"},
+{"title":"年份菜单与触发器错位","reason":"light/dark/1440 实测菜单 left=608 vs 触发器 left=607.75（差 0.25px）、菜单 top=触发器 bottom+6px 间距精确，完整在视口内；768 空库与 ja 同样在视口内。","source":"WTD"},
+{"title":"年份菜单分隔线与全站不一致","reason":".menu-sep 实测 h=1px、背景透明——线由 border-top 1px rgba(0,0,0,0.08) 绘制（style.css .app-menu-panel hr/.menu-sep 统一规则），V-12 维持。","source":"WTD"},
+{"title":"菜单激活项颜色与模板 text-gray-800 不符","reason":"实测激活项 light=rgb(124,58,237)/700、dark=rgb(226,232,240)/700，来自全站规则 .app-menu-panel [aria-checked=true]（style.css:3739-3743），两主题一致，属设计而非缺陷。","source":"WTD"},
+{"title":"分页按钮尺寸不一 / 禁用态缺失","reason":"8 页多页态实测全部按钮 50×50（EXCL-09 维持）；首页 prev/next disabled 时 opacity 0.4 + cursor not-allowed（EXCL-10 维持）。","source":"WTD"},
+{"title":"拖拽中交互态缺失","reason":"已看页无拖拽功能（WatchedView.vue 与 style.css 中无 draggable/拖拽实现），该交互态不适用。","source":"WTD"},
+{"title":"本页导入入口缺失","reason":"已看页本就没有导入入口：原「导入/导出」已迁至 /transfer 页与侧栏「导入 & 导出」导航项（App.vue:83-85 注释、截图侧栏可见），本页无从测起，不计为本页问题。","source":"WTD"},
+{"title":"清空弹窗按钮溢出卡片","reason":"zh 三按钮实测 133.5×51 等宽、overflowsCard=false（V-06 维持）；en/ja 按钮高 68.5px 是多行文案正常换行，clippedX=0 无裁剪。","source":"WTD"},
+{"title":"Toast 背景透明不可见","reason":"实测警告 Toast 实底琥珀渐变+白字（对最浅端约 7:1），148×38.5 @(1271,63) 不溢出视口，EXCL-03 维持。","source":"WTD"},
+{"title":"dp 精确度按钮/日期格尺寸不一（EXCL-05/06/08 回归核对）","reason":"实测 3 个精度按钮全 81.5×21.8、42 个日期格全 34.8×29.6（root14），唯一尺寸，无回归。","source":"WTD"},
+{"title":"深色模式标签文字对比不足（矩阵初测 1.21~1.61）","reason":"工具带 contrastOf 沿 backgroundColor 合成，本页底色是渐变（backgroundColor 全透明）→ 假设白底产生假低值；改用截图实采样像素后 dark 实际：tag-name ratioMin=8.63、badge=7.16、action=4.43（>非文本 3:1 线），全部达标，非应用缺陷。","source":"TAG"},
+{"title":"浏览器缩放 125%/80% 下取色面板与 Tooltip 定位漂移","reason":"html{zoom} 近似方案的坐标双重缩放伪影（gBCR 已含 zoom 因子，fixed 元素 left/top 被再乘 zoom）；真实缩放语义（deviceScaleFactor=1.25）面板 gap=8px、Tooltip gap=7.8px，viewport-only 0.8/1.25 亦正常——按 README §6 该近似模式数值不作为断言依据，不作为应用缺陷上报。","source":"TAG"},
+{"title":"Toast 白字对比不足","reason":"采样 toast-success 底 rgb(29,128,99) 白字 ratio=4.86 ≥4.5（12.25px），达标（EXCL-03 维持）。","source":"TAG"},
+{"title":"Tooltip 字号偏小","reason":"实测 11.5px（V-24 维持）；对比度 light 10.18、dark 14.32，达标。","source":"TAG"},
+{"title":"取色面板命中区不足（色相条/预设色块）","reason":"色相条实测 16px（V-15 维持 ≥16px）；14 个预设色 minW=25.2、minH=24（V-16 维持 ≥24×24）；两按钮 54.5×34 等大。","source":"TAG"},
+{"title":"取色面板未 Teleport 到 body、被玻璃卡片 fixed 包含块劫持","reason":"实测 panel.parentElement===document.body（ColorPicker.vue:21 Teleport 正确），触发块下方 gap=8px、行内取色面板夹取后完整在视口内。","source":"TAG"},
+{"title":"禁用态样式缺失","reason":"新建按钮空名时 disabled=true、opacity=0.4、cursor=not-allowed，强制点击无效果（rows 14→14）（EXCL-10 同族维持）。","source":"TAG"},
+{"title":"输入框无焦点指示","reason":"键盘焦点实测：:focus-visible=true 时新建输入框 2px ring（primary 30% alpha）+边框变色，编辑输入框 1px ring+边框变色；指示可见但对比低于 3:1（项目统一 soft-ring 风格，行按钮/色块均为实测 2px solid 0.55 outline）。","source":"TAG"},
+{"title":"hover 无反馈","reason":"色块 filter none→brightness(1.08)、行按钮底色→primary/danger 10%、主按钮 scale(1.02)+0.42 阴影，三处均有实测反馈。","source":"TAG"},
+{"title":"内置标签可被删除 / 约束提示缺失","reason":"UI 层 12 个内置行全部只有改名 1 个按钮（Tab 序亦无删除）、无删除按钮可点；「内置」徽章+标题 info 气泡双提示；双击/右键内置行可进入改名（符合「可改名改色不可删」）；DB 层 deleteTag 对 is_builtin 拒绝（src/db/index.js:480）。","source":"TAG"},
+{"title":"行内编辑/右键行为异常","reason":"双击与右键均可进入改名（无右键菜单弹层，anyMenuPanel=false）；Esc 取消不保存、Enter 保存、失焦保存、maxlength=20 均实测正常。","source":"TAG"},
+{"title":"编辑态行高跳动","reason":"编辑态行 46px vs 静态 44px（编辑输入框 26.5px 略高于行内其他控件），2px 瞬时差仅编辑期间存在，影响极小，不单列上报。","source":"TAG"},
+{"title":"拖拽排序缺失或拖拽失控","reason":"标签页本就没有行拖拽排序 UI（无 draggable 元素，sort_order 无界面入口），无从测起（覆盖说明如实记录）；取色器 SV 面板/色相条的 pointer 拖拽实测正常改色、Esc 回滚、外点关闭均正常。","source":"TAG"},
+{"title":"深色导出按钮文字对比 1.01:1（矩阵工具报 FAIL）","reason":"工具假阳性：contrastOf 沿祖先只合成 background-color，而玻璃卡/按钮底是 background-image 渐变，链上无不透明层即按白底假设（assumedWhite:true）；用截图像素采样实测深色按钮真实底 rgb(23,15,45)~rgb(49,44,69)，label #e2e8f0 对比 10.8~14.91:1，全部达标。","source":"TRF"},
+{"title":"禁用态样式缺失（opacity 实测为 1）","reason":"浅色首轮在设 importing=true 后 150ms 读取，正处 opacity 0.22s 过渡起点；稳态复测（650ms 后）6 按钮全部 opacity 0.4 + cursor not-allowed、hover 不放大，DOM 直设 disabled 交叉验证同为 0.4；与 EXCL-10 结论一致，无回退。","source":"TRF"},
+{"title":"Toast 背景对比 1.3:1（首轮采样）","reason":"Toast 有滑入+淡入动画，首轮在出现瞬间截图采到半透明混合底；稳定 600ms 后重测：浅色白字 vs toast 底 rgb(180,51,51)=5.43~6.07:1、深色=13.4~14.0:1，均达标，EXCL-03 维持成立。","source":"TRF"},
+{"title":"导出的 JSON 回灌 12/20 条失败","reason":"测试设计问题而非缺陷：向已含同一种子数据的库重复导入，12 条因 UNIQUE 冲突按设计被拒（面板 failed=12、byTable 全 0，符合 ImportExportView.vue:196-200 注释的冲突语义）；空库导入同一文件实测 20/20 成功、byTable 7/5/8，导出→导入环路完好。","source":"TRF"},
+{"title":"取消按钮未关闭 db 确认弹窗（cancelClosed=false）","reason":"首轮 250ms 等待不足（弹窗有离场过渡，元素仍在 DOM）；650ms 后复测 dialogGone=true 且结果面板未出现、焦点归还页面根 DIV。","source":"TRF"},
+{"title":"V-21 回退：按钮规格漂移","reason":"无回退：本页 6 个按钮（导入 1+导出 5）全部带 .btn-base，高 33.5px、字号 12.25px、圆角一致；弹窗两按钮同规格（0.08px 属亚像素容差）；1920 下全部变 37.97px/13.1~14px 是根字号 clamp 的全局响应式，所有按钮同步变化；EXCL-15 五按钮等宽 223px 亦维持。","source":"TRF"},
+{"title":"ja 侧栏「インポート & エクスポート」激活项文字截断","reason":"matrix-light-ja-1440.png 目测可见侧栏激活项文字贴边，但侧栏属 App 全局导航非本页区域，未展开测量，仅记录。","source":"TRF"},
+{"title":"Tooltip 溢出/字号回退","reason":"无问题：3 处 v-tip（导入标题/导出标题/格式清单）实测 fontSize 11.5px（V-24 修复值维持，src/style.css:2446），maxWidth 308px=min(22rem)，长文案 72 字在 1440 与 768 均折行且不溢出，气泡挂 body（规避玻璃 fixed 包含块坑，useHoverTip.js:79-97 实测 parentIsBody=true），light/dark/en/ja 四轮通过。","source":"TRF"},
+{"title":"毛玻璃/液态玻璃两档材质视觉差异不足（重点项）","reason":"实测差异明显：真实卡片 computed 切换为 渐变0.62→0.30+blur(20px)saturate(1.65)+高光内阴影 vs 平色 rgba(255,255,255,0.7)+blur(12px)（light；dark 为深紫渐变 vs 平色）；两块材质预览条像素差 mean 30.6/255（light）、38.95/255（dark），max 97/210——预览可辨。","source":"APP"},
+{"title":"预览区与实际背景不是同一张图（重点项）","reason":"实测 .tone-preview img.src === state.bgBlobUrl（blob 指纹一致），同源/带 CORS 图源下预览与背景同字节；渲染观感差异来自遮罩/模糊/主区半透明层（设计行为）；取色链路验证正确（红蓝图 → 色相 355 → --c-primary HSL 匹配）。","source":"APP"},
+{"title":"跟随壁纸取色降级链路失效","reason":"实测正常：两次代理失败后切换图源触发 watch → toast「该图源不支持跨域取色，配色已改为固定」+ paletteMode 自动转 manual + 菜单项禁用（disabled=true、opacity 0.4、not-allowed、aria-checked 正确）。","source":"APP"},
+{"title":"页内两个下拉菜单（配色来源/自动换图）定位或层级问题","reason":"两菜单实测均 Teleport 到 body（parentIsBody=true）、z-index 110、与触发器左对齐（Δ<1.5px）、面板底边在触发器上方且 gap=8px、完整在视口内；触发器 aria-expanded 同步。菜单内部条目几何归另一代理。","source":"APP"},
+{"title":"Tooltip 定位/对比度问题","reason":"实测正常：11.5px（V-24 无回退）、右侧放不下自动翻左侧、垂直居中偏差 <2px、对比度 light 10.31:1 / dark 13.69:1、focus({focusVisible}) 也能触发；仅 APP-15 的隐藏时钟单例干扰自动化查询，非视觉缺陷。","source":"APP"},
+{"title":"遮罩/模糊滑块拖拽失灵","reason":"实测拖拽 120px：state.bgDim 0.25→0.55（拖拽中即更新）、文案 25%→55% 同步、松手稳定；重置按钮点击后回 0.25+toast（--bg-dim 显示 0 是因壁纸未激活时引擎按无壁纸归零，属预期）。","source":"APP"},
+{"title":"焦点环缺失","reason":"focus({focusVisible:true}) 实测 outline: rgba(124,58,237,0.55) solid 2px、offset 2px（与 EXCL-02 一致）。","source":"APP"},
+{"title":"壁纸开关几何/状态异常","reason":"aria-checked 与旋钮位置（off 1.75px / on 19.25px）、轨道 38.5×21 开合往返一致；仅深色关闭态配色问题已单列上报（A-59）。","source":"APP"},
+{"title":"Toast 不可见/对比不足","reason":"success toast 像素采样实测白字对比 light 4.88:1 / dark 5.34:1，位置右上 (1295.5,61.9) 123.5×38.5、圆角 10px、z-100；与 EXCL-03 结论一致。","source":"APP"},
+{"title":"预设配色圆尺寸/选中环回归（V-23）","reason":"6 个圆在全部 24 个矩阵格均为 34×34px，选中后 border rgb(55,65,81)+scale 1.1（37.4px）正常；点击后 --c-primary 正确切换（樱紫 122 63 217）。","source":"APP"},
+{"title":"布局矩阵整体溢出","reason":"24 格（2 主题×3 语言×4 视口）文档级横向溢出均为 0；80%/125% 缩放（viewport-only 近似）下卡片/预设圆/文档同样无溢出；三卡纵向内容也无溢出（除按钮行的行级横溢已单列 A-06）。","source":"APP"},
+{"title":"按钮高度不一","reason":"各卡 .btn-base 高度统一 34px（root 14px）；1920 下 root=16px 按 rem 等比到 38px，属全局 clamp 字号设计而非不一致。","source":"APP"},
+{"title":"空数据态与有数据态外观页差异","reason":"不灌种子的全新 context 与种子态关键几何完全一致（三卡 1188 宽、无溢出），外观页不依赖番剧数据，符合预期。","source":"APP"},
+{"title":"外观页首帧骨架缺失","reason":"按设计本页无骨架（README §5：仅 /remaining /watched 有 .record-skeleton-row）；实测 /#/watching 数据就绪后骨架数为 0，首帧骨架格归其它页代理。","source":"APP"},
+{"title":"Esc「按一次关不掉弹窗」（矩阵 36 例 escClosed=false）","reason":"headless 空闲节流伪影，非产品缺陷：Esc 后轮询保持 renderer 活动时 ~240ms 全部关闭（5/5）；空闲 420ms 检查 2/6 关，但同一轮 1500ms 复查 6/6 全关。leave 过渡 0.24s 在空闲渲染器里被推迟派帧；遮罩点击关闭同理。escClosed 单值字段不可单独采信。","source":"DLG"},
+{"title":"业务弹窗超出视口 / 底部按钮不可达","reason":"16 目标 × 12 组合（237 条记录）overflowTop/overflowBottom 全部 ≤0，768×1024 下最高的 watching-add（607.8px 高）也完整居中可交互；help 弹窗自身有 max-h。注意：未测 <768 高的矮视口（见覆盖说明）。","source":"DLG"},
+{"title":"Tab 焦点陷阱逃逸","reason":"全部业务弹窗+Help+Transfer 确认：初始焦点均在弹窗内（focusInsideOnInit 0 例外），连续 14 步 Tab 的 trace 全为 1（0 逃逸），useDialogFocus（useDialogFocus.js:93-126）生效；DatePicker 面板 Tab 后焦点落入宿主弹窗而非背景页。","source":"DLG"},
+{"title":"Toast 被弹窗盖住 / Toast 层级错误","reason":"实测 toast host z=100 > 弹窗遮罩 z=50，警告 toast 在弹窗上方完整可见；toast 与 z 更高的 ClockPicker(110)/DatePicker(240) 面板实测无几何重叠，当前布局下无视觉冲突。","source":"DLG"},
+{"title":"DatePicker 月份切换边界/年夹取回退","reason":"12 组合全通过：1 月点上月→上一年 12 月、12 月点下月→次年 1 月（wrap 正确）；年份快选视图 next 至 2090–2101 后停止（上界夹取生效）；下界 1900 因循环步数限制未走到（代码 clampYear 有 max(1900,…)，DatePicker.vue:228）。","source":"DLG"},
+{"title":"ColorPicker 色相条命中区 / 预设色块尺寸回退（V-15/V-16）","reason":"无回退：色相条命中区实测 208×16px（≥16 达标，12 组合一致）；预设块 14 个全部 ≥24（最小 25.2×24.0），面板 z=160、Teleport 到 body、Esc 关闭且视口内；之前 1440 组合测到的面板宽 276.4px 为 headless 过渡冻结伪影，768 实测 293.6=21rem 正确。","source":"DLG"},
+{"title":"弹窗/菜单 Teleport 后与触发器错位（glass 包含块坑复发）","reason":"复核未发现错位（原疑点清单该项无实测异常内容）。","source":"DLG"},
+{"title":"弹窗按钮文字三语溢出","reason":"全部弹窗全部 .btn-base（含 ja 最长『キャンセルする』91.3px、watched-clear 三按钮带年份插值）scrollWidth−clientWidth 均为 0，无一处溢出（237 记录逐按钮检查）。","source":"DLG"},
+{"title":"开合动画参数错误 / reduced-motion 失效","reason":"实测进场 transition 0.4s var(--ease-spring)（cubic-bezier(0.32,0.72,0,1)）、进场 from scale(0.95)+translateY(10px)、退场 0.24s+opacity 淡出、遮罩同步；emulateMedia reducedMotion=reduce 后 overlay/弹窗 computed transition-duration=1e-05s（style.css:3848-3851 全局兜底生效，V-22 保持）。","source":"DLG"},
+{"title":"弹窗标题语言错乱（en/ja 显示中文）","reason":"en 记录 0 条中文标题；ja 记录标题全为日文（クリアの確認/視聴日を選択 等为正确日文，非泄漏）；唯一语言错乱是 ClockPicker 硬编码按钮（已单列上报 A-28）。","source":"DLG"},
+{"title":"ClockPicker 指针与刻度错位 / 点击选值不准","reason":"点击外圈小时刻度（0/6/18）与切分钟段后点击内圈刻度（25/55）：值全部正确（00:00→06:00→18:00→09:25→09:55），指针端点与目标刻度圆心距离 dist=0（px 级对齐）；相邻刻度命中区间隙外圈 5px/内圈 10.9px，可点性尚可。","source":"DLG"},
+{"title":"顶栏「更多操作」菜单 Esc 连带关闭其它层","reason":"768 实测：菜单打开时 Esc 只关菜单（280ms），无误关弹窗（App.vue:855-861 stopPropagation 生效）；1440 下该按钮 display:none（≤1100px 才出现，style.css:3827-3829），属响应式设计而非缺陷。","source":"DLG"},
+{"title":"拖拽落点高亮（ring）不出现","reason":"首轮合成 DragEvent 未带坐标（clientY=0），冒泡到容器的 onTableDragOver 里 rowIndexAtPointer(0) 命中第 0 行，把 dragOverIndex 覆写回拖拽源自身，ring 条件不成立——脚本伪影；改用目标行中心坐标重新派发后：目标行 className 含 ring-2/ring-primary/60/ring-inset、computed boxShadow=rgba(124,58,237,0.6) 0 0 0 2px inset、拖拽源 opacity=0.4，全部生效。","source":"FBK"},
+{"title":"表头全选勾选框颜色异常（实测出非主题紫的色值）","reason":"默认 paletteMode='auto'+bgEnabled=true 会拉随机壁纸并取色覆写 --c-primary，两次运行主色不同属设计行为；钉住外观（banager_appearance 置 bgEnabled:false/paletteMode:manual/palette:null）后 --c-primary 恢复 124 58 237，全选勾选框 bg=rgb(124,58,237) 正确；相关色彩断言均已在钉住外观后复测。","source":"FBK"},
+{"title":"Escape 关不掉右键菜单（dark-ja 格曾报 false）","reason":"首轮脚本在 Escape 前有残留打开步骤，属时序误报；确定性复测（每次重新打开菜单→Esc→轮询）3/3 次在 ~400ms 内关闭（含 0.2s pop 离场动画）。","source":"FBK"},
+{"title":"点击「打开链接」（无 URL 项）后菜单不关闭","reason":"首轮在点击后仅等 250ms 就断言，短于 0.2s pop 离场+帧延迟；复测轮询：400ms 内菜单关闭、无新 tab、无 dialog，行为正确（仅剩禁用语义不一致已单列 A-63）。","source":"FBK"},
+{"title":"Toast 堆叠间距 14.7px 疑似翻倍","reason":"首轮几何是在入场动画中取样（项处于 scale(0.8)，38.5×0.8=30.8px 与实测吻合）；等动画结束重测：相邻项间隙精确 7px×4（=gap-2 在根字号 14px 下的值），容器 computed gap=7px，无问题。","source":"FBK"},
+{"title":"768 格 toast 同时出现 7 条（>MAX_TOASTS=5）","reason":"先前两条未等过期就再发 8 条，2 条旧 toast 尚在存活期内所致；单轮发 8 条时 DOM 恒为 5 条，MAX_TOASTS 逻辑正确。","source":"FBK"},
+{"title":"备注 blur 提交丢失","reason":"首轮读的是第 1 行第 3 个可编辑 td（url 列），而编辑的是末行 notes；用 nth=-1 精确定位复测：blur 后末行 notes 文本更新、保存成功。","source":"FBK"},
+{"title":"1920 视口行高/表头变大（40.9→46.9px）","reason":"根字号 clamp(14px,0.8333vw,28px)（style.css:207）在 1920 时为 16px，全站 rem 等比放大，非缺陷；同一视口内各行一致。","source":"RGN"},
+{"title":"深色选中/勾选普遍失效","reason":"排除悬停因素后（指针移开+600ms 采样）深色 is-selected=rgba(P,0.34)、is-checked=rgba(239,68,68,0.28)，与 style.css:3902/3903 规定一致；问题仅限悬停态（已单列上报 A-09）。","source":"RGN"},
+{"title":"窄屏横滚条样式丢失","reason":"::-webkit-scrollbar 8px/主题色 35%/4px 圆角计算样式存在且生效；但 headless Chromium 走 overlay 滚动条（rectH-clientH≈边框 1.8px，无布局占位），截图中不可见——headed 渲染无法在当前环境验证，样式声明本身无回退。","source":"RGN"},
+{"title":"骨架行(147px)与数据行(41px)/空态(193px)高度差 ~106px","reason":"加载占位→内容渲染的自然收缩，列表下方卡片随之变矮属占位设计本质；V-19 要防的『误显空态』未复发（listLoaded 门闩正常）。","source":"RGN"},
+{"title":"侧栏展开态(≤900)悬停导航不出气泡","reason":"代码即如此设计：@mouseenter=\"sidebarCollapsed && showSidebarTip(...)\"（App.vue:62），展开态有完整文字标签无需气泡；矩阵脚本的该步超时是预期行为非缺陷。","source":"RGN"},
+{"title":"剩余页 th#w-[4.5rem] 与 colgroup col-index 3.5rem 不一致（RemainingView.vue:69）","reason":"table-layout:fixed 下 colgroup 宽度胜出，实测 # 列恒 49px，无视觉影响，纯死代码。","source":"RGN"}
+],"fixOrder":[
+{"batch":"第一批：纯样式/几何/token/文案小改（30 项）","ids":["A-02","A-03","A-09","A-10","A-11","A-12","A-15","A-16","A-19","A-20","A-26","A-29","A-30","A-37","A-38","A-39","A-41","A-42","A-43","A-45","A-47","A-48","A-49","A-50","A-51","A-52","A-59","A-65","A-66","A-67"],"why":"全部是一行 CSS/token/文案/属性级单点改动（对比度深阶替换、字号提档、min-height 占位、类名写法修正、:global(.dark) 规则归位、菜单按钮豁免、hover 特异性/!important 收敛、i18n 文案缩短+title 兜底），不触碰交互逻辑；对比度类集中改可一次复测全部 AA 达标，几何类互相独立、回归成本低。"},
+{"batch":"第二批：组件/交互逻辑（38 项）","ids":["A-04","A-05","A-06","A-07","A-08","A-13","A-14","A-17","A-18","A-21","A-22","A-23","A-24","A-25","A-27","A-28","A-31","A-32","A-33","A-34","A-35","A-36","A-44","A-46","A-53","A-54","A-55","A-56","A-57","A-58","A-60","A-61","A-62","A-63","A-64","A-68","A-69","A-70"],"why":"涉及组件模板、事件流（Esc 层叠/键盘导航）、状态门闩（V-19 补齐）、取色引擎模型与 i18n 接线，需逐项回归交互态；建议先做展示类（toast 动画/换行/命中区、菜单语义/aria、硬编码中文接线），再做时序敏感类（Esc stopPropagation、title-swap、reduce 显形、侧栏抽屉、拖拽排序锁定）。"},
+{"batch":"第三批：需要设计/产品决策（2 项）","ids":["A-01","A-40"],"why":"A-01 为任务B顶栏迁移：承载机制（A/B/C）与 ≤1100 降级（D1~D4）需用户拍板后才能实施，请回复「改 A-01（方案N）」（承载与降级可分别指定，如 A+D1）；A-40 需产品确认是否新增周历跨列拖拽能力，否则按预期落差关闭任务书该格。"}
+],"stats":"共 70 项（高 6 / 中 31 / 低 33，目测 0 项；A-01 为任务B设计决策项按中等计入），用户已确认 2 项（A-01 顶栏迁移、A-02 每页条数菜单溢出），实测排除 92 项（各区域 suspectsExcluded；高频误报为工具带深色对比度合成失真与动画窗口采样伪影；本轮全部 79 条来源发现均获独立复核 confirmed/corrected，无 notReproduced，无与旧报告 V-01~V-27/EXCL 撞车需移出项——涉及 V-09/V-19/V-22/V-27 区域的条目均为旧修复未覆盖的新缺口，regressionArea 已标注），失败单元 0 个。合并去重 9 组：REM-1+DLG-1（深色 chip :global 丢弃）、WTD-1+RGN-1（深色悬停覆盖 V-27）、WCH-1+FBK-4（border-l-3）、REM-4+WCH-5+FBK-6（菜单危险项）、REM-5+WTD-4（深色序号列）、WCH-8+TAG-1（V-19 门闩缺口）、WCH-4+RGN-5（标签行 2px）、WCH-6+APP-13（gradient-text）、FBK-9+TRF-5（toast 关闭命中区）。"}</script>
+
+<script>
+(function () {
+  var listEl = document.getElementById('list')
+  var DATA
+  try {
+    DATA = JSON.parse(document.getElementById('audit-data').textContent)
+  } catch (e) {
+    listEl.innerHTML = '<div class="panel">数据块解析失败：' + e.message + '</div>'
+    return
+  }
+
+  var SEV_CLS = { high: 'red', medium: 'amber', low: 'green' }
+  var SEV_NAME = { high: '高', medium: '中', low: '低' }
+  var SEV_GROUP = { high: '🔴 高', medium: '🟡 中', low: '🟢 低' }
+
+  function esc (s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+  // 纯展示增强：把 文件:行号 / 文件名 包上 <code>，不改动任何文字内容
+  function fmt (s) {
+    var h = esc(s)
+    h = h.replace(/[A-Za-z0-9_.\-\/\\]+\.(?:vue|js|mjs|cjs|ts|css|scss|json|ndjson|md|html|htm|db|txt|png|jpg)(?::\d+(?:[-~]\d+)?)?/g, '<code>$&</code>')
+    return h
+  }
+  function pad2 (n) { return n < 10 ? '0' + n : '' + n }
+
+  var A01_HTML =
+    '<table class="mini plans">' +
+    '<tr><th style="width:70px">方案</th><th>要点（摘自建议原文，全文见下方「建议」）</th><th style="width:76px">结论</th></tr>' +
+    '<tr><td><b>A</b> · 承载</td><td>pageControls store + markRaw 组件，与 pageActions 四件套同构；状态、过滤、fetch、年份 CRUD 逻辑全留 view，只移渲染入口；卸载清理对齐 WatchedView 先例</td><td class="rec">★ 推荐</td></tr>' +
+    '<tr><td><b>B</b> · 承载</td><td>Teleport 到顶栏挂载点 #topbar-controls；生命周期零管理、view 模板改动最小，但与 pageActions「view 写数据、App 渲染」模式不同构，控件进出场与 title-swap 动画不同步</td><td>备选</td></tr>' +
+    '<tr><td><b>C</b> · 承载</td><td>具名插槽反转——不成立（Vue3 router-view v-slot 是父→子方向，view 无法反向把内容插进 App 布局），仅记录排除理由</td><td class="no">排除</td></tr>' +
+    '<tr><td><b>D1</b> · 降级</td><td>搜索折叠 36px 图标、标签/年份 icon-only，展开走 Teleport 面板；与现有 ≤1100 图标化断点对齐，24 个组合实测余量全为正（1024 档余 92~170px、768 档余 20~36px；标签钮此档必须 icon-only）</td><td class="rec">★ 推荐</td></tr>' +
+    '<tr><td><b>D2</b> · 降级</td><td>≤1100 收进现有「⋯ 更多」菜单，扩展为筛选面板；改动集中在 App.vue 一处、不占常驻宽度，但搜索变「先开菜单再打字」，读屏与焦点管理复杂</td><td>备选</td></tr>' +
+    '<tr><td><b>D3</b> · 降级</td><td>响应式双停靠（≤1100 控件回落正文第一卡）；窄屏体验零退化、复用卡内容器查询，但与「main 区不得残留第一张卡」字面要求冲突，需产品侧确认放宽</td><td>需决策</td></tr>' +
+    '<tr><td><b>D4</b> · 降级</td><td>压缩常驻（≤1100 搜索缩到 12rem=168px + 触发钮 icon-only）；168px 搜索框可见词元极少，且已看@768 仍放不下、须连时钟一起让位</td><td class="no">不推荐</td></tr>' +
+    '</table>' +
+    '<div class="plan-pick" id="planPick">' +
+    '<span class="pp-label">回复选择：</span>' +
+    '<span class="pp-label">承载</span>' +
+    '<button type="button" class="pp" data-plan="carrier" data-v="A">A</button>' +
+    '<button type="button" class="pp" data-plan="carrier" data-v="B">B</button>' +
+    '<button type="button" class="pp" data-plan="carrier" data-v="C">C</button>' +
+    '<span class="pp-label">降级</span>' +
+    '<button type="button" class="pp" data-plan="degrade" data-v="D1">D1</button>' +
+    '<button type="button" class="pp" data-plan="degrade" data-v="D2">D2</button>' +
+    '<button type="button" class="pp" data-plan="degrade" data-v="D3">D3</button>' +
+    '<button type="button" class="pp" data-plan="degrade" data-v="D4">D4</button>' +
+    '<button type="button" class="pp pp-clear" data-plan="clear">清除选择</button>' +
+    '</div>' +
+    '<div class="reply-preview">回复预览：<code id="planPreview"></code></div>'
+
+  function renderItem (it) {
+    var el = document.createElement('article')
+    el.className = 'item'
+    el.setAttribute('data-sev', SEV_CLS[it.severity] || 'green')
+    el.setAttribute('data-id', it.id)
+    el.id = 'it-' + it.id
+    var badges = ''
+    if (it.userConfirmed) badges += '<span class="badge conf">用户已确认</span>'
+    if (it.regressionArea) badges += '<span class="badge reg">回归 · ' + esc(it.regressionArea) + '</span>'
+    badges += '<span class="badge sev-' + (SEV_CLS[it.severity] || 'green') + '">' + (SEV_NAME[it.severity] || '目测') + '</span>'
+    var sources = (it.sourceTempIds || []).map(function (s) { return '<span class="orig">' + esc(s) + '</span>' }).join('')
+    el.innerHTML =
+      '<div class="item-head"><div class="cb" role="checkbox" tabindex="0"></div>' +
+      '<span class="id">' + esc(it.id) + '</span>' +
+      '<span class="title">' + esc(it.title) + '</span>' + badges + '</div>' +
+      '<div class="area-line">位置：' + esc(it.area) + '</div>' +
+      '<div class="body">' +
+        '<div class="blk"><span class="blk-k">问题</span><div class="blk-v">' + fmt(it.problem) + '</div></div>' +
+        '<div class="blk"><span class="blk-k">实测</span><div class="blk-v">' + fmt(it.measurements) + '</div></div>' +
+        '<div class="blk"><span class="blk-k">建议</span><div class="blk-v suggest">' + fmt(it.suggestion) + '</div></div>' +
+        (sources ? '<div class="src-line">来源 ' + sources + '</div>' : '') +
+        (it.id === 'A-01' ? A01_HTML : '') +
+      '</div>'
+    return el
+  }
+
+  // ---------- 渲染：主列表（按严重度分组） ----------
+  var items = []
+  var groupTitles = []
+  var mainItems = DATA.items.filter(function (it) { return !it.eyeballOnly })
+  ;['high', 'medium', 'low'].forEach(function (sev) {
+    var arr = mainItems.filter(function (it) { return it.severity === sev })
+    var gt = document.createElement('div')
+    gt.className = 'group-title'
+    gt.setAttribute('data-gsev', SEV_CLS[sev])
+    gt.innerHTML = '<span class="dot ' + SEV_CLS[sev] + '"></span>' + SEV_GROUP[sev] + '（' + arr.length + '）'
+    listEl.appendChild(gt)
+    groupTitles.push(gt)
+    arr.forEach(function (it) {
+      var el = renderItem(it)
+      listEl.appendChild(el)
+      items.push(el)
+    })
+  })
+
+  // ---------- 渲染：目测分区 ----------
+  var eyeballItems = DATA.items.filter(function (it) { return !!it.eyeballOnly })
+  document.getElementById('eyeballCount').textContent = eyeballItems.length
+  var eyeballList = document.getElementById('eyeballList')
+  eyeballItems.forEach(function (it) {
+    var el = renderItem(it)
+    eyeballList.appendChild(el)
+    items.push(el)
+  })
+
+  // ---------- 渲染：实测排除表 ----------
+  var excl = DATA.measuredExclusions || []
+  document.getElementById('exclCount').textContent = excl.length
+  document.getElementById('exclCount2').textContent = excl.length
+  document.getElementById('exclRows').innerHTML = excl.map(function (e, i) {
+    return '<tr><td class="ex-n">EX-' + pad2(i + 1) + '</td><td>' + esc(e.title) + '</td><td>' + fmt(e.reason) + '</td><td class="ex-src">' + esc(e.source) + '</td></tr>'
+  }).join('')
+
+  // ---------- 渲染：建议修复顺序 ----------
+  var foBody = document.getElementById('fixOrderBody')
+  foBody.innerHTML = (DATA.fixOrder || []).map(function (b) {
+    var chipsHtml = b.ids.map(function (id) {
+      return '<button type="button" class="orig fid" data-jump="' + esc(id) + '">' + esc(id) + '</button>'
+    }).join(' ')
+    return '<div class="panel"><div class="body" style="padding-left:0">' +
+      '<div class="fo-head"><b>' + esc(b.batch) + '</b><span class="fo-n">' + b.ids.length + ' 项</span></div>' +
+      '<div class="fo-ids">' + chipsHtml + '</div>' +
+      '<div class="fo-why">' + fmt(b.why) + '</div></div></div>'
+  }).join('')
+  foBody.addEventListener('click', function (e) {
+    var b = e.target.closest('.fid')
+    if (!b) return
+    var t = document.getElementById('it-' + b.getAttribute('data-jump'))
+    if (t) {
+      t.scrollIntoView({ block: 'start' })
+      t.classList.add('flash')
+      setTimeout(function () { t.classList.remove('flash') }, 1600)
+    }
+  })
+
+  // ---------- 渲染：口径原文 ----------
+  document.getElementById('statsRaw').textContent = DATA.stats || ''
+
+  // ---------- 交互（沿用旧报告 IIFE 结构：filter / picked 两状态） ----------
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'))
+  var visibleCount = document.getElementById('visibleCount')
+  var pickCount = document.getElementById('pickCount')
+  var pickList = document.getElementById('pickList')
+  var copyBtn = document.getElementById('copyBtn')
+  var clearBtn = document.getElementById('clearBtn')
+  var planPick = document.getElementById('planPick')
+  var planPreview = document.getElementById('planPreview')
+
+  var filter = 'all'
+  var picked = {}
+  DATA.items.forEach(function (it) { if (it.userConfirmed) picked[it.id] = true })
+  var planSel = { carrier: '', degrade: '' }
+
+  function refreshVisible () {
+    var shown = 0
+    items.forEach(function (it) {
+      var sev = it.getAttribute('data-sev')
+      var show = (filter === 'all' || filter === sev)
+      it.classList.toggle('hidden', !show)
+      if (show) shown++
+    })
+    groupTitles.forEach(function (g) {
+      g.classList.toggle('hidden', filter !== 'all' && g.getAttribute('data-gsev') !== filter)
+    })
+    visibleCount.textContent = '显示 ' + shown + ' / ' + items.length + ' 项'
+  }
+
+  function buildReply () {
+    var ids = Object.keys(picked).filter(function (k) { return picked[k] }).sort()
+    if (!ids.length) return ''
+    var plan = [planSel.carrier, planSel.degrade].filter(Boolean).join('+')
+    if (picked['A-01'] && plan) {
+      return '改 ' + ['A-01（方案' + plan + '）'].concat(ids.filter(function (id) { return id !== 'A-01' })).join(' ')
+    }
+    var text = '改 ' + ids.join(' ')
+    if (picked['A-01']) text += '（A-01 方案待定）'
+    return text
+  }
+
+  function refreshPicked () {
+    var ids = Object.keys(picked).filter(function (k) { return picked[k] })
+    ids.sort()
+    pickCount.textContent = ids.length
+    pickList.textContent = ids.length ? '（' + ids.join('、') + '）' : ''
+    copyBtn.disabled = ids.length === 0
+    items.forEach(function (it) {
+      var id = it.getAttribute('data-id')
+      it.classList.toggle('picked', !!picked[id])
+      var cb = it.querySelector('.cb')
+      if (cb) cb.setAttribute('aria-checked', picked[id] ? 'true' : 'false')
+    })
+    if (planPreview) planPreview.textContent = buildReply() || '（未勾选任何条目）'
+  }
+
+  items.forEach(function (it) {
+    var cb = it.querySelector('.cb')
+    if (!cb) return
+    var id = it.getAttribute('data-id')
+    function toggle () {
+      picked[id] = !picked[id]
+      refreshPicked()
+    }
+    cb.addEventListener('click', function (e) { e.stopPropagation(); toggle() })
+    cb.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); toggle() }
+    })
+    it.addEventListener('click', function (e) {
+      // 点条目任意处也可选中，但不干扰文本选择 / 表格 / 行内代码 / 按钮
+      if (window.getSelection && String(window.getSelection()).length) return
+      if (e.target.closest('table') || e.target.closest('code') || e.target.closest('button') || e.target.closest('a')) return
+      toggle()
+    })
+  })
+
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      chips.forEach(function (x) { x.classList.remove('on') })
+      c.classList.add('on')
+      filter = c.getAttribute('data-f')
+      refreshVisible()
+    })
+  })
+
+  if (planPick) {
+    planPick.addEventListener('click', function (e) {
+      var b = e.target.closest('.pp')
+      if (!b) return
+      e.stopPropagation()
+      if (b.getAttribute('data-plan') === 'clear') {
+        planSel.carrier = ''
+        planSel.degrade = ''
+      } else {
+        var k = b.getAttribute('data-plan')
+        var v = b.getAttribute('data-v')
+        planSel[k] = (planSel[k] === v) ? '' : v
+      }
+      syncPlanUI()
+    })
+  }
+  function syncPlanUI () {
+    if (planPick) {
+      Array.prototype.forEach.call(planPick.querySelectorAll('.pp'), function (b) {
+        var k = b.getAttribute('data-plan')
+        if (k && k !== 'clear') b.classList.toggle('on', planSel[k] === b.getAttribute('data-v'))
+      })
+    }
+    refreshPicked()
+  }
+
+  clearBtn.addEventListener('click', function () {
+    picked = {}
+    planSel.carrier = ''
+    planSel.degrade = ''
+    syncPlanUI()
+  })
+
+  function fallbackCopy (text, done) {
+    var ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    var ok = false
+    try { ok = document.execCommand('copy') } catch (e) { ok = false }
+    document.body.removeChild(ta)
+    if (ok) done()
+    else window.prompt('请手动复制：', text)
+  }
+
+  copyBtn.addEventListener('click', function () {
+    var text = buildReply()
+    if (!text) return
+    var done = function () {
+      var old = copyBtn.textContent
+      copyBtn.textContent = '已复制 ✓'
+      setTimeout(function () { copyBtn.textContent = old }, 1500)
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done) })
+    } else {
+      fallbackCopy(text, done)
+    }
+  })
+
+  refreshVisible()
+  refreshPicked()
+})()
+</script>
+</body>
+</html>
