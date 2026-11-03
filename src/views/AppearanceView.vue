@@ -659,10 +659,14 @@ const applyWallpaperChanges = async () => {
       }
       if (state.bgUrl !== url) {
         // A-21：applyCustomBackground 返回 false = 地址为空或被安全闸拒绝
-        //（引擎已 toast 具体原因），此时不能再补「已应用」成功提示、也不清 bgFailed
+        //（引擎已 toast 具体原因），此时不能再补「已应用」成功提示。
+        // 复核 newIssue：这里不再提前清 bgFailed —— CUSTOM_PROXY 恒配置时引擎
+        // 先 await cacheWallpaperBlob 再写 state.bgUrl，过早清除会让重挂载的
+        // 预览 img 以旧失败 URL 起载并报错，把 bgFailed 打回 true，预览块与
+        // 红色失败提示双双滞留（背景已是新图、页面仍显示「加载失败」）。
+        // 清除时机移到下方「渲染源变化」的 watch：bgUrl 落地（字节就绪）后才清。
         const ok = applyCustomBackground()
         if (ok) {
-          bgFailed.value = false
           showToast(tt('toast.customWallpaperApplied'))
         }
       }
@@ -681,7 +685,16 @@ const applyWallpaperChanges = async () => {
   }
 }
 
-const onBgError = () => {
+const onBgError = (e) => {
+  // 复核 newIssue：迟到/过期错误过滤。img 报错的 src 已不是「当前应渲染的源」
+  // （previewSrc 或 bgBlobUrl||bgUrl）时直接忽略——applyCustomBackground 先缓存
+  // 字节再更新 bgUrl 的窗口里，重挂载的 img 可能短暂以旧失败 URL 起载并报错；
+  // 不忽略会把刚清掉的 bgFailed 重新置 true（预览块滞留隐藏），还会弹出与
+  // 「已应用」自相矛盾的失败 toast。与当前源一致的错误仍按真实失败处理
+  //（如 404 自定义地址），A-23 的失败语义不变。
+  const src = String(e?.target?.src || '')
+  const current = state.bgBlobUrl || state.bgUrl
+  if (src && src !== current && src !== previewSrc.value) return
   bgFailed.value = true
   showToast(tt('toast.wallpaperLoadFailed'), 'error')
 }
@@ -754,8 +767,18 @@ const downloadOriginal = async () => {
   showToast(tt('toast.downloadStarted'))
 }
 
-// 切换图源后提示重新换图
-watch(() => state.bgProvider, () => { bgLoaded.value = false; bgFailed.value = false })
+// 图源或「实际渲染源」变化：重置预览/失败标记。
+// 复核 newIssue：bgFailed 的清除必须发生在 state.bgUrl 更新之后——
+// applyCustomBackground（CUSTOM_PROXY 恒配置）先 await cacheWallpaperBlob
+// 再写 state.bgUrl，过早清除（原在 applyWallpaperChanges 成功分支里）会让
+// 重挂载的预览 img 以旧失败 URL 起载并报错，把 bgFailed 打回 true，
+// 预览块与红色失败提示双双滞留（背景已是新图、页面仍显示「加载失败」）。
+// 监听渲染源（bgBlobUrl || bgUrl）：它变化即新图字节已就绪，重挂载的 img
+// 直接以正确 src 起载；404 等真失败仍会由 onBgError 正常置回 true。
+watch(
+  () => [state.bgProvider, state.bgEnabled ? state.bgBlobUrl || state.bgUrl : ''],
+  () => { bgLoaded.value = false; bgFailed.value = false },
+)
 </script>
 
 <style scoped>
