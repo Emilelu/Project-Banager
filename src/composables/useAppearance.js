@@ -408,7 +408,12 @@ function applyAdaptiveText() {
   };
   // 深/浅两个方向都算一遍，取对比度更高的一组：中间亮度区（约 0.18~0.45）单独任一
   // 方向都够不到 4.5，选对比度大者至少保证可读
-  const pick = (effY) => {
+  // deepTowardDark：第四档（deeper）的推进方向。传 true 时按「文字相对模型背景的
+  // 实际位置」决定——中间偏暗的背景（深壁纸浅色模式）会选中深色字，此时第四档必须
+  // 继续变深；旧的 `effY > 0.5 ? 深 : 浅` 推断在这种中间区会反向提亮，
+  // 把 --txt-card-700 推成 1.2:1 的不可读灰（A-07）。仅 --txt-card-700 消费 [3] 档，
+  // main/sb 两套不受影响；深色模式保持旧行为避免连带变化（卡片文字由 .dark 规则接管）。
+  const pick = (effY, deepTowardDark) => {
     const darkScale = deriveTextScale(effY, base, cfg, true);
     const lightScale = deriveTextScale(effY, base, cfg, false);
     const cr = (g) => contrast(relLum(g.split(" ").map(Number)), effY);
@@ -418,7 +423,11 @@ function applyAdaptiveText() {
     // 朝"远离背景"方向再压/提一截，用 rgbWithLum 保证方向正确且不过冲。
     const [r, g, b] = scale[2].split(" ").map(Number);
     const curY = relLum([r, g, b]);
-    const targetY = effY > 0.5 ? Math.max(0.06, curY - 0.12) : Math.min(0.94, curY + 0.12);
+    const targetY = deepTowardDark
+      ? Math.max(0, curY - 0.12)
+      : effY > 0.5
+        ? Math.max(0.06, curY - 0.12)
+        : Math.min(0.94, curY + 0.12);
     const deeper = rgbWithLum([r, g, b], targetY).join(" ");
     return [scale[0], scale[1], scale[2], deeper];
   };
@@ -436,8 +445,25 @@ function applyAdaptiveText() {
   // 保证卡片最暗处依然可读；毛玻璃是 0.70 更亮，套用同一结果只会更安全。
   // 仅用于浅色模式（暗色模式的卡片是深紫底，由 .dark 规则的浅色字接管）。
   const wallY = typeof state.effYWall === "number" ? state.effYWall : 0.5;
-  const effYCard = 0.3 * 1.0 + 0.7 * wallY;
-  const card = pick(effYCard);
+  // A-07：卡片有效亮度改为「sRGB 空间逐通道 alpha 合成 → 再取相对亮度」。
+  // 原来在亮度空间线性混合（0.3×1 + 0.7×wallY）会高估深壁纸下的卡片亮度：
+  // 近黑壁纸实测卡角 ~rgb(122,119,136)（亮度 ≈0.19），模型却给 0.303，
+  // 派生的 --txt-card-500/700 偏深且 700 档方向反转，压在中灰卡上仅 1.21~1.43:1。
+  // 合成链与渲染一致：壁纸(按灰阶近似) → 遮罩(dim×scrim) → 液态玻璃最不利角 0.30 白。
+  // 灰阶近似不影响亮度合成；亮壁纸结果与旧模型几乎一致（0.93 vs 0.93），仅深壁纸被修正。
+  // 暗色模式保持旧公式：卡片文字由 .dark 规则接管，避免连带改动（见上方 pick 注释）。
+  const effYCard = (() => {
+    if (dark) return 0.3 * 1.0 + 0.7 * wallY;
+    const y = clamp(wallY, 0, 1);
+    const wallV =
+      y <= 0.04045 ? 12.92 * y * 255 : 255 * (1.055 * Math.pow(y, 1 / 2.4) - 0.055);
+    const scrimV = 247; // --bg-scrim-light: 245 243 255 的近似灰
+    const dim = clamp(state.bgDim, 0, 0.9);
+    const masked = (1 - dim) * wallV + dim * scrimV;
+    const carded = 0.3 * 255 + 0.7 * masked;
+    return relLum([carded, carded, carded]);
+  })();
+  const card = pick(effYCard, !dark);
   root.style.setProperty("--txt-card-300", card[0]);
   root.style.setProperty("--txt-card-400", card[1]);
   root.style.setProperty("--txt-card-500", card[2]);
@@ -546,7 +572,15 @@ function normalizeAppearance(raw) {
     out.paletteMode = raw.paletteMode;
   }
   if (typeof raw.bgEnabled === "boolean") out.bgEnabled = raw.bgEnabled;
-  if (typeof raw.bgProvider === "string" && raw.bgProvider in PROVIDERS) out.bgProvider = raw.bgProvider;
+  // A-24：'custom' 是 UI 支持的图源（AppearanceView 下拉第 4 项）但不在这张 PROVIDERS
+  // 表里——原先每次启动都会把持久化的 custom 重置回 alcy，而 bgUrl 仍是自定义地址，
+  // UI 与实际壁纸自相矛盾（用户点「换一张」就会被随机图悄悄覆盖）。白名单放行 custom。
+  if (
+    typeof raw.bgProvider === "string" &&
+    (raw.bgProvider in PROVIDERS || raw.bgProvider === "custom")
+  ) {
+    out.bgProvider = raw.bgProvider;
+  }
   if (typeof raw.bgCustomUrl === "string") out.bgCustomUrl = sanitizeBackgroundUrl(raw.bgCustomUrl);
   if (typeof raw.bgUrl === "string") out.bgUrl = sanitizeBackgroundUrl(raw.bgUrl);
   if (typeof raw.bgDim === "number" && raw.bgDim >= 0 && raw.bgDim <= 1) out.bgDim = raw.bgDim;
@@ -762,10 +796,9 @@ function probeBackground() {
     state.bgFailed = true;
     applyBackground();
     if (!state.bgSilentProbe) {
-      showToast(
-        "背景图加载失败，已自动关闭背景（可稍后在设置中重试）",
-        "warning",
-      );
+      // A-22：这里原先硬编码中文，en/ja 界面会弹出中文提示（相邻 toast 均走 i18n）。
+      // key appearance.bgLoadFailedAutoOff 三语早已存在（自愈分支 758 行在用）。
+      showToast(t("appearance.bgLoadFailedAutoOff"), "warning");
     }
   };
   img.onload = () => {
@@ -1063,12 +1096,31 @@ function setPaletteMode(mode) {
   // 'manual' / 预设 / 自定义：配色已由对应入口（setPalette / applyCustomBackground）设定，保持不变
 }
 
-/** 应用自定义图片地址为壁纸（「完成」时调用） */
+/**
+ * 应用自定义图片地址为壁纸（「完成」时调用）。
+ * A-21：sanitizeImageUrl/sanitizeBackgroundUrl 原先只在「下次启动」的
+ * normalizeAppearance 里生效，运行时输入 javascript: 等非法 scheme 会原样直通
+ * state.bgUrl 并持久化、无任何提示。这里在入口先过安全闸：
+ *   - 空：toast pleaseEnterUrl（原先静默 return）
+ *   - 非法：toast invalidWallpaperUrl（三语 key）
+ *   - 合法：按返回的规范化 URL 应用
+ * @returns {boolean} 是否真正发起了应用（false = 被拦截，调用方不应再报成功）
+ */
 function applyCustomBackground() {
   if (state.bgProvider !== "custom") state.bgProvider = "custom";
   const url = (state.bgCustomUrl || "").trim();
-  if (!url) return;
-  _applyNewBg(url);
+  if (!url) {
+    showToast(t("toast.pleaseEnterUrl"), "error");
+    return false;
+  }
+  const safe = sanitizeBackgroundUrl(url);
+  if (!safe) {
+    showToast(t("toast.invalidWallpaperUrl"), "error");
+    return false;
+  }
+  if (safe !== url) state.bgCustomUrl = safe; // 绝对地址规范化后回填输入框，持久化值与显示一致
+  _applyNewBg(safe);
+  return true;
 }
 
 /**

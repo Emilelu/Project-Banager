@@ -554,6 +554,15 @@ html:not(.dark) body.adaptive .border-primary\/30 {
   border-color: rgb(var(--c-primary-dark) / 0.28) !important;
 }
 
+/* A-25：上一条带 !important 的兜底会同时命中「自带 hover 描边」的元素
+   （外观页两张材质卡按钮 idle 态是 border-primary/20 + hover:border-primary/40，
+   已看页时间下拉触发器同样组合），把模板声明的 hover 描边永久压死——
+   浅色模式下悬停毫无反馈。这里给 hover 态开一个更高优先级的出口，
+   恢复工具类本来的目标色；只在 hover 时生效，静止态仍走上面的收敛兜底。 */
+html:not(.dark) body.adaptive .hover\:border-primary\/40:hover {
+  border-color: rgb(var(--c-primary) / 0.4) !important;
+}
+
 /* ==================== 纯白文字压在浅色玻璃上的兜底 ==================== */
 /* 少数位置（如渐变按钮已褪色的禁用态、浅色玻璃上的白色文字）实测对比度不足 1.2:1。
    这里给「浅色背景 + 白字」的常见组合兜底成深色文字。
@@ -2226,6 +2235,19 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   transform: scale(1.02);
   z-index: 1;
 }
+
+/* A-58：带常驻选中放大（scale-110）的元素（外观页预设色圆）悬浮时被上面的
+   .btn-press:hover scale(1.02) 覆盖——「选中+悬浮 1.02 < 未选中悬浮 1.05 < 选中静止 1.1」
+   的缩放语义反转，观感像被点掉。给选中元素开更高特权的 hover 出口：
+   选中=1.1、未选中悬浮=1.05、选中+悬浮=1.1。 */
+.btn-press.scale-110:hover {
+  transform: scale(1.1);
+}
+/* 按下反馈同步补一条同特权的 :active（写在 :hover 之后），否则上面 0,3,0 的
+   :hover 会压过 .btn-press:active 的 0,2,0，选中圆按下时不再回缩 */
+.btn-press.scale-110:active {
+  transform: scale(0.975);
+}
 .btn-base.btn-press:active {
   transform: scale(0.975);
   z-index: 1;
@@ -2568,8 +2590,24 @@ body[data-glass='liquid'] .sidebar-bg {
 }
 
 /* 渐变文字 */
+/* A-39：浅色下原端点 --c-primary/--c-secondary（#7C3AED→#EC4899）压亮玻璃不足 4.5:1
+   （auto 取色最差 1.86~3.77、静态粉端 3.29~3.4）。改用深变体收敛：
+   第一条是纯端色兜底（不支持 color-mix 的浏览器），主端 --c-primary-dark 对白底 7.1:1；
+   第二条与 .btn-toned 同一收敛档（primary-dark/secondary-dark 各 ×72%，白底 ≥4.6、
+   JS 派生档 ≥5.43，见下方 .btn-toned 注释），副色粉端同步达标。
+   深色模式仍由下方 .dark .gradient-text 覆盖为 light 变体，不受影响。 */
 .gradient-text {
-  background: linear-gradient(135deg, rgb(var(--c-primary)), rgb(var(--c-secondary)));
+  background: linear-gradient(135deg, rgb(var(--c-primary-dark)), rgb(var(--c-secondary-dark)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+html:not(.dark) .gradient-text {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, rgb(var(--c-primary-dark)) 72%, black),
+    color-mix(in srgb, rgb(var(--c-secondary-dark)) 72%, black)
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

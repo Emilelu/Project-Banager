@@ -18,14 +18,18 @@
                   <div class="h-12 rounded-lg mb-2 frost-preview"></div>
                   <!-- 风格卡片的说明（「经典柔和模糊」「高光折射 · 更通透」）原为卡片内第二行灰字，
                        改为整卡气泡：卡片本身就是触发点，悬停/聚焦时信息仍在，卡片同时收紧一行。 -->
-                  <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="snowflake" class="text-primary" />{{ tt('theme.frosted') }}</div>
+                  <!-- A-07：标签原先写死 text-gray-800，浅色模式配深壁纸时玻璃卡变中灰底，
+                       深字压中灰底仅 ~1.2:1。改用自适应变量 --txt-card-700（引擎按
+                       「遮罩+玻璃白 合成卡片亮度」派生，深壁纸下自动变浅/加深方向正确），
+                       深色模式由本文件 scoped 的 .dark 规则接管。 -->
+                  <div class="glass-style-label text-sm font-bold flex items-center gap-1.5"><AppIcon scale="sm" name="snowflake" class="text-primary" />{{ tt('theme.frosted') }}</div>
                 </button>
                 <button @click="setGlass('liquid')"
                   class="p-2.5 rounded-xl border-2 text-left transition-all btn-press"
                   v-tip="tt('theme.liquidDesc')" :aria-label="tt('theme.liquidDesc')"
                   :class="state.glass === 'liquid' ? 'border-primary bg-primary/10' : 'border-primary/20 hover:border-primary/40'">
                   <div class="h-12 rounded-lg mb-2 liquid-preview"></div>
-                  <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5"><AppIcon scale="sm" name="droplet" class="text-primary" />{{ tt('theme.liquid') }}</div>
+                  <div class="glass-style-label text-sm font-bold flex items-center gap-1.5"><AppIcon scale="sm" name="droplet" class="text-primary" />{{ tt('theme.liquid') }}</div>
                 </button>
               </div>
             </section>
@@ -218,8 +222,16 @@
 
                   <!-- 「原链接预览 / 下载原图」居中，「遮罩与模糊」靠右 —— 全部与上面同一行。
                        窄屏用 flex-wrap 换行，不挤坏布局。 -->
-                  <div class="flex items-center gap-2.5 flex-1 justify-center min-w-0">
-                    <p v-if="bgFailed" class="tone-danger text-xs text-danger truncate">{{ tt('theme.previewFailed') }}</p>
+                  <!-- A-06：本行原先无 flex-wrap，en/ja 文案较长时两个 shrink-0 按钮撑破
+                       容器 1~116px、右端按钮被裁（ja@768 需横滚才可达）—— 补 flex-wrap 换行；
+                       min-w-0 改 min-w-min：窄视口下本行会被邻块挤到比单个按钮还窄，
+                       按钮仍从行盒溢出（实测 en@768 余 27px），给行一个 min-content 下限
+                       让外层 flex-wrap 提前换行，内部溢出归零。 -->
+                  <!-- A-05：失败提示原先没有 shrink-0，被两个 shrink-0 按钮挤压，
+                       768/1024 全语言宽度塌缩为 0（完全不可见）—— 补 shrink-0 + max-w-full
+                       （超宽时由 truncate 截断而不是塌缩）。 -->
+                  <div class="flex items-center gap-2.5 flex-1 justify-center flex-wrap min-w-min">
+                    <p v-if="bgFailed" class="tone-danger text-xs text-danger shrink-0 max-w-full truncate">{{ tt('theme.previewFailed') }}</p>
                     <button @click="openOriginal" class="btn-base btn-neutral shrink-0"
                       v-tip="tt('theme.openOriginalHint')"><AppIcon scale="sm" name="link" />{{ tt('theme.openOriginal') }}</button>
                     <button @click="downloadOriginal" class="btn-base btn-neutral shrink-0"
@@ -238,13 +250,20 @@
                     </transition>
                   </div>
                 </div>
+                <!-- A-04：applyWallpaperChanges 此前是死代码（全库零调用点），输入任何地址
+                     都毫无反应。这里在提交语义的时机接线：change（失焦/提交）与回车。
+                     非法地址由 applyCustomBackground → sanitizeBackgroundUrl 拦截并报错（A-21）。 -->
                 <input v-if="state.bgProvider === 'custom'" v-model="state.bgCustomUrl" type="text" :placeholder="tt('theme.customUrlPlaceholder')"
+                  @change="applyWallpaperChanges" @keyup.enter="applyWallpaperChanges"
                   :aria-label="tt('theme.customUrlHint')" v-tip="tt('theme.customUrlHint')" class="tone-input w-full mt-3 px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white/80" />
                   <!-- 自动换图 / 固定壁纸：自定义图源由用户指定固定地址，无换图概念，整块隐藏 -->
                   <!-- 两个模式按钮常驻显示、互斥高亮：点「自动换一张」就是开自动换图，
                        点「固定当前壁纸」就是固定当前这张（内部把随机端点解析为稳定地址）。
                        不再用"当前状态即下一步动作"的 toggle，避免点一下反而固定/换掉的歧义 -->
-                <div v-if="state.bgUrl" class="mt-4">
+                <!-- A-23：bgFailed 时原先仍渲染 1144×308 的空白预览大块 + 破图图标，
+                     把「遮罩与模糊」等控件推出视口 —— 失败期整块不渲染，
+                     失败原因由上方红色提示与 toast 承载。 -->
+                <div v-if="state.bgUrl && !bgFailed" class="mt-4">
                   <!-- 预览走降采样缩略图：大分辨率原图直接解码会造成弹窗卡顿，
                        这里展示 buildPreview 生成的 1600px 内 blob URL（见 script 说明）；
                        生成中显示骨架，降级失败才回退原图直出 -->
@@ -256,7 +275,7 @@
                     <div v-else class="absolute inset-0 animate-pulse bg-white/50"></div>
                   </div>
                   <p v-if="noCorsSource" class="tone-warning card-sub mt-1 flex items-start gap-1">
-                    <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ tt('theme.noCorsDetail') }}
+                    <AppIcon scale="xs" name="warning" class="mt-0.5" />{{ noCorsReason === 'proxyUnhealthy' ? tt('theme.noCorsProxyUnhealthy') : tt('theme.noCorsDetail') }}
                   </p>
                 </div>
                 <!-- 遮罩/模糊属于低频微调：默认折叠，避免弹窗被撑到必须滚动，
@@ -295,7 +314,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl } from '../composables/useAppearance'
+import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl, getProxyHealth } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 import { useI18n } from '../composables/useI18n'
 
@@ -311,6 +330,15 @@ const bgFailed = ref(false)
 //   ② 无法读取字节 → 「下载原图」降级为打开原图后另存
 //   ③ 随机端点 + 无法读取重定向目标 → 预览/原链接打开的图无法保证与背景是同一张
 const noCorsSource = computed(() => providerBlocksPalette(state.bgProvider))
+
+// A-57：取色不可用有两种原因——「未配置跨域代理」与「代理已配置但连续失败（不健康）」，
+// providerBlocksPalette 对两者都返回 true。警告文案必须与真实原因一致，
+// 否则配置了代理的用户会被「未配置」误导排查方向。
+const noCorsReason = computed(() => {
+  if (!noCorsSource.value) return ''
+  const h = getProxyHealth()
+  return h.configured && h.consecutiveFails >= 2 ? 'proxyUnhealthy' : 'noProxy'
+})
 
 // —— 预览图降采样：原图分辨率过高（4K/8K）时，弹窗打开会因解码整张位图而卡顿。
 // 这里把预览改为「离主线程解码 + 缩小到 1600px 内 + 编码为小尺寸 blob URL」的缩略图，
@@ -630,9 +658,13 @@ const applyWallpaperChanges = async () => {
         return
       }
       if (state.bgUrl !== url) {
-        applyCustomBackground()
-        bgFailed.value = false
-        showToast(tt('toast.customWallpaperApplied'))
+        // A-21：applyCustomBackground 返回 false = 地址为空或被安全闸拒绝
+        //（引擎已 toast 具体原因），此时不能再补「已应用」成功提示、也不清 bgFailed
+        const ok = applyCustomBackground()
+        if (ok) {
+          bgFailed.value = false
+          showToast(tt('toast.customWallpaperApplied'))
+        }
       }
     } else if (state.bgProvider !== providerAtOpen.value) {
       // 随机图源：切换了图源，立即取一张
@@ -862,5 +894,33 @@ html:not(.dark) .tone-num {
 }
 .dark .tone-warning {
   color: #fcd34d !important;
+}
+
+/* A-26：浅色模式下 tone-danger（#EF4444）直接压浅色玻璃卡只有 2.3~2.6:1
+   （10.5px 小字，AA 需 4.5，纯色上限约 3.5——原色无解），加深到 red-800 档
+   （#991B1B，对白底 6.5:1、对实测玻璃底 6.5:1，留足余量；red-700 #B91C1C 仅 5.1）。
+   深色模式沿用上方 .dark .tone-danger 的提亮规则，不受影响。 */
+html:not(.dark) .tone-danger {
+  color: #991b1b !important;
+}
+
+/* A-59：深色模式下壁纸开关「关」态的 bg-gray-300 未被 .dark 区段反转——
+   亮灰 rgb(209,213,219) 压深紫卡刺眼，白色旋钮对轨道仅 ~1.47:1。
+   改深灰半透明底（叠加在深卡上），旋钮保持白色，对比回到 ~10:1。 */
+.dark .bg-gray-300 {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+/* A-07：材质按钮标签的自适应文字色。
+   浅色：用引擎按「遮罩+玻璃白 合成卡片亮度」派生的 --txt-card-700
+   （深壁纸下为近黑深字，亮壁纸下为收敛深灰，均 ≥4.5:1）；
+   深色：卡片文字由 .dark 规则统一接管（引擎在深色模式保持旧模型，
+   --txt-card-* 不可直接用，见 applyAdaptiveText 注释），提亮为 #e2e8f0
+   （与 style.css 的 .dark .text-gray-800 同档，保持深色观感不变）。 */
+.glass-style-label {
+  color: rgb(var(--txt-card-700, 31 41 55));
+}
+.dark .glass-style-label {
+  color: #e2e8f0 !important;
 }
 </style>
