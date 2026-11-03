@@ -10,7 +10,11 @@
         <input v-model="newName" type="text" :placeholder="tt('tags.namePlaceholder')" maxlength="20"
           class="tag-input flex-1 min-w-[10rem] px-3 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80"
           @keyup.enter="createTag" />
-        <ColorPicker :value="newColor" size="2.5rem" :aria-label="tt('tags.color')" :tip="tt('tags.color')" @input="newColor = $event" />
+        <!-- size 对齐同行控件实际渲染高：.tag-input/.btn-base = 0.5rem×2 padding
+             + 1.25rem line-height + 1px×2 边框 = 2.25rem + 2px ≈ 33.5px（根字号 14px）。
+             原值 2.5rem = 35px，中心对齐下上下各外扩 0.75px（审计 A-50）。用 rem 而非 px，
+             跟随根字号缩放方向与相邻控件保持一致。 -->
+        <ColorPicker :value="newColor" size="2.393rem" :aria-label="tt('tags.color')" :tip="tt('tags.color')" @input="newColor = $event" />
         <button @click="createTag" :disabled="!newName.trim()"
           class="btn-base btn-primary shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">
           <AppIcon scale="sm" name="plus" />{{ tt('tags.addShort') }}
@@ -22,7 +26,9 @@
     <!-- 标签列表 -->
     <div class="glass rounded-2xl shadow-lg border border-white/30 px-6 py-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div class="flex items-center gap-2 mb-3">
+        <!-- mb-3 只留外层这一层：内层再挂一个会与外层叠加成 21px（flex 子项 margin 不塌陷），
+             标题与内容间距比新建卡（单层 mb-3 = 10.5px）多一档（审计 A-48）。 -->
+        <div class="flex items-center gap-2">
           <AppIcon scale="md" name="bookmark" class="text-primary" />
           <!-- 与其它页的 tooltip 标题保持同一几何：inline-flex + gap-1，
                让 info 图标与文字之间有 3.5px 间隙（原 block 布局下图标紧贴文字）。 -->
@@ -48,7 +54,9 @@
               @keyup.enter="saveRename(tag)" @keyup.esc="cancelRename" @blur="saveRename(tag)" />
           </template>
           <template v-else>
-            <span class="tag-name flex-1 text-sm text-gray-700 truncate">{{ tagLabel(tag, tt) }}</span>
+            <!-- v-tip 兜底全名：名称带 truncate，窄视口（768）下 20 字名会被截断且无省略提示；
+                 行内改名/删除按钮都有 v-tip，唯独名称没有（审计 A-49）。气泡挂 body，不受玻璃包含块影响。 -->
+            <span class="tag-name flex-1 text-sm text-gray-700 truncate" v-tip="tagLabel(tag, tt)">{{ tagLabel(tag, tt) }}</span>
             <span v-if="tag.is_builtin" class="tag-badge text-xs text-gray-400 shrink-0">{{ tt('tags.builtin') }}</span>
           </template>
 
@@ -270,6 +278,15 @@ watch(() => tags.value.length, () => { error.value = '' })
   /* 新建失败提示：danger 原色在深色底上偏暗，提亮到 400 档 */
 .dark .tag-error {
   color: #fca5a5 !important;
+}
+
+  /* 新建失败提示（浅色）：text-danger（#EF4444）压在玻璃卡近白底上实测只有
+     3.5~3.6:1（WCAG AA 要求 4.5:1，审计 A-19）。深色已有上方提亮规则，浅色这里
+     反向加深一档到 red-700：#B91C1C 对实测卡底 rgb(255,244,251) ≈ 6.0:1。
+     不用 600 档 #DC2626：对同一底色恰为 4.50:1，壁纸略偏色就跌破线，无余量。
+     特异性：.dark .tag-error（三段）> .tag-error（两段），深色仍走提亮值，互不影响。 */
+.tag-error {
+  color: #b91c1c !important;
 }
 </style>
 
