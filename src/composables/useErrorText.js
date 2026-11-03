@@ -114,6 +114,7 @@ export function useErrorText() {
  */
 const IMPORT_ERRORS = [
   { code: 'JSON_UNRECOGNIZED', key: 'impErr.jsonUnrecognized' },
+  { code: 'JSON_PARSE_FAILED', key: 'impErr.jsonParseFailed' },
   { code: 'JSON_MISSING_NAME_WATCHING', key: 'impErr.jsonMissingNameWatching' },
   { code: 'JSON_MISSING_NAME_REMAINING', key: 'impErr.jsonMissingNameRemaining' },
   { code: 'JSON_MISSING_NAME_WATCHED', key: 'impErr.jsonMissingNameWatched' },

@@ -118,6 +118,18 @@ async function boot() {
 
   // 首帧渲染后再打点：若卡死在渲染/响应式循环，这里不会出现
   requestAnimationFrame(() => console.log('[boot] first animation frame ok'))
+
+  // 视觉审计 A-56：/transfer 是路由懒加载 chunk，页内首次进入该页时主区（两张卡）
+  // 要等 chunk 拉完才挂载（dev 实测 171~851ms），期间只有侧栏/顶栏壳。
+  // 本页无数据依赖，故在首帧渲染完成后的空闲时段预取该 chunk：用户点侧栏进入
+  // 导入导出页时组件已就绪，不再出现空白窗。（prod 是 vite-plugin-singlefile 的
+  // inlineDynamicImports 单文件产物，本就无独立 chunk 请求，此预取只服务 dev/慢网。）
+  const preloadTransferView = () => import('./views/ImportExportView.vue')
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(preloadTransferView, { timeout: 3000 })
+  } else {
+    setTimeout(preloadTransferView, 1200)
+  }
 }
 
 boot()

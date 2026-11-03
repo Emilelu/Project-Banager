@@ -56,16 +56,16 @@
         <div class="grid grid-cols-3 gap-2 text-center mt-2">
           <div class="xfer-stat rounded-lg py-1.5">
             <div class="text-base font-bold xfer-success" data-test="result-imported">{{ result.imported }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('importResult.imported') }}</div>
+            <div class="xfer-muted text-xs">{{ tm('importResult.imported') }}</div>
           </div>
           <div class="xfer-stat rounded-lg py-1.5">
             <div class="text-base font-bold" :class="result.failed ? 'xfer-danger' : 'xfer-muted'"
               data-test="result-failed">{{ result.failed }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('importResult.failed') }}</div>
+            <div class="xfer-muted text-xs">{{ tm('importResult.failed') }}</div>
           </div>
           <div class="xfer-stat rounded-lg py-1.5">
             <div class="text-base font-bold xfer-text" data-test="result-total">{{ result.imported + result.failed }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('importResult.total') }}</div>
+            <div class="xfer-muted text-xs">{{ tm('importResult.total') }}</div>
           </div>
         </div>
 
@@ -74,15 +74,15 @@
         <div class="grid grid-cols-3 gap-2 text-center">
           <div class="xfer-stat rounded-lg py-1" data-test="result-table-watching">
             <div class="text-sm font-bold text-primary">{{ result.byTable.watching }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('nav.watching') }}</div>
+            <div class="xfer-muted text-xs">{{ tm('nav.watching') }}</div>
           </div>
           <div class="xfer-stat rounded-lg py-1" data-test="result-table-remaining">
             <div class="text-sm font-bold text-secondary">{{ result.byTable.remaining }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('nav.remaining') }}</div>
+            <div class="xfer-muted text-xs">{{ tm('nav.remaining') }}</div>
           </div>
           <div class="xfer-stat rounded-lg py-1" data-test="result-table-watched">
-            <div class="text-sm font-bold text-accent">{{ result.byTable.watched }}</div>
-            <div class="xfer-muted text-[0.6875rem]">{{ tm('nav.watched') }}</div>
+            <div class="text-sm font-bold xfer-accent">{{ result.byTable.watched }}</div>
+            <div class="xfer-muted text-xs">{{ tm('nav.watched') }}</div>
           </div>
         </div>
 
@@ -217,6 +217,9 @@ import {
 import { useI18n } from '../composables/useI18n'
 import { showToast } from '../composables/useToast'
 import { useDialogFocus } from '../composables/useDialogFocus'
+// A-55：errText 对 {code} 形态的导入错误要走 importErrorText 映射；
+// 此前该函数被使用却从未 import（旧路径只喂字符串错误，潜在 ReferenceError 未爆过）。
+import { importErrorText } from '../composables/useErrorText'
 
 const { tt } = useI18n()
 
@@ -605,11 +608,19 @@ defineExpose({ detectKind, ACCEPT })
 .dark .xfer-link { color: rgb(var(--c-primary-light)); }
 .dark .xfer-link:hover { color: #c4b5fd; }
 
-/* 语义色：浅色模式用主题变量原色，深色模式提亮到 300 档（深底上 4.5:1） */
-.xfer-success { color: rgb(var(--c-success)); }
-.xfer-danger { color: rgb(var(--c-danger)); }
+/* 语义色（A-20 对比度修复）：
+   浅色模式原色实测压在半透明白 stat 底上不够 AA（成功 2.35 / 失败 3.10~3.50 /
+   accent 1.99~2.25），按 ToastHost.vue 的 color-mix 压深做法改写：
+   success 62% / danger 75% / accent 50% 混黑后，对最深实测格底
+   rgb(237,234,233)（L≈0.83）分别约 4.9 / 5.0 / 6.5，留足余量；
+   深色模式维持「提亮档」套路（#6ee7b7 / #fca5a5 / #67e8f9），
+   配合下方 .dark .xfer-stat / .dark .xfer-panel-* 底色加深后全部 ≥5:1。 */
+.xfer-success { color: color-mix(in srgb, rgb(var(--c-success)) 62%, black); }
+.xfer-danger { color: color-mix(in srgb, rgb(var(--c-danger)) 75%, black); }
+.xfer-accent { color: color-mix(in srgb, rgb(var(--c-accent)) 50%, black); }
 .dark .xfer-success { color: #6ee7b7; }
 .dark .xfer-danger { color: #fca5a5; }
+.dark .xfer-accent { color: #67e8f9; }
 
 /* 统计小格 / 导出格式选项：半透明白底，深色下换成深紫半透明
    （不用 bg-white/60：style.css 的深色区段只反转了 /20 /30 /40 /50 /70 /80 /90，
@@ -618,8 +629,12 @@ defineExpose({ detectKind, ACCEPT })
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgb(var(--c-primary) / 0.15);
 }
+/* A-20：深色小格底从白 6% 改为深紫 60%（与 .dark .glass 同族色相）。
+   原 rgba(255,255,255,0.06) 在亮壁纸透色下实测可被抬到 rgb(114,86,107)
+   （L≈0.11），此时 primary/secondary/accent 的提亮字只剩 3.2~3.5:1；
+   压回深底后最坏格底 L≤0.03，格内全部文字 ≥5:1。 */
 .dark .xfer-stat {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(20, 15, 40, 0.6);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
@@ -649,12 +664,15 @@ defineExpose({ detectKind, ACCEPT })
   background: rgb(var(--c-danger) / 0.08);
   border-color: rgb(var(--c-danger) / 0.28);
 }
+/* A-20：深色面板底同理——原 14% 语义色透底在亮壁纸下实测抬到 rgb(111,82,101)，
+   失败标题/错误明细只有 3.6:1。用 color-mix 把 14% 语义色锚进深紫底
+   （与 .dark .glass 同族），保留红/绿色相、压回亮度，标题与错误明细 ≥7:1。 */
 .dark .xfer-panel-ok {
-  background: rgb(var(--c-success) / 0.14);
+  background: color-mix(in srgb, rgb(var(--c-success)) 14%, rgba(20, 15, 40, 0.72));
   border-color: rgb(var(--c-success) / 0.34);
 }
 .dark .xfer-panel-bad {
-  background: rgb(var(--c-danger) / 0.14);
+  background: color-mix(in srgb, rgb(var(--c-danger)) 14%, rgba(20, 15, 40, 0.72));
   border-color: rgb(var(--c-danger) / 0.34);
 }
 </style>

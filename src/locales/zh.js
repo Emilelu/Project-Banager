@@ -7,6 +7,9 @@ export default {
   'datePicker.open': '选择日期',
   // ===== 导入结果错误 =====
   'impErr.jsonUnrecognized': 'JSON 结构无法识别（既不是数组也不是对象）',
+  /* A-55：JSON.parse 异常不再透出 V8 英文原始报错（原始 message 仅入 console），
+     这里给三语短文案。 */
+  'impErr.jsonParseFailed': 'JSON 文件内容无效，无法解析，请检查格式',
   'importKind.watching': '追番',
   'importKind.remaining': '等番',
   'importKind.watched': '已看',
@@ -76,7 +79,9 @@ export default {
   'transfer.unknownType': '不支持的文件类型，请选择 Excel / CSV / JSON / Markdown / 数据库备份文件',
   'transfer.dbConfirmSnapshot': '导入数据库备份会覆盖当前全部数据。继续前会先自动导出当前库作为回滚快照。',
   'transfer.restored': '数据库已恢复',
-  'transfer.restoreDone': '恢复完成，页面将刷新',
+  /* A-53：doRestore 全流程没有 reload，原文案「页面将刷新」与实际行为不符（用户会白等）。
+     按审计建议选「改文案」分支：结果面板已经响应式展示恢复数据，刷新并非必需。 */
+  'transfer.restoreDone': '恢复完成',
   'transfer.resultTitle': '导入结果',
   'transfer.clearResult': '清除结果',
   'transfer.importDone': '已导入 {count} 条记录',

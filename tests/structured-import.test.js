@@ -246,14 +246,16 @@ describe('JSON 回灌', () => {
     expect(res.imported).toBe(0)
     expect(res.failed).toBeGreaterThan(0)
     expect(res.errors.length).toBeGreaterThan(0)
-    expect(String(res.errors[0].message || res.errors[0])).toContain('JSON 解析失败')
+    // A-55：解析异常不再透出「JSON 解析失败：{V8英文message}」，改走 errorCode 体系，
+    // UI 层按 impErr.jsonParseFailed 出本地化文案；这里断言 code（定位同步，用例不删）
+    expect(String((res.errors[0] && res.errors[0].code) || res.errors[0])).toContain('JSON_PARSE_FAILED')
     expect(db.getAllWatching()).toHaveLength(0)
   })
 
   it('空文件 / 顶层不是数组或对象：返回 failed>0 且不抛异常', async () => {
     const empty = await importJson(textFile(''))
     expect(empty.failed).toBeGreaterThan(0)
-    expect(String(empty.errors[0].message || empty.errors[0])).toContain('JSON 解析失败')
+    expect(String((empty.errors[0] && empty.errors[0].code) || empty.errors[0])).toContain('JSON_PARSE_FAILED')
 
     const scalar = await importJson(textFile('123'))
     expect(scalar.failed).toBeGreaterThan(0)

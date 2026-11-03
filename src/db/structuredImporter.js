@@ -152,7 +152,11 @@ export async function importJson(file) {
   try {
     parsed = JSON.parse(raw)
   } catch (e) {
-    result.errors.push(`JSON 解析失败：${e.message}`)
+    // A-55：V8 原始英文报错（如 "Expected property name or '}' in JSON at position 2"）
+    // 透出到 zh/ja 界面难读且与全站文案不协调。错误项改走 errorCode 体系
+    // （UI 层按 impErr.jsonParseFailed 出本地化短文案），原始 message 仅入 console 供排查。
+    console.warn('[importer] JSON.parse failed:', e?.message || e)
+    result.errors.push({ code: 'JSON_PARSE_FAILED' })
     result.failed = 1
     return result
   }

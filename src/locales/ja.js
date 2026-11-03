@@ -10,6 +10,9 @@ export default {
   'datePicker.open': '日付を選択',
   // ===== インポート結果のエラー =====
   'impErr.jsonUnrecognized': 'JSON 構造を認識できません（配列でもオブジェクトでもありません）',
+  /* A-55: JSON.parse 失敗時に V8 の英語エラー文を UI に出さない（console のみ）。
+     三語共通の短いローカライズ文言。 */
+  'impErr.jsonParseFailed': 'JSONファイルの内容が無効で解析できません。形式を確認してください',
   'importKind.watching': '視聴中',
   'importKind.remaining': '更新待ち',
   'importKind.watched': '視聴履歴',
@@ -79,7 +82,9 @@ export default {
   'transfer.unknownType': '未対応のファイル形式です。Excel / CSV / JSON / Markdown / データベースのバックアップを選択してください。',
   'transfer.dbConfirmSnapshot': 'データベースのバックアップをインポートすると現在のデータがすべて上書きされます。続行前に現在のデータベースをロールバック用スナップショットとして書き出します。',
   'transfer.restored': 'データベースを復元しました',
-  'transfer.restoreDone': '復元が完了しました。ページを再読み込みします',
+  /* A-53: doRestore はページを再読み込みしないため、旧文言の「再読み込みします」は
+     実挙動と不一致。監査の提案どおり文言のみ修正（結果パネルが復元データを表示済み）。 */
+  'transfer.restoreDone': '復元が完了しました',
   'transfer.resultTitle': 'インポート結果',
   'transfer.clearResult': '結果をクリア',
   'transfer.importDone': '{count} 件の記録をインポートしました',
@@ -123,7 +128,10 @@ export default {
   'sidebar.exportJson': 'JSON データ (.json)',
   'sidebar.exportCsv': 'CSV 表 (.csv)',
   'sidebar.exportMd': 'Markdown 文書 (.md)',
-  'sidebar.exportDb': 'データベースのバックアップ (.db)',
+  /* A-51：五按钮栅格里可用宽度最大 ~173px（768~1440 视口），原文案需 188px 必截断、
+     扩展名 (.db) 信息丢失；缩短后与同组「JSON データ (.json)」等命名家族一致，
+     实测四视口均不截断（zh/en 本就不截断，不动）。 */
+  'sidebar.exportDb': 'データベース (.db)',
   'sidebar.import': 'インポート',
   'sidebar.importShort': '取込',
   'sidebar.importXlsx': 'Excel 表 (.xlsx)',

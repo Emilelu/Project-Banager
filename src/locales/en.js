@@ -10,6 +10,9 @@ export default {
   'datePicker.open': 'Pick a date',
   // ===== Import result errors =====
   'impErr.jsonUnrecognized': 'JSON structure not recognised (neither an array nor an object)',
+  /* A-55: JSON.parse failures no longer leak the raw V8 English message into the UI
+     (raw message goes to console only); short localized copy here. */
+  'impErr.jsonParseFailed': 'Invalid JSON file: it could not be parsed. Please check the format',
   'importKind.watching': 'Watching',
   'importKind.remaining': 'Waiting',
   'importKind.watched': 'History',
@@ -79,7 +82,10 @@ export default {
   'transfer.unknownType': 'Unsupported file type. Please choose an Excel / CSV / JSON / Markdown / database backup file.',
   'transfer.dbConfirmSnapshot': 'Importing a database backup replaces all current data. A rollback snapshot of the current database is exported first.',
   'transfer.restored': 'Database restored',
-  'transfer.restoreDone': 'Restore complete, the page will reload',
+  /* A-53: doRestore never reloads the page, so the old copy promised a reload
+     that never happens. Copy-only fix (audit suggestion); the result panel
+     already shows restored data reactively. */
+  'transfer.restoreDone': 'Restore complete',
   'transfer.resultTitle': 'Import result',
   'transfer.clearResult': 'Clear result',
   'transfer.importDone': 'Imported {count} records',
