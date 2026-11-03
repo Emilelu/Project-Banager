@@ -3409,7 +3409,13 @@ td .truncate {
  * 「每页」横向 padding 由 14px 收到 10px，宽度从 119 降到 ~95，比例更协调。
  */
 .page-size-trigger {
-  width: 186px;
+  /* min-width 取代固定 width（视觉审计 A-02）：ja 文案最宽，
+     实测触发器内容 159px > 内容盒 154px，固定 186px + overflow:hidden
+     会把 ja 文字裁掉 5px（scrollWidth 189 > clientWidth 184）；
+     zh/en 恰好满宽零余量，字体度量一漂移就裁。min-width 保底
+     「与页码按钮同宽」的设计，文案更宽时自然放宽。 */
+  min-width: 186px;
+  width: auto;
   height: 50px;
   padding: 0 15px;
   border-radius: 16px;
@@ -3740,6 +3746,21 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 .app-menu-panel .is-active {
   color: rgb(var(--c-primary));
   font-weight: 700;
+}
+
+/* 「每页 N 条」菜单自定义行内的「确定」按钮（视觉审计 A-02）：
+   上面的 `.app-menu-panel > div > button { width:100% }` 会误伤它 ——
+   它与固定宽输入框（w-[4.5rem]）同排 nowrap，width:100% 按行内容盒宽解析，
+   行内容必然超出面板：实测菜单 scrollWidth 226/258 > clientWidth 166/190，
+   按钮连同 hover 底色与点击热区伸出圆角面板右缘 58.5/67px 压在表格上。
+   双类选择器（0,2,0）压过 (0,1,2)，恢复 auto 宽度后行内容 ≈141px < 168px 面板宽，
+   60/68px 溢出两视图同时消失；高度/字号与 .btn-sm 档保持一致。 */
+.page-size-menu .pager-confirm-btn {
+  width: auto;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  line-height: 16px;
 }
 
 /* 分隔线统一 */

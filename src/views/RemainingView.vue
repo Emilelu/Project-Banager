@@ -227,7 +227,7 @@
                菜单自身的 backdrop-filter 因此采不到页面背景 → 背景模糊形同虚设。
                语言菜单正是 fixed z-[110] 才正常。 -->
          <Teleport to="body">
-         <div v-if="showPageSizeMenu" role="menu"
+         <div v-if="showPageSizeMenu" ref="pageSizeMenuEl" role="menu"
                 class="page-size-menu app-menu-panel fixed z-[110] min-w-[12rem]"
                 :style="pageSizeMenuStyle">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
@@ -238,7 +238,9 @@
                 <div class="px-3 py-2 flex items-center gap-2 whitespace-nowrap">
                   <input v-model="customPageSize" type="number" min="1" :placeholder="tt('common.custom')"
                     class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
-                  <button @click="applyCustomPageSize" class="btn-base btn-sm btn-link shrink-0">{{ tt('common.confirm') }}</button>
+                  <!-- pager-confirm-btn：避免被 .app-menu-panel > div > button 的 width:100% 命中，
+                       否则与固定宽输入框同排必然横向溢出面板（视觉审计 A-02，见 style.css 同名规则） -->
+                  <button @click="applyCustomPageSize" class="btn-base btn-sm btn-link pager-confirm-btn shrink-0">{{ tt('common.confirm') }}</button>
                 </div>
               </div>
          </Teleport>
@@ -793,32 +795,33 @@ const pageSizeOptions = [10, 20, 50, 100]
 const customPageSize = ref('')
 const showPageSizeMenu = ref(false)
 
-/** 「每页 N 条」菜单的 fixed 坐标（向上展开，贴在触发按钮上方） */
-const pageSizeMenuPos = ref({ left: 0, bottom: 0 })
+/** 「每页 N 条」菜单元素（Teleport 到 body，打开后用它实测宽高做精确定位） */
+const pageSizeMenuEl = ref(null)
 /**
- * 菜单用 bottom 定位：不需要知道菜单自身高度，
- * 「底边贴住触发按钮上边」由 CSS 保证，菜单多高都自动向上展开。
- * （之前用 top = 按钮顶 - 菜单高，得先量高度，时序不可靠。）
+ * 菜单 fixed 定位样式：默认向上展开（bottom 锚定，底边贴触发按钮上方）。
+ * 视觉审计 A-02：打开时等菜单渲染出来用实测宽高重算 ——
+ * 旧常量 MENU_W=200 比实测菜单宽（168/192）偏大，窄视口会把菜单往左多推；
+ * 「上方放不下翻到下方」的翻转判断也必须用真实菜单高度，常量会随根字号/语言漂移。
  */
-const pageSizeMenuStyle = computed(() => ({
-  left: pageSizeMenuPos.value.left + 'px',
-  bottom: pageSizeMenuPos.value.bottom + 'px',
+const pageSizeMenuStyle = ref({
+  left: '0px',
+  bottom: '0px',
   /*
-   * 过渡方向变量：菜单向上展开（底边贴触发器上沿），
-   * 所以缩放原点在 bottom、起始位移向下（+6px）——
-   * 视觉上就是「从下往上长出来」。
-   * 若漏掉这两个变量，CSS 会走默认的 top / -6px，变成「从上往下」，方向相反。
+   * 过渡方向变量（默认向上展开）：缩放原点在 bottom、起始位移向下（+6px）——
+   * 视觉上就是「从下往上长出来」；翻到下方时改写为 top / -6px。
    */
   '--pop-origin-y': 'bottom',
   '--pop-from-y': '6px',
-}))
+})
 
 /**
  * 打开/关闭「每页 N 条」菜单。
  *
  * 菜单是 fixed 定位（为了脱离 .glass 的 backdrop root，让背景模糊生效），
- * 所以必须自己算坐标。向上展开：top = 触发按钮 top - 菜单高 - 间距；
- * 上方放不下就翻到下方。
+ * 所以必须自己算坐标。默认向上展开（底边贴按钮上方 MARGIN 处）；
+ * 上方放不下且下方放得下时翻到下方（兑现旧注释承诺、此前未实现的行为）；
+ * 两头都放不下（视口矮于菜单+触发器）时按空间大的一侧放置并夹进视口，
+ * 保证菜单顶边不越出视口（审计探针 h≤280 的越顶场景）。
  */
 const togglePageSizeMenu = async (e) => {
   if (showPageSizeMenu.value) {
@@ -829,19 +832,68 @@ const togglePageSizeMenu = async (e) => {
   const btn = e && e.currentTarget
   if (!btn) return
   const r = btn.getBoundingClientRect()
-  const MENU_W = 200
   const MARGIN = 8
   const vw = window.innerWidth
   const vh = window.innerHeight
 
-  // 横向：左对齐触发按钮；右侧放不下就贴右边界
+  // 先按旧常量预算给一个初始位（菜单渲染前不空白），渲染后用实测尺寸校正
   let left = r.left
-  if (left + MENU_W > vw - MARGIN) left = Math.max(MARGIN, vw - MENU_W - MARGIN)
+  if (left + 200 > vw - MARGIN) left = Math.max(MARGIN, vw - 200 - MARGIN)
+  pageSizeMenuStyle.value = {
+    left: left + 'px',
+    bottom: (vh - r.top + MARGIN) + 'px',
+    '--pop-origin-y': 'bottom',
+    '--pop-from-y': '6px',
+  }
 
-  // 纵向：用 bottom —— 菜单底边在按钮上方 MARGIN 处，高度多少都自动向上展开
-  const bottom = vh - r.top + MARGIN
+  // 等菜单随 v-if 渲染出来（Teleport 到 body），再实测宽高精确定位
+  await nextTick()
+  const menu = pageSizeMenuEl.value
+  if (!menu) return
+  const mw = menu.offsetWidth
+  const mh = menu.offsetHeight
 
-  pageSizeMenuPos.value = { left: left, bottom: bottom }
+  // 横向：左对齐触发按钮；右侧放不下就贴右边界（用实测宽，不再用偏大常量）
+  if (left + mw > vw - MARGIN) left = Math.max(MARGIN, vw - mw - MARGIN)
+
+  // 纵向：默认向上；上方放不下且下方放得下（或下方相对更宽裕）时翻到下方
+  const spaceAbove = r.top - MARGIN
+  const spaceBelow = vh - r.bottom - MARGIN
+  if (spaceAbove >= mh) {
+    // 上方放得下：维持向上展开（底边贴触发按钮上方 MARGIN 处）
+    pageSizeMenuStyle.value = {
+      left: left + 'px',
+      bottom: (vh - r.top + MARGIN) + 'px',
+      '--pop-origin-y': 'bottom',
+      '--pop-from-y': '6px',
+    }
+  } else if (spaceBelow >= mh) {
+    // 上方放不下、下方放得下：翻到下方展开（顶边贴触发按钮下方 MARGIN 处）
+    pageSizeMenuStyle.value = {
+      left: left + 'px',
+      top: (r.bottom + MARGIN) + 'px',
+      '--pop-origin-y': 'top',
+      '--pop-from-y': '-6px',
+    }
+  } else if (spaceBelow > spaceAbove) {
+    // 两头都放不下、下方相对更宽裕：向下并夹进视口底
+    const top = Math.max(MARGIN, Math.min(r.bottom + MARGIN, vh - MARGIN - mh))
+    pageSizeMenuStyle.value = {
+      left: left + 'px',
+      top: top + 'px',
+      '--pop-origin-y': 'top',
+      '--pop-from-y': '-6px',
+    }
+  } else {
+    // 两头都放不下、上方相对更宽裕：向上但顶边夹进视口（改 top 锚定，靠近触发器且不越顶）
+    const top = Math.max(MARGIN, r.top - MARGIN - mh)
+    pageSizeMenuStyle.value = {
+      left: left + 'px',
+      top: top + 'px',
+      '--pop-origin-y': 'bottom',
+      '--pop-from-y': '6px',
+    }
+  }
 }
 
 
