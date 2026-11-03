@@ -62,7 +62,11 @@
                    已挂到年份筛选触发器与「添加年份」弹窗的标签上；空态只保留主文案。 -->
               <div class="empty-state">
                 <AppIcon scale="xl" name="emptyBox" class="empty-state-icon" />
-                <p class="empty-state-title">{{ searchQuery ? tt('watched.emptyNoMatch') : (selectedYear === '__unclassified__' ? tt('watched.emptyUnclassified') : tt('watched.emptyYear', { year: selectedYear })) }}</p>
+                <!-- 视觉审计 A-18：selectedYear 为空串（无年份组）或 '__all__' 时不能把
+                     空值/哨兵插进 emptyYear —— en 会渲染悬空介词句「No records for 」、
+                     ja 缺主语、__all__ 直接透出哨兵。这两种情况改用不带 {year} 的
+                     watched.emptyTitle（三语现成、此前未被本页使用）；只有真实年份才走 emptyYear。 -->
+                <p class="empty-state-title">{{ searchQuery ? tt('watched.emptyNoMatch') : (selectedYear === '__unclassified__' ? tt('watched.emptyUnclassified') : (selectedYear && selectedYear !== '__all__' ? tt('watched.emptyYear', { year: selectedYear }) : tt('watched.emptyTitle'))) }}</p>
               </div>
             </td>
           </tr>
@@ -252,7 +256,7 @@
               <h3 id="watched-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear' ? tt('confirm.clearTitle') : confirmAction==='batchDelete' ? tt('confirm.batchDeleteTitleShort') : confirmAction==='deleteYear' ? tt('watched.deleteYear') : tt('confirm.deleteTitle') }}</h3>
               <p class="text-sm text-gray-500">
                 <template v-if="confirmAction==='clear'">
-                  <template v-if="clearScope==='year'">{{ tt('confirm.clearYearMessage', { year: selectedYear }) }}</template>
+                  <template v-if="clearScope==='year'">{{ tt('confirm.clearYearMessage', { year: yearDisplayName(selectedYear) }) }}</template>
                   <template v-else>{{ tt('confirm.clearAllMessage') }}</template>
                 </template>
                 <template v-else-if="confirmAction==='batchDelete'">{{ tt('confirm.batchDeleteMessageWatched', { count: confirmTarget }) }}</template>
@@ -289,8 +293,8 @@
                  原来用 flex-wrap 时最长那个会被挤到第二行，视觉不整齐。 -->
             <div class="clear-scope-actions px-6 py-4 border-t border-white/20 grid gap-2.5">
               <button @click="showClearDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
-              <button @click="doClearYear" class="btn-base btn-toned">
-                {{ tt('clearScope.clearYear', { year: selectedYear }) }}
+              <button v-if="showClearYearButton" @click="doClearYear" class="btn-base btn-toned">
+                {{ tt('clearScope.clearYear', { year: yearDisplayName(selectedYear) }) }}
               </button>
               <button @click="doClearAll" class="btn-base btn-danger">
                 {{ tt('clearScope.clearAll') }}
@@ -821,6 +825,28 @@ const openClearDialog = () => {
   showClearDialog.value = true
 }
 
+/**
+ * 年份哨兵 → 用户可读名称（视觉审计 A-17）。
+ * selectedYear 还可能是内部哨兵 '__all__' / '__unclassified__' 或空串（无年份组），
+ * 直接插值进 i18n 会把内部值透给用户（曾显示「清空当前年份 (__all__)」、
+ * toast「__all__ 已清空」），所以任何要把 selectedYear 展示给用户的地方都必须
+ * 先过这里映射成「全部年份 / 未分类」。
+ */
+const yearDisplayName = (label) => {
+  if (!label || label === '__all__') return tt('watched.allYears')
+  if (label === '__unclassified__') return tt('watched.unclassified')
+  return label
+}
+/**
+ * 「清空当前年份」按钮只在选中真实年份或未归类时出现（视觉审计 A-17）：
+ * '__all__' 下 yearItems = 全部记录，该按钮实删所有年份的已看记录，
+ * 文案却宣称只清当前年份 —— 语义误导且不可撤销。旁边本就有诚实的
+ * 「清空所有」按钮，直接隐藏即可，不新增第四个按钮。
+ * 空串（无任何年份组）时该按钮必然空操作、标签同样失真，一并隐藏。
+ */
+const showClearYearButton = computed(() =>
+  !!selectedYear.value && selectedYear.value !== '__all__')
+
 const doClearYear = async () => {
   showClearDialog.value = false
   confirmAction.value = 'clear'
@@ -941,7 +967,7 @@ const confirmActionFn = async () => {
         const yearItems = watchedList.value.map(i => i.id)
         if (yearItems.length === 0) { showToast(tt('toast.noRecordThisYear'),'warning'); return }
         const res = await batchApi.batchDeleteWatched(yearItems)
-        if (res.data.success) { showToast(tt('toast.yearCleared', { year: selectedYear.value })); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
+        if (res.data.success) { showToast(tt('toast.yearCleared', { year: yearDisplayName(selectedYear.value) })); selected.value=null; batchMode.value=false; checkedIds.value=[]; await fetchData() }
         else showToast(errorText(res.data, tt, 'toast.clearFailed'),'error')
       } else {
         // 清空所有

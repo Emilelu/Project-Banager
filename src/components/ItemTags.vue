@@ -137,7 +137,11 @@ const moreTitle = computed(() =>
   min-width: 0;
   padding: 0 0.375rem;
   border-radius: 0.375rem;
-  font-size: 0.6875rem;
+  /* 视觉审计 A-47：常规档原 0.6875rem（1440 下 9.625px）是全站最小字号档，
+     低于 V-13 确立的 10.5px 徽章规格，也小于本组件 compact 档（0.75rem）。
+     对齐到 0.75rem（10.5px@1440）；max-width 6.5rem 按 rem 计不随字号变化，
+     种子最长标签（4 字 CJK）远未触顶，实测无新增截断。 */
+  font-size: 0.75rem;
   line-height: 1.15rem;
   white-space: nowrap;
   max-width: 6.5rem;
