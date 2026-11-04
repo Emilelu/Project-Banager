@@ -1,12 +1,12 @@
 <script setup>
 /**
- * 钟表盘时间选择器 —— 用圆形表盘选「时」和「分」。
+ * 钟表盘时间选择器 —— AOSP 闹钟式两步交互。
  *
- * 设计要点（对齐用户要求「改成钟表那样，可以在时钟上点击时和分」）：
- *   · 表盘是一整个圆，外圈刻度选**小时**（0-23），内圈刻度选**分钟**（0-59）
- *   · 点外圈数字 → 选小时；点内圈 → 选分钟
- *   · 顶部大字显示当前 时:分，选中段高亮
- *   · 可在表盘上按住拖动连续选择（沿圆周滑动）
+ * 设计要点（用户要求「跟 AOSP 设闹钟的逻辑一样，先选时后选分」）：
+ *   · 单圈刻度，一次只渲染当前段：先「小时」（24 格）→ 选完自动切「分钟」（12 格，5 分步进）
+ *   · 分钟段落定（点击或拖拽松手）即收盘并写值；头部大字可手动来回切段
+ *   · 表盘可按住拖动连续选择（沿圆周滑动）
+ *   · 面板水平居中于触发按钮（两侧越界夹进视口）
  *   · 保留手动输入作为兜底（有些用户就想直接打 23:30）
  *
  * 为什么用 SVG 而不是 div 定位：圆盘的刻度按角度计算，SVG 的坐标系天然适合，
@@ -39,8 +39,8 @@ const dragging = ref(false)
 
 const PANEL_W = 280
 const MARGIN = 8
-/** 首帧估算高度：真实高度由 offsetHeight 复测（A-61：硬编码 338 与实测 321 差 17px） */
-const PANEL_H_EST = 338
+/** 面板估算高度：单圈表盘（AOSP 两步式）后真实值 ≈ 312，仍由 offsetHeight 复测 */
+const PANEL_H_EST = 316
 const SIZE = 220
 const CENTER = SIZE / 2
 
@@ -91,31 +91,39 @@ const pointOn = (index, total, radius) => {
   }
 }
 
-/** 小时刻度：24 个，外圈 */
-const HOUR_R = 88
+/** 刻度半径：单圈表盘（AOSP 两步式），时/分共用一个半径，段间切换时只渲染当前段 */
+const R = 88
 const hours = Array.from({ length: 24 }, (_, i) => {
-  const p = pointOn(i, 24, HOUR_R)
+  const p = pointOn(i, 24, R)
   return { value: i, x: p.x, y: p.y, label: String(i) }
 })
 
-/** 分钟刻度：12 个（每 5 分钟一格），内圈 */
-const MIN_R = 52
+/** 分钟刻度：12 个（每 5 分钟一格） */
 const minutes = Array.from({ length: 12 }, (_, i) => {
-  const p = pointOn(i, 12, MIN_R)
+  const p = pointOn(i, 12, R)
   const value = i * 5
   return { value, x: p.x, y: p.y, label: value === 0 ? '00' : String(value) }
 })
 
-/** 指针位置（按当前段） */
+/** 当前段要渲染的刻度（先时后分，一次只渲染一圈） */
+const dialMarks = computed(() => (segment.value === 'hour' ? hours : minutes))
+
+/** 刻度是否为当前选中值 */
+const isMarkOn = (t) =>
+  segment.value === 'hour'
+    ? hour.value === t.value
+    : Math.round((minute.value ?? -1) / 5) * 5 === t.value
+
+/** 指针位置（按当前段，单圈） */
 const handEnd = computed(() => {
   if (segment.value === 'hour') {
     if (hour.value === null) return null
-    return pointOn(hour.value, 24, HOUR_R)
+    return pointOn(hour.value, 24, R)
   }
   if (minute.value === null) return null
   // 分钟取最近的 5 分钟格（用于指针位置），实际值仍可精确到 1
   const idx = Math.round(minute.value / 5) % 12
-  return pointOn(idx, 12, MIN_R)
+  return pointOn(idx, 12, R)
 })
 
 /* ---------------------------- 交互：点击/拖动表盘 ---------------------------- */
@@ -126,7 +134,6 @@ const pickFromEvent = (e) => {
   const cy = box.top + box.height / 2
   const dx = e.clientX - cx
   const dy = e.clientY - cy
-  const dist = Math.hypot(dx, dy)
 
   // 角度：atan2 得到 -180..180，转成「从 12 点顺时针」的 0..360
   let deg = (Math.atan2(dy, dx) * 180) / Math.PI + 90
@@ -138,10 +145,7 @@ const pickFromEvent = (e) => {
     commit(idx, minute.value)
   } else {
     const idx = Math.round(deg / 30) % 12
-    let mm = idx * 5
-    // 靠近内圈中心（半径小于 MIN_R 的一半）→ 视为 0 分微调
-    if (dist < MIN_R * 0.5) mm = minute.value === null ? 0 : minute.value
-    commit(hour.value, mm)
+    commit(hour.value, idx * 5)
   }
 }
 
@@ -157,7 +161,17 @@ const onPointerMove = (e) => {
 }
 
 const onPointerUp = () => {
+  if (!dragging.value) return
   dragging.value = false
+  /* AOSP 两步流程：小时段落定（点击或拖拽松手）自动进入分钟段；
+     分钟段落定即收盘。头部大字仍可手动来回切段。 */
+  if (segment.value === 'hour') {
+    segment.value = 'minute'
+  } else if (minute.value !== null) {
+    open.value = false
+    // 焦点还给触发按钮，避免随面板卸载退回 body
+    nextTick(() => triggerRef.value?.focus?.())
+  }
 }
 
 if (typeof window !== 'undefined') {
@@ -174,10 +188,9 @@ const placePanel = (measured = false) => {
   const btn = triggerRef.value
   if (!btn) return
   const r = btn.getBoundingClientRect()
-  let left = r.left
-  if (left + PANEL_W > window.innerWidth - MARGIN) {
-    left = Math.max(MARGIN, window.innerWidth - PANEL_W - MARGIN)
-  }
+  // 水平居中于触发按钮（用户要求），两侧越界时夹进视口
+  let left = r.left + r.width / 2 - PANEL_W / 2
+  left = Math.min(Math.max(MARGIN, left), window.innerWidth - PANEL_W - MARGIN)
 
   /*
    * 纵向定位：先试上方，放不下翻到下方，都放不下就夹进视口。
@@ -210,10 +223,10 @@ const toggle = () => {
   }
   if (!triggerRef.value) return
   placePanel(false)
+  // AOSP 两步式：每次打开都先进入「选小时」段，选完自动切「分钟」
+  segment.value = 'hour'
   open.value = true
   nextTick(() => {
-    // 未选小时时默认进入「选小时」段
-    segment.value = hour.value === null ? 'hour' : 'minute'
     placePanel(true)
   })
 }
@@ -300,12 +313,12 @@ const clear = () => {
             @click="segment = 'minute'">{{ minuteLabel }}</button>
         </div>
 
-        <!-- 表盘 -->
+        <!-- 表盘：AOSP 两步式单圈——先选时（选完自动切分），分落定即收盘 -->
         <div class="clock-face px-2 pt-1">
           <svg :width="SIZE" :height="SIZE" :viewBox="`0 0 ${SIZE} ${SIZE}`"
             @pointerdown="onPointerDown">
-            <!-- 外圈底盘 -->
-            <circle class="clock-plate" :cx="CENTER" :cy="CENTER" :r="HOUR_R + 14" fill="rgba(255,255,255,0.5)"
+            <!-- 底盘 -->
+            <circle class="clock-plate" :cx="CENTER" :cy="CENTER" :r="R + 14" fill="rgba(255,255,255,0.5)"
               stroke="rgba(0,0,0,0.06)" />
 
             <!-- 指针 -->
@@ -315,28 +328,13 @@ const clear = () => {
             <!-- 圆心 -->
             <circle :cx="CENTER" :cy="CENTER" r="3" fill="currentColor" class="clock-hand" />
 
-            <!-- 小时刻度（24 格，外圈） -->
-            <g v-for="h in hours" :key="'h' + h.value">
-              <circle :cx="h.x" :cy="h.y" r="9"
-                :fill="segment === 'hour' && hour === h.value ? 'rgb(var(--c-primary))' : 'transparent'"
+            <!-- 当前段刻度（时 24 格 / 分 12 格，单圈渲染） -->
+            <g v-for="t in dialMarks" :key="segment + '-' + t.value">
+              <circle :cx="t.x" :cy="t.y" r="10"
+                :fill="isMarkOn(t) ? 'rgb(var(--c-primary))' : 'transparent'"
                 class="clock-dot" />
-              <text :x="h.x" :y="h.y + 3.5" text-anchor="middle" class="clock-num"
-                :class="{
-                  'is-on': segment === 'hour' && hour === h.value,
-                  'is-dim': segment === 'minute',
-                }">{{ h.label }}</text>
-            </g>
-
-            <!-- 分钟刻度（12 格，内圈） -->
-            <g v-for="m in minutes" :key="'m' + m.value">
-              <circle :cx="m.x" :cy="m.y" r="8"
-                :fill="segment === 'minute' && Math.round((minute ?? -1) / 5) * 5 === m.value ? 'rgb(var(--c-primary))' : 'transparent'"
-                class="clock-dot" />
-              <text :x="m.x" :y="m.y + 3" text-anchor="middle" class="clock-num clock-num-min"
-                :class="{
-                  'is-on': segment === 'minute' && Math.round((minute ?? -1) / 5) * 5 === m.value,
-                  'is-dim': segment === 'hour',
-                }">{{ m.label }}</text>
+              <text :x="t.x" :y="t.y + 3.5" text-anchor="middle" class="clock-num"
+                :class="{ 'is-on': isMarkOn(t) }">{{ t.label }}</text>
             </g>
           </svg>
         </div>
@@ -419,6 +417,9 @@ const clear = () => {
 }
 
 .clock-face {
+  /* 表盘在面板内水平居中（用户反馈「没居中」的一半：SVG 默认 inline 左对齐） */
+  display: flex;
+  justify-content: center;
   cursor: crosshair;
   user-select: none;
   touch-action: none;
@@ -429,20 +430,11 @@ const clear = () => {
    浅色 #374151/#4b5563 压在近白圆盘上 7:1 以上；深色 #e5e7eb/#cbd5e1
    压在深色圆盘上同样 ≥4.5:1（圆盘深色下改为 12% 白，见 .dark .clock-plate）。 */
 .clock-num {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   fill: #374151;
   pointer-events: none;
   transition: fill 0.15s ease;
-}
-.clock-num-min {
-  font-size: 10px;
-  fill: #4b5563;
-}
-.clock-num.is-off,
-.clock-num.is-dim {
-  opacity: 1;
-  fill: #4b5563;
 }
 .clock-num.is-on {
   fill: #fff;
@@ -488,13 +480,6 @@ const clear = () => {
 }
 .dark .clock-num {
   fill: #e5e7eb;
-}
-.dark .clock-num-min {
-  fill: #cbd5e1;
-}
-.dark .clock-num.is-off,
-.dark .clock-num.is-dim {
-  fill: #cbd5e1;
 }
 .dark .clock-num.is-on {
   fill: #fff;
