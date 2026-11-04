@@ -206,7 +206,6 @@
               </div>
          </Teleport>
             </transition>
-            <div v-if="showPageSizeMenu" class="fixed inset-0 z-40" @click="showPageSizeMenu=false"></div>
           </div>
         </div>
         <!-- 分页按钮组：间距 8px（调参结果，原 gap-1 = 3.5px 偏挤）。
@@ -1121,6 +1120,14 @@ const formDatePrecision = computed(() => {
 
 // 点击表格行和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
 const onDocClick = (e) => {
+  // 「每页 N 条」菜单：点菜单外任意位置关闭（第二期审计 A-02 复核项）。
+  // 与 RemainingView 的 onDocClick 同构。原先靠 .glass 卡内的 fixed 遮罩，
+  // 被 backdrop-filter 包含块裁成分页卡大小（实测 1630×80），点表格等
+  // 卡外区域关不掉；且本函数下方有 tbody tr 早退，分支必须放在最前。
+  // 按钮自身由 togglePageSizeMenu 处理，closest 白名单豁免菜单/触发器内部点击。
+  if (showPageSizeMenu.value && !e.target.closest('.page-size-menu, .page-size-trigger')) {
+    showPageSizeMenu.value = false
+  }
   if (editing.value && !e.target.closest('input, select, textarea')) {
     cancelEdit()
   }
