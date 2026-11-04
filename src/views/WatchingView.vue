@@ -931,14 +931,17 @@ const toggleTimeSort = () => {
   timeSortAsc.value = !timeSortAsc.value
   localStorage.setItem('watching_time_sort', timeSortAsc.value ? 'asc' : 'desc')
 }
-// 解析 time_slot 中的 HH:mm 为分钟数，无法解析的排在最后
+// 解析 time_slot 中的 HH:mm 为分钟数，无法解析的排在最后。
+// 深夜时段沿用业界 24+ 时制（24:00~29:00，数据层允许录入）：按实际分钟数参与排序
+// （24:00=1440，排在 23:00=1380 之后、24:30=1470 之前）；超出该范围仍视为无法解析。
+// 此前 h>23 一律归 Infinity，两条 Infinity 相减为 NaN，同列深夜条目只能回落插入序。
 const parseTimeSlot = (slot) => {
   if (!slot) return Infinity
   const m = String(slot).match(/(\d{1,2}):(\d{2})/)
   if (!m) return Infinity
   const h = parseInt(m[1], 10)
   const min = parseInt(m[2], 10)
-  if (h > 23 || min > 59) return Infinity
+  if (h > 29 || min > 59) return Infinity
   return h * 60 + min
 }
 const getItemsByDay = (day) => watchingList.value
