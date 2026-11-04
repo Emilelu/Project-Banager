@@ -38,7 +38,7 @@
         </div>
       </div>
 
-      <p v-if="tags.length === 0" class="tag-meta text-sm text-gray-400 text-center py-10">{{ tt('tags.empty') }}</p>
+      <p v-if="listLoaded && tags.length === 0" class="tag-meta text-sm text-gray-400 text-center py-10">{{ tt('tags.empty') }}</p>
       <div v-else class="grid gap-2 sm:grid-cols-2">
         <div v-for="tag in tags" :key="tag.id"
           class="tag-row flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/50 border border-primary/10"
@@ -102,11 +102,22 @@ const { errorText } = useErrorText()
 const { tagLabel } = useTagLabel()
 
 const tags = ref([])
+/**
+ * 首帧门闩（视觉审计 A-08）：标签数据是否已到达。
+ * 与等番/已看页的 listLoaded 同款 —— 数据未返回时不能渲染「还没有标签」，
+ * 否则有数据的用户首帧会看到整页空态（像标签全丢了），数据到达后整体弹入。
+ * 标签列表很短，不需要骨架行，只要压住假空态与顶栏假计数即可。
+ */
+const listLoaded = ref(false)
 
-/** 标签计数同步到顶栏（用户要求：计数统一放页面标题旁，不占卡片内一行） */
+/** 标签计数同步到顶栏（用户要求：计数统一放页面标题旁，不占卡片内一行）
+ *  门闩前不写：否则首帧顶栏先亮「共 0 个」，与空态叠加成「标签全丢了」的错觉。 */
 watch(
-  () => tags.value.length,
-  (n) => setPageStats('/tags', [{ text: tt('tags.totalCount', { count: n }), tone: 'neutral' }]),
+  [() => tags.value.length, listLoaded],
+  ([n, loaded]) => {
+    if (!loaded) return
+    setPageStats('/tags', [{ text: tt('tags.totalCount', { count: n }), tone: 'neutral' }])
+  },
   { immediate: true },
 )
 
@@ -124,10 +135,17 @@ const load = async () => {
     tags.value = res?.data?.data || []
   } catch {
     tags.value = []
+  } finally {
+    // 失败也放行：否则门闩永远不打开，空态/计数都不再出现（错误态会被当成加载中）
+    listLoaded.value = true
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  // 进入页面先清掉上次留下的计数：加载窗口里顶栏宁可空着，也不能显示旧数字（A-08）。
+  clearPageStats('/tags')
+  load()
+})
 
 const createTag = async () => {
   const name = newName.value.trim()

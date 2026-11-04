@@ -1,11 +1,15 @@
 <template>
+  <!-- 视觉审计 A-10：选中/勾选的 3px 左轨必须用任意值语法 border-l-[3px]。
+       Tailwind 默认 borderWidth 刻度是 0/1/2/4/8，`border-l-3` 不是合法刻度，
+       会被静默丢弃（运行时规则数 0、computed border-left-width 0px），
+       只剩背景淡色，与表格行 V-27 的 3px 左轨不一致。 -->
   <div
     class="watching-card px-3 py-2.5 border-b border-white/10 cursor-pointer transition-all duration-200 group relative"
     :class="[
       batchMode && checked
-        ? 'bg-danger/10 border-l-3 border-l-danger'
+        ? 'bg-danger/10 border-l-[3px] border-l-danger'
         : selected
-          ? 'bg-primary/15 border-l-3 border-l-primary'
+          ? 'bg-primary/15 border-l-[3px] border-l-primary'
           : 'hover:bg-primary/5'
     ]"
     role="button" tabindex="0"
@@ -336,12 +340,16 @@ const onCardKeydown = (e) => {
   white-space: nowrap;
 }
 
-/* 标签行：固定最小高度，保证有/无标签的卡片等高 */
+/* 标签行：固定最小高度，保证有/无标签的卡片等高。
+   视觉审计 A-38：占位高度必须与徽章**实高**一致，否则无标签卡整行塌到占位值。
+   compact 徽章 = line-height 1.25rem + 上下各 1px 边框 = 1.25rem + 2px（root 14px
+   下 19.5px）；原先只写 1.25rem（17.5px）比徽章矮 2px，同列无标签卡的集数行/备注行
+   上移 2px，与「保证同列卡片文字基线不错位」的设计承诺相悖。 */
 .card-tags-row {
   display: flex;
   align-items: center;
   min-width: 0;
-  min-height: 1.25rem;
+  min-height: calc(1.25rem + 2px);
   margin-top: 0.25rem;
   overflow: hidden;
 }

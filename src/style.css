@@ -4062,6 +4062,28 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 .dark .record-table tbody tr.is-selected { background-color: rgb(var(--c-primary) / 0.34); }
 .dark .record-table tbody tr.is-checked { background-color: rgb(var(--c-danger) / 0.28); }
 
+/* ===== 视觉审计 A-09：深色下悬停把语义行底色击穿 =====
+ * 深色通用悬浮规则 .dark .list-item:hover（primary/0.10 !important）与
+ * .dark .editable-cell:hover（primary/0.15 !important）压过了上面两条无 !important
+ * 的语义底色：鼠标停在已选中/已勾选行上时，选中行 0.34 → 0.10、勾选行 danger 红
+ * 0.28 → 主题紫 0.10（色相从「危险红」变成「主题紫」，语义错乱），与斑马纹几乎不可分
+ * （合成后约 1.02~1.19:1）。左轨 box-shadow 同时被 :hover 变体翻成 primary-dark。
+ * 修法：给深色语义行补专用 :hover 变体，保持与不悬停时完全相同的底色与左轨；
+ * 并让语义行内单元格的悬停底色让位（否则红行上仍会叠一层主题紫）。
+ * 特异性 (0,4,2) > .dark .list-item:hover (0,3,0)；!important 与通用规则对齐。 */
+.dark .record-table tbody tr.is-selected:hover {
+  background-color: rgb(var(--c-primary) / 0.34) !important;
+  box-shadow: inset 3px 0 rgb(var(--c-primary-light));
+}
+.dark .record-table tbody tr.is-checked:hover {
+  background-color: rgb(var(--c-danger) / 0.28) !important;
+  box-shadow: inset 3px 0 rgb(var(--c-danger));
+}
+.dark .record-table tbody tr.is-selected > .editable-cell:hover,
+.dark .record-table tbody tr.is-checked > .editable-cell:hover {
+  background-color: transparent !important;
+}
+
 /* ===== 视觉审计 A-41：浅色表头文字随 auto 取色漂移不达标 =====
  * th 的 text-primary-dark 直接吃 --c-primary-dark；该变量由引擎朝「理想浅底(亮度
  * 0.82)」收敛到恰好 4.5:1，而实际玻璃合成底（壁纸透色后）常更暗，暖色相轮次实测

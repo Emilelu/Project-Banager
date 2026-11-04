@@ -55,8 +55,15 @@
           <!-- ⚠️ 勿在此处加无限动画：本元素在 .glass（backdrop-filter）子树内，
                动画会使这块占屏 62% 的玻璃每帧重新捕获背景并模糊，导致 GPU 持续满载。
                详见 .workbuddy/memory/2026-09-13.md -->
-          <!-- 周历空白处右键 → 添加番剧（用户要求：不再需要按钮） -->
-          <div v-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center cursor-default"
+          <!-- 周历空白处右键 → 添加番剧（用户要求：不再需要按钮）。
+               视觉审计 A-08：「暂无」是**数据已到且该列确实为空**才成立的结论。
+               dataLoaded 之前 7 列全都会命中空判断，有数据的用户首帧看到 7 个「暂无」，
+               数据到位后卡片突然替换。门闩前改渲染静态细条占位（与 V-19 门闩同思路）。 -->
+          <div v-if="!dataLoaded" class="day-col-skeleton" aria-hidden="true">
+            <span class="day-col-skeleton-bar"></span>
+            <span class="day-col-skeleton-bar is-short"></span>
+          </div>
+          <div v-else-if="getItemsByDay(day).length===0" class="flex-1 flex items-center justify-center cursor-default"
             @contextmenu.prevent="openEmptyAreaMenu($event)">
             <span class="empty-inline"><AppIcon scale="sm" name="sparkle" />{{ tt('watching.noItem') }}</span>
           </div>
@@ -1300,9 +1307,12 @@ onMounted(async () => {
 
 
 // 计数同步到顶栏（追番总数）
+// 首帧门闩（视觉审计 A-08）：dataLoaded 之前不写，否则顶栏先亮「共 0 条」，
+// 与列内 7 个「暂无」叠加成「数据全丢了」的错觉；数据到达后随 length 变化正常更新。
 watch(
-  () => watchingList.value.length,
-  (n) => {
+  [() => watchingList.value.length, dataLoaded],
+  ([n, loaded]) => {
+    if (!loaded) return
     setPageStats('/watching', [
       { text: tt('watched.totalCount', { count: n }), tone: 'neutral' },
     ])
@@ -1456,5 +1466,32 @@ const unpinLeavingGroup = (el) => {
    Vue 的 -move 位移测量失去参照，归位动画同样不会播放。 */
 .sel-anim-wrap {
   position: relative;
+}
+
+/* ── 周历列首帧占位（视觉审计 A-08）──────────────────────────────────
+   数据未到时列内渲染静态细条，而不是「暂无」假空态。
+   ⚠️ 本元素在 .glass（backdrop-filter）子树内，**禁止任何动画**：
+   无限动画会让这块占屏 62% 的玻璃每帧重捕获背景并模糊（AGENTS.md 第 7 条）。
+   所以这里只给静态底色，不做 pulse。 */
+.day-col-skeleton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-height: 0;
+}
+.day-col-skeleton-bar {
+  display: block;
+  height: 2.25rem;
+  border-radius: 0.375rem;
+  background: rgb(var(--c-primary) / 0.08);
+}
+.day-col-skeleton-bar.is-short {
+  height: 1.5rem;
+  width: 70%;
+}
+.dark .day-col-skeleton-bar {
+  background: rgb(255 255 255 / 0.06);
 }
 </style>
