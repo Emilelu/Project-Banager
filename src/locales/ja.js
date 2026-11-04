@@ -474,6 +474,7 @@ export default {
   'toast.maskBlurReset': 'マスクとぼかしを初期設定に戻しました',
   'toast.paletteReset': '配色を初期設定に戻しました（壁紙から色を取得）',
   'toast.movedToRemaining': '更新待ちリストへ移動しました ⏳',
+  'toast.movedToDay': '{day}に移動しました',
   'toast.movedToWatching': '視聴中リストへ移動しました',
   'toast.paletteRandomized': '配色をランダムに変更しました',
   'toast.yearDeleted': '年を削除しました',

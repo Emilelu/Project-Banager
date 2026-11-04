@@ -475,6 +475,7 @@ export default {
   'toast.maskBlurReset': 'Mask and blur restored to defaults',
   'toast.paletteReset': 'Palette restored to default (sampled from wallpaper)',
   'toast.movedToRemaining': 'Moved to the Waiting list ⏳',
+  'toast.movedToDay': 'Moved to {day}',
   'toast.movedToWatching': 'Moved to the Watching list',
   'toast.paletteRandomized': 'Palette randomized',
   'toast.yearDeleted': 'Year deleted',

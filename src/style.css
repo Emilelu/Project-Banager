@@ -4108,3 +4108,24 @@ html:not(.dark) .record-table tbody tr.list-item:not(.is-selected):not(.is-check
 /* 清空范围弹窗：按钮按内容换行排列，短屏/大字号下不溢出卡片 */
 .clear-scope-actions { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
 .clear-scope-actions > button { white-space: normal; word-break: break-word; min-height: 2.125rem; }
+
+/* ==================== 周历拖拽跨列改星期（审计 A-40，任务书「拖拽排序跨列」） ==================== */
+/* 拖源卡片：拖拽期间降透明度，明确「被拖走的是它」；drop/dragend 后由视图层复位。
+   透明度只作用于卡片自身（不作用于祖先），不会触发 backdrop root 问题。 */
+.watching-card.is-dragging {
+  opacity: 0.4;
+}
+
+/* 落点列高亮：主题色淡底 + 内描边，与进度条轨道同一套主题变量（取色/换肤自动跟随）。
+   置于文件末尾：浅色下同特异性压过 .bg-white/30 工具类；深色下 .dark .bg-white\/30
+   （style.css:1649「周历列背景」）用 !important 锁了底色，故深色高亮同样 !important
+   （同特异性、文件序在后 → 生效），把淡底提到 22% 保证深玻璃上仍可见。 */
+.col-drag-over {
+  background-color: rgb(var(--c-primary) / 0.10);
+  box-shadow: inset 0 0 0 2px rgb(var(--c-primary) / 0.35);
+}
+
+.dark .col-drag-over {
+  background-color: rgb(var(--c-primary) / 0.22) !important;
+  box-shadow: inset 0 0 0 2px rgb(var(--c-primary) / 0.45);
+}

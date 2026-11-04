@@ -468,6 +468,7 @@ export default {
   'toast.maskBlurReset': '已恢复默认遮罩与模糊',
   'toast.paletteReset': '已恢复默认配色（跟随壁纸取色）',
   'toast.movedToRemaining': '已移至等番列表 ⏳',
+  'toast.movedToDay': '已移到{day}',
   'toast.movedToWatching': '已移至追番列表',
   'toast.paletteRandomized': '已随机配色',
   'toast.yearDeleted': '年份已删除',

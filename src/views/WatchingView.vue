@@ -29,8 +29,13 @@
         </div>
         <div v-for="(day, colIdx) in weekDays" :key="'col-'+day"
           class="border-r border-white/10 last:border-r-0 min-h-[18.75rem] flex flex-col bg-white/30"
-          @contextmenu.prevent.self="openEmptyAreaMenu($event)">
+          :class="{ 'col-drag-over': dragOverDay === day }"
+          @contextmenu.prevent.self="openEmptyAreaMenu($event)"
+          @dragover="onColumnDragOver($event, day)"
+          @drop.prevent="onColumnDrop($event, day)">
           <WatchingCard v-for="item in getItemsByDay(day)" :key="item.id" class="flex-1"
+            :draggable="canDrag" :class="{ 'is-dragging': draggingId === item.id }"
+            @dragstart="onCardDragStart($event, item)" @dragend="onCardDragEnd"
             :item="item"
             :selected="selected?.id===item.id"
             :batch-mode="batchMode"
@@ -88,6 +93,8 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <WatchingCard v-for="item in unscheduledItems" :key="item.id" class="w-64"
+          :draggable="canDrag" :class="{ 'is-dragging': draggingId === item.id }"
+          @dragstart="onCardDragStart($event, item)" @dragend="onCardDragEnd"
           :item="item"
           :selected="selected?.id===item.id"
           :batch-mode="batchMode"
@@ -951,6 +958,46 @@ const getItemsByDay = (day) => watchingList.value
     const tb = parseTimeSlot(b.time_slot)
     return timeSortAsc.value ? ta - tb : tb - ta
   })
+
+// ========== 周历拖拽：跨列改星期（任务书「拖拽排序跨列」，审计 A-40） ==========
+// HTML5 DnD：卡片为拖源（draggable/@dragstart 走 WatchingCard 根节点 attr 透传），
+// 七个星期列为落点，drop 即改写 day_of_week（未排期卡拖入即入列；同列/同值 no-op）。
+// 边界处理与 placeContextMenu 同一取向：只认本页发起的拖拽（draggingId 为 null 时
+// dragover 不 preventDefault，外部拖入的文本/文件无法落列），dragend 兜底清理状态。
+// 键盘等价路径不缺位：改星期仍可走编辑弹窗的星期下拉（行内编辑/批量模式下禁拖）。
+const draggingId = ref(null)   // 正被拖拽的卡片 id（拖源降透明度，提示「拖的是它」）
+const dragOverDay = ref('')    // 悬停中的落点列（整列高亮）
+const canDrag = computed(() => !batchMode.value && !editing.value)
+const onCardDragStart = (e, item) => {
+  draggingId.value = item.id
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(item.id))
+}
+const onCardDragEnd = () => { draggingId.value = null; dragOverDay.value = '' }
+const onColumnDragOver = (e, day) => {
+  // 外部拖入（文件/文本/外链）不 preventDefault：列不成为系统拖拽的落点
+  if (draggingId.value === null) return
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dragOverDay.value = day
+}
+const moveItemToDay = async (item, day) => {
+  if (!item || item.day_of_week === day) return
+  try {
+    const res = await watchingApi.update(item.id, { day_of_week: day })
+    if (res.data.success) {
+      showToast(tt('toast.movedToDay', { day: dayLabel(day) }), 'success')
+      await fetchData()
+    } else {
+      showToast(errorText(res.data, tt, 'toast.updateFailed'), 'error')
+    }
+  } catch { showToast(tt('toast.updateFailed'), 'error') }
+}
+const onColumnDrop = (e, day) => {
+  dragOverDay.value = ''
+  const id = Number(e.dataTransfer.getData('text/plain'))
+  moveItemToDay(watchingList.value.find(i => i.id === id), day)
+}
 
 const fetchData = async () => {
   try {
