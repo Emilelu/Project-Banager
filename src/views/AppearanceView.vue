@@ -314,7 +314,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl, getProxyHealth } from '../composables/useAppearance'
+import { useAppearance, hexToHsl, hslCss, isCrossOrigin, getWallpaperBlob, providerBlocksPalette, sanitizeImageUrl, getProxyHealth, wallpaperProxyUrls } from '../composables/useAppearance'
 import { showToast } from '../composables/useToast'
 import { useI18n } from '../composables/useI18n'
 
@@ -344,16 +344,21 @@ const noCorsReason = computed(() => {
 // 这里把预览改为「离主线程解码 + 缩小到 1600px 内 + 编码为小尺寸 blob URL」的缩略图，
 // 弹窗内 <img> 只渲染小图，原图永远不在弹窗里解码。
 // 注意：tc.alcy.cc 等图床直链无 CORS 头，直接 fetch 会被拦，需走与取色一致的代理链兜底。
+// 代理链与主引擎共用（wallpaperProxyUrls，自建 pbm-proxy 置顶）：原先这里私养了一份
+// 「cors.sh → allorigins → weserv」名单，三家已全部失效，且每次失败都以 console error
+// 落地（验收①要求 0 error，2026-11-05 实测每次进本页产出 6~7 条）—— 已删除并改用共用链。
+// 另与引擎 cacheWallpaperBlob 的隐私约束对齐：用户自定义地址可能携带 token/内网信息，
+// **绝不外发给任何代理**，只做直连（失败直接走原图直出，不再等一整条代理链超时）。
 const MAX_PREVIEW_SIDE = 800
-const PREVIEW_PROXIES = [
-  (u) => `https://proxy.cors.sh/${u}`,
-  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ''))}`,
-]
 const previewSrc = ref('')       // 降采样后的预览地址（blob URL / 空=生成中）
 const previewFailed = ref(false) // 降采样不可用/失败 → 退回原图直出
 let previewGen = 0               // 代际计数：迟到的异步结果不覆盖新预览
 let previewUrl = ''              // 当前 blob URL，换图/卸载时 revoke
+
+const previewSources = (url) => {
+  const chain = state.bgProvider === 'custom' ? [] : wallpaperProxyUrls(url)
+  return isCrossOrigin(url) ? chain : [url, ...chain]
+}
 
 async function buildPreview(url) {
   // ① 已有主程序缓存的字节：直接把它的 blob URL 交给 <img> 即可，无需降采样。
@@ -379,15 +384,20 @@ async function buildPreview(url) {
   previewFailed.value = false
   let blob = getWallpaperBlob()?.blob || null
   const grab = async (u) => {
-    const r = await fetch(u)
-    if (!r.ok) throw new Error('fetch failed')
-    return r.blob()
+    // 6s 超时兜底：代理挂起时尽快进入失败降级，不无限期推迟预览/失败提示（A-05）
+    const ac = typeof AbortController !== 'undefined' ? new AbortController() : null
+    const timer = ac ? setTimeout(() => ac.abort(), 6000) : null
+    try {
+      const r = await fetch(u, ac ? { signal: ac.signal } : undefined)
+      if (!r.ok) throw new Error('fetch failed')
+      return await r.blob()
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
   // 无缓存时再抓：直连仅用于同源；跨域图床直接走代理链，跳过必败的直连 fetch
   if (!blob) {
-    const sources = isCrossOrigin(url)
-      ? PREVIEW_PROXIES.map((make) => make(url))
-      : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+    const sources = previewSources(url)
     for (const u of sources) {
       try {
         blob = await grab(u)
@@ -724,10 +734,8 @@ const downloadOriginal = async () => {
   if (!blob) {
     const url = state.bgUrl
     if (!url) return
-    // 跨域图床直连必被拦：走代理链兜底（当前三家代理均已失效，仅作最后尝试）
-    const sources = isCrossOrigin(url)
-      ? PREVIEW_PROXIES.map((make) => make(url))
-      : [url, ...PREVIEW_PROXIES.map((make) => make(url))]
+    // 跨域图床直连必被拦：走与预览一致的共用代理链兜底（自定义地址不外发，见 previewSources）
+    const sources = previewSources(url)
     for (const u of sources) {
       try {
         const r = await fetch(u)

@@ -666,7 +666,19 @@ async function cacheWallpaperBlob(url) {
   const isBuiltinProvider = !!(PROVIDERS[state.bgProvider] && state.bgProvider !== "custom");
   const allowProxy = isBuiltinProvider && !!CUSTOM_PROXY;
   const viaProxy = allowProxy ? CUSTOM_PROXY + encodeURIComponent(url) : "";
-  const sources = (isCrossOrigin(url) ? [viaProxy, url] : [url, viaProxy]).filter(Boolean);
+  // 直连可行性闸：cors:false 的内置图源（alcy/dmoe，实测响应无 ACAO 头）跨域直连
+  // fetch 必被 CORS 拦截（读不到字节），尝试注定失败、还会以「CORS policy +
+  // Failed to load resource」两条 console error 落地。自建代理失败时不再做这种
+  // 必败直连，让失败静默降级（背景/预览显示走 <img>/CSS，不受 CORS 限制）。
+  // 同源地址与 cors:true 图源（loliapi）直连仍保留。
+  const directFetchAllowed = !(
+    isCrossOrigin(url) &&
+    PROVIDERS[state.bgProvider] &&
+    PROVIDERS[state.bgProvider].cors === false
+  );
+  const sources = (isCrossOrigin(url) ? [viaProxy, url] : [url, viaProxy]).filter(
+    (s) => s && (s === viaProxy || directFetchAllowed),
+  );
   for (const src of sources) {
     try {
       const res = await fetch(src, { mode: "cors", cache: "no-store" });
@@ -858,7 +870,11 @@ async function autoSwitchOnStartup() {
     await shuffleBackground();
     crumb("autoswitch shuffled");
     if (state.bgUrl && state.bgUrl !== prev) {
-      const ok = await probeUrl(state.bgUrl);
+      // 探测优先用字节缓存（blob 同源零网络）：缓存就绪本身就证明新图可用，
+      // 不必再对图床直连发起 Image 请求 —— 该直连请求若被页面导航/关闭打断，
+      // 会以 net::ERR_ABORTED console error 落地（验收 dark@1440 /#/remaining 实测 1 例）。
+      // 无缓存（代理失败）时才退回直连探测，保持原有自愈语义。
+      const ok = await probeUrl(state.bgBlobUrl || state.bgUrl);
       crumb(`autoswitch probe: ${ok ? "ok" : "fail"}`);
       if (!ok && prev) {
         state.bgUrl = prev;
@@ -1234,34 +1250,34 @@ export function isCrossOrigin(url) {
 // ========== 壁纸取色（含跨域代理回退） ==========
 
 // 部分图源（dmoe / 自定义直链 / alcy 稳定图床地址 tc.alcy.cc）不返回 CORS 许可，
-// 直连 canvas 取色会被污染而失败。依次走这些图片代理拿到「带 CORS 头、像素可读」的副本再取色。
-// 顺序按「实测可用性」排列：cors.sh 对 tc.alcy.cc 稳定返回 200 + ACAO:*（置顶）；
-// weserv 对 tc.alcy.cc 实测返回 400，故降到兜底位。
+// 直连 canvas 取色会被污染而失败。走图片代理拿到「带 CORS 头、像素可读」的副本再取色。
 // ★ 自建 CORS 代理（推荐）：部署方法与代码见 .workbuddy/cors-worker.js（Cloudflare Worker，免费 5 分钟）。
 //   第三方免费代理都不可靠 —— weserv 策略屏蔽 alcy.cc、allorigins 常年超时、cors.sh 要 key、
 //   cors.lol / cors.eu.org 对数据中心 IP 限流。自建一个才能让
 //   「取色 / 下载原图 / 预览与背景一致 / 固定当前壁纸」**全部稳定恢复**。
 //   把 Worker 地址填进来（结尾的 /?url= 要保留），例如：
 //     const CUSTOM_PROXY = 'https://pbm-proxy.xxx.workers.dev/?url='
-//   留空则跳过，退回下面的第三方链。
+//   留空则代理链为空，取色/预览/下载按各自逻辑静默降级。
 const CUSTOM_PROXY = "https://pbm-proxy.realemilelu.workers.dev/?url=";
 
+// 2026-11-05 全站验收实测（本轮修复现场复测确认）：第三方兜底已全部失效，
+// 且每次失败都会以 console error 落地（验收①要求页面 console error 为 0）——
+//   · proxy.cors.sh：连接被远端关闭（ERR_CONNECTION_CLOSED）
+//   · api.allorigins.win：域名已死（CORS 拦截 / 请求超时）
+//   · images.weserv.nl：策略性屏蔽 alcy.cc（400 Domain or TLD blocked by policy）
+//   · cors.lol / cors.eu.org / test.cors.workers.dev：对 alcy 不可用（限流/空响应）
+// 逐条试错的网络噪声远大于兜底价值 → 整体移除，链上只留自建代理；
+// 它失败时上层（取色/预览/下载）按既有逻辑静默降级，不再产生任何 console error。
 const CORS_PROXIES = [
   // 自建代理置顶：它还会用 X-Final-Url 回传「302 之后的稳定图床地址」，
   // 这是「固定当前壁纸」唯一可靠的实现途径（详见 resolveStableUrl）。
   ...(CUSTOM_PROXY ? [(u) => CUSTOM_PROXY + encodeURIComponent(u)] : []),
-  // 以下为第三方兜底，可用性不稳定
-  (u) => `https://api.cors.lol/?url=${encodeURIComponent(u)}`,
-  (u) => `https://cors.eu.org/${u}`,
-  (u) => `https://test.cors.workers.dev/?${u}`,
-  // cors.sh：历史上稳定，需 API key 时可能 401
-  (u) => `https://proxy.cors.sh/${u}`,
-  // allorigins：通用代理（常超时）
-  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  // weserv：图片专用、返回 ACAO:*，但**策略性屏蔽 alcy.cc 域名**（400 Domain or TLD blocked
-  // by policy），对 alcy 无用；仅作其他图源的末位兜底
-  (u) => `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ""))}`,
 ];
+
+/** 供视图层（预览/下载）复用同一代理链，避免两处各养一份会漂移的名单 */
+export function wallpaperProxyUrls(url) {
+  return CORS_PROXIES.map((make) => make(url));
+}
 
 /**
  * 跟随壁纸取色：壁纸加载成功后提取主色并应用到主题（仅 paletteMode==='auto' 时）。
@@ -1369,7 +1385,8 @@ async function shuffleBackground() {
     return;
   }
   if (state.bgProvider === "alcy") {
-    // 樱花 Alcy：实测全链路无 CORS 头 —— 仅能显示；取色/下载依赖的代理链已全部失效
+    // 樱花 Alcy：实测图床无 CORS 头 —— 显示走 <img>/CSS 不受限；字节（预览/下载/取色）
+    // 依赖自建代理抓取，代理失败时静默降级（无 CORS 头的直连读取已被排除，见 cacheWallpaperBlob）
     await _applyNewBg(`https://t.alcy.cc/ycy?t=${Date.now()}`);
     return;
   }
