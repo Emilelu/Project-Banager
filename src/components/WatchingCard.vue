@@ -108,9 +108,10 @@
           :style="{ width: progress.pct + '%' }" aria-hidden="true"></div>
       </div>
     </div>
+    <!-- 时间行：card-time-row 提供恒定占位（与标签行同策略），空时段时备注行不错位 -->
     <div v-bind="editCellProps('time_slot')" :aria-label="editLabels.time_slot"
       @keydown="onCellKeydown($event, 'time_slot')"
-      @dblclick.stop="!batchMode && $emit('start-edit', 'time_slot')" class="editable-cell">
+      @dblclick.stop="!batchMode && $emit('start-edit', 'time_slot')" class="editable-cell card-time-row">
       <input v-if="editing?.id === item.id && editing?.field === 'time_slot'" :value="editValue"
         :aria-label="editLabels.time_slot"
         @input="$emit('update:editValue', $event.target.value)"
@@ -348,6 +349,16 @@ const onCardKeydown = (e) => {
 .card-tags-row .card-name-tags {
   flex: 0 1 auto;
   min-width: 0;
+}
+
+/* 时间行：与标签行同款恒定占位（审计 A-67）。
+   时间单元格内容为空时行盒塌缩为 0 高，备注行上移约 21px，
+   与有时段的卡片底部两行错位。min-height 取根字号 14px 下的行盒高
+   1.5rem（=21px，与 .editable-cell 的 strut 同源；根字号随视口
+   clamp 缩放时二者同步缩放），空/有时段同高，备注行基线对齐；
+   有值卡片实高 20.95px 被 min-height 抬到 21px，差异 <0.05px 视觉无感。 */
+.card-time-row {
+  min-height: 1.5rem;
 }
 
 /* 封面缩略图：28×40（竖排海报 5:7），压在名称行左侧。
