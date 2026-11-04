@@ -3629,6 +3629,15 @@ button[class*="btn-"] {
   border-radius: var(--r-lg);
 }
 
+/* ===== 大根字号下的弹窗限高（用户实测 4K@125%、视口 3072×1300 时） =====
+ * 弹窗内容随根字号等比放大：追番添加弹窗在根 32px 下高 1494px，而真实浏览器
+ * 窗口高度只有 ~1300px —— 底部按钮被顶出屏幕 107px 且不可滚动。
+ * 限高 + 内部滚动是全弹窗通用的兜底；正常视口下弹窗本就低于视口，无副作用。 */
+.app-dialog {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
 /* 分页卡片之前带 14px 已一致，这里显式声明以固定语义 */
 .glass:has(.page-size-trigger) {
   border-radius: var(--r-lg);
