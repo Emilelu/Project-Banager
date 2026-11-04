@@ -67,9 +67,10 @@
         </a>
       </div>
     </div>
-    <!-- 标签行：恒定高度占位，有/无标签的卡片等高，周历列内不错位。 -->
-    <div class="card-tags-row" :class="{ 'ml-5': batchMode }">
-      <ItemTags v-if="item.tags" :tags="item.tags" :max="2" compact class="card-name-tags" />
+    <!-- 标签行：无标签不再保留定高占位行（用户要求反转第一期「等高占位」决策），
+         行随内容消失；同列卡片高度允许不同。 -->
+    <div v-if="item.tags" class="card-tags-row" :class="{ 'ml-5': batchMode }">
+      <ItemTags :tags="item.tags" :max="2" compact class="card-name-tags" />
     </div>
     <div class="flex items-center gap-1 mt-0.5 card-ep-row">
       <span class="text-sm font-bold text-gray-800 shrink-0 card-ep-label" aria-hidden="true">e</span>

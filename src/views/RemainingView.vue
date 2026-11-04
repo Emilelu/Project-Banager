@@ -324,7 +324,7 @@
           <div ref="confirmDialogRef" class="relative glass rounded-2xl shadow-2xl w-[23.75rem] border border-white/40 pointer-events-auto app-dialog" role="dialog" aria-modal="true" aria-labelledby="remaining-confirm-title" @keydown.ctrl.enter="confirmActionFn">
             <div class="px-6 py-5 text-center">
               <div class="mb-3 flex justify-center" aria-hidden="true">
-                <AppIcon scale="xl" class="text-danger" :name="confirmAction === 'clear' ? 'clear' : 'trash'" />
+                <AppIcon scale="xl" class="text-danger" :name="confirmAction === 'clear' ? 'sweep' : 'trash'" />
               </div>
               <h3 id="remaining-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{
                 confirmAction === 'clear' ? tt('confirm.clearTitle') : confirmAction === 'batchDelete' ? tt('confirm.batchDeleteTitleShort') : tt('confirm.deleteTitle') }}</h3>
@@ -1645,7 +1645,7 @@ watch(
       items.push({ key: 'invert', icon: 'swap', label: tt('watching.invertSelection'), onClick: invertSelection })
       items.push({ key: 'batch-del', icon: 'trash', label: tt('watching.batchDeleteCount', { count: checkedIds.value.length }), onClick: batchDelete, danger: true })
     }
-    items.push({ key: 'clear', icon: 'clear', label: tt('remaining.clearList'), onClick: openClearDialog, danger: true })
+    items.push({ key: 'clear', icon: 'sweep', label: tt('remaining.clearList'), onClick: openClearDialog, danger: true })
     setPageActions('/remaining', items)
   },
   { immediate: true, deep: true },

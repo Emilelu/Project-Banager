@@ -430,7 +430,7 @@
                    是 emoji → SVG 迁移时唯一漏改的一处（另外两页都已正确）。 -->
               <div class="mb-3 flex justify-center" aria-hidden="true">
                 <AppIcon scale="xl" class="text-danger"
-                  :name="confirmAction==='clear' ? 'clear' : (confirmAction==='batchDelete'||confirmAction==='delete') ? 'trash' : 'log'" />
+                  :name="confirmAction==='clear' ? 'sweep' : (confirmAction==='batchDelete'||confirmAction==='delete') ? 'trash' : 'log'" />
               </div>
               <h3 id="watching-confirm-title" class="text-lg font-bold text-gray-800 mb-2">{{ confirmAction==='clear' ? tt('confirm.clearTitle') : confirmAction==='batchDelete' ? tt('confirm.batchDeleteTitleShort') : confirmAction==='delete' ? tt('confirm.deleteTitle') : tt('watching.moveToRemaining') }}</h3>
               <p class="text-sm text-gray-500">
@@ -1371,6 +1371,8 @@ watch(
   [() => batchMode.value, () => checkedIds.value.length, () => isAllChecked.value, () => selected.value, () => timeSortAsc.value],
   () => {
     const items = [
+      // 用户要求：顶栏常驻「添加番剧」入口（此前只留在周历空白处右键）
+      { key: 'add', icon: 'plus', label: tt('watching.addShow'), onClick: openAddDialog },
       { key: 'batch', icon: 'checkbox', label: batchMode.value ? tt('watching.cancelBatchSelect') : tt('watching.batchSelect'), onClick: toggleBatchMode },
     ]
     if (selected.value && !batchMode.value) {
@@ -1383,7 +1385,7 @@ watch(
       items.push({ key: 'invert', icon: 'swap', label: tt('watching.invertSelection'), onClick: invertSelection })
       items.push({ key: 'batch-del', icon: 'trash', label: tt('watching.batchDeleteCount', { count: checkedIds.value.length }), onClick: batchDelete, danger: true })
     }
-    items.push({ key: 'clear', icon: 'clear', label: tt('watching.clearList'), onClick: openClearDialog, danger: true })
+    items.push({ key: 'clear', icon: 'sweep', label: tt('watching.clearList'), onClick: openClearDialog, danger: true })
     items.push({ key: 'time-sort', icon: 'timeSort', label: timeSortAsc.value ? tt('watching.timeAsc') : tt('watching.timeDesc'), onClick: toggleTimeSort })
     setPageActions('/watching', items)
   },
