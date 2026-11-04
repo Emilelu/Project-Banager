@@ -188,9 +188,11 @@ const placePanel = (measured = false) => {
   const btn = triggerRef.value
   if (!btn) return
   const r = btn.getBoundingClientRect()
-  // 水平居中于触发按钮（用户要求），两侧越界时夹进视口
-  let left = r.left + r.width / 2 - PANEL_W / 2
-  left = Math.min(Math.max(MARGIN, left), window.innerWidth - PANEL_W - MARGIN)
+  // 水平居中于触发按钮（用户要求），两侧越界时夹进视口。
+  // 面板宽随根字号缩放（rem），measured 阶段用实测宽，首帧用常量估算。
+  const pw = (measured && panelRef.value?.offsetWidth) || PANEL_W
+  let left = r.left + r.width / 2 - pw / 2
+  left = Math.min(Math.max(MARGIN, left), window.innerWidth - pw - MARGIN)
 
   /*
    * 纵向定位：先试上方，放不下翻到下方，都放不下就夹进视口。
@@ -228,6 +230,12 @@ const toggle = () => {
   open.value = true
   nextTick(() => {
     placePanel(true)
+    /* 宿主弹窗的入场动画是长尾 ease-out：大根字号（4K）下触发器在数百毫秒内
+       还会移动 ~12px，nextTick 首测会钉在动画尾程坐标上。动画基本结束后
+       再校准一次；面板已关则跳过。 */
+    setTimeout(() => {
+      if (open.value) placePanel(true)
+    }, 350)
   })
 }
 
@@ -364,13 +372,13 @@ const clear = () => {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  height: 34px;
   width: 100%;
-  padding: 0 10px;
+  padding: 0.5rem 1rem;
   border: 1px solid rgb(var(--c-primary) / 0.2);
   border-radius: var(--r-md, 10px);
   background: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
@@ -388,7 +396,8 @@ const clear = () => {
 }
 
 .clock-panel {
-  width: 280px;
+  /* rem 化：280px @根14 = 20rem，大根字号（4K）下随全局等比放大 */
+  width: 20rem;
   color: #374151;
 }
 .dark .clock-panel {
@@ -399,7 +408,7 @@ const clear = () => {
    未选中段不再靠 opacity 弱化（A-29：0.45 压在面板上 light 2.32 / dark 3.79:1），
    改用不透明灰阶，层级差由「有无主色底」表达，两主题均 ≥4.5:1。 */
 .clock-digit {
-  font-size: 26px;
+  font-size: 1.857rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   padding: 1px 8px;
@@ -424,13 +433,19 @@ const clear = () => {
   user-select: none;
   touch-action: none;
 }
+/* 表盘尺寸 rem 化（220px @根14 = 15.714rem）：4K 大根字号下随全局等比放大，
+   viewBox 坐标系不变，指针/命中计算走 getBoundingClientRect 天生兼容缩放 */
+.clock-face svg {
+  width: 15.714rem;
+  height: 15.714rem;
+}
 
 /* 刻度数字（A-29）：不再用 opacity 弱化 —— opacity 会连同底色一起淡化，
    分钟数字实测压到 1.46~1.78:1。改用「不透明但降一档的灰阶」保持层级：
    浅色 #374151/#4b5563 压在近白圆盘上 7:1 以上；深色 #e5e7eb/#cbd5e1
    压在深色圆盘上同样 ≥4.5:1（圆盘深色下改为 12% 白，见 .dark .clock-plate）。 */
 .clock-num {
-  font-size: 11px;
+  font-size: 0.786rem;
   font-weight: 600;
   fill: #374151;
   pointer-events: none;
@@ -452,7 +467,7 @@ const clear = () => {
 .clock-manual {
   width: 5rem;
   padding: 3px 7px;
-  font-size: 12px;
+  font-size: 0.857rem;
   border: 1px solid rgb(var(--c-primary) / 0.2);
   border-radius: var(--r-sm, 8px);
   background: #fff;

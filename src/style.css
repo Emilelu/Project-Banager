@@ -205,7 +205,11 @@ body:not([data-glass='liquid']) .sidebar-bg {
 /* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
    所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放 */
 html {
-  font-size: clamp(14px, 0.8333vw, 28px);
+  /* 根字号缩放曲线（第二期修复后重调）：
+     · ≤1680px 维持 14px 下限；1920px 基线 16px 不变（全站既有调参基准）
+     · 1920 以上进陡段：4K@150%（视口 2560）≈ 25px、4K@125%（视口 3072）≈ 32px、
+       4K@100%（视口 3840）封顶 36px —— 大屏不再「字号跟不上视口」 */
+  font-size: clamp(14px, calc(16px + (100vw - 1920px) * 0.014), 36px);
 }
 
 /* 全局字体
@@ -3842,10 +3846,12 @@ html:not(.dark) .app-menu-panel .text-danger {
    60/68px 溢出两视图同时消失；高度/字号与 .btn-sm 档保持一致。 */
 .page-size-menu .pager-confirm-btn {
   width: auto;
-  height: 34px;
-  padding: 0 8px;
-  font-size: 11.5px;
-  line-height: 16px;
+  height: auto;
+  /* rem 化：固定 34px/11.5px 在大根字号（4K）下不缩放，与菜单项脱节。
+     现与同排输入框（text-xs + py-1 ≈ 26.5px）对齐到 ≈27.5px，字号同菜单项。 */
+  padding: 4px 12px;
+  font-size: 0.875rem;
+  line-height: 17.5px;
 }
 
 /* 分隔线统一 */
@@ -3867,9 +3873,11 @@ html:not(.dark) .app-menu-panel .text-danger {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 11px 12px;
+  /* 与 .app-menu-panel [role=menuitem] 完全同几何（11px 14px / 0.875rem / 17.5px）：
+     全站菜单项一套间距，AppSelect 不再自养一份（原 12px 右距 + 1.4 行高）。 */
+  padding: 11px 14px;
   font-size: 0.875rem;
-  line-height: 1.4;
+  line-height: 17.5px;
   text-align: left;
   color: #374151;
   background: transparent;

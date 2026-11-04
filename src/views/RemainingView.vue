@@ -246,7 +246,7 @@
                语言菜单正是 fixed z-[110] 才正常。 -->
          <Teleport to="body">
          <div v-if="showPageSizeMenu" ref="pageSizeMenuEl" role="menu"
-                class="page-size-menu app-menu-panel fixed z-[110] min-w-[12rem]"
+                class="page-size-menu app-menu-panel fixed z-[110]"
                 :style="pageSizeMenuStyle">
                 <!-- 宽度由 8rem 提到 12rem 并全程 nowrap：原宽度下「确定」会被挤成两行 -->
                 <button v-for="s in pageSizeOptions" :key="s" role="menuitem" @click="setPageSize(s)"
@@ -258,7 +258,7 @@
                     class="w-[4.5rem] shrink-0 px-2 py-1 border border-primary/20 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 bg-white" @keyup.enter="applyCustomPageSize" />
                   <!-- pager-confirm-btn：避免被 .app-menu-panel > div > button 的 width:100% 命中，
                        否则与固定宽输入框同排必然横向溢出面板（视觉审计 A-02，见 style.css 同名规则） -->
-                  <button @click="applyCustomPageSize" class="btn-base btn-sm btn-link pager-confirm-btn shrink-0">{{ tt('common.confirm') }}</button>
+                  <button @click="applyCustomPageSize" class="btn-base btn-sm btn-neutral pager-confirm-btn shrink-0">{{ tt('common.confirm') }}</button>
                 </div>
               </div>
          </Teleport>
@@ -872,6 +872,7 @@ const togglePageSizeMenu = async (e) => {
   let left = r.left
   if (left + 200 > vw - MARGIN) left = Math.max(MARGIN, vw - 200 - MARGIN)
   pageSizeMenuStyle.value = {
+    minWidth: r.width + 'px', // 宽度贴内容且不小于触发器（右侧大留白，第二期用户反馈）
     left: left + 'px',
     bottom: (vh - r.top + MARGIN) + 'px',
     '--pop-origin-y': 'bottom',

@@ -138,19 +138,21 @@ if (typeof document !== 'undefined') {
 </template>
 
 <style scoped>
-/* 触发器：与全站输入框/按钮同一几何（34px 高、10px 圆角、主题色描边） */
+/* 触发器：与全站输入框/按钮同一几何（随根字号缩放、10px 圆角、主题色描边）。
+   原先 height:34px / font-size:14px 是固定 px，大根字号（4K）下不缩放，
+   与 rem 制的按钮和菜单项脱节 —— 全部改 rem 后与 .btn-base 完全同高（≈2.25rem+2px）。 */
 .app-select-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 7px;
-  height: 34px;
-  padding: 0 10px;
+  padding: 0.5rem 1rem;
   min-width: 8rem;
   border: 1px solid rgb(var(--c-primary) / 0.2);
   border-radius: var(--r-md, 10px);
   background: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
   color: #374151;
   cursor: pointer;
   transition: border-color 0.15s ease;
