@@ -196,6 +196,7 @@ export default {
   'watching.viewRemaining': '更新待ちを見る →',
   'watching.batchDeleteCount': 'まとめて削除 ({count})',
   'watching.selectAll': 'すべて選択',
+  'watching.selectAllMixed': '一部選択中（クリックですべて選択）',
   'watching.unselectAll': '選択を解除',
   'watching.selectedCount': '{count} 件を選択中',
 

@@ -59,6 +59,7 @@
                 : 'text-white/60 hover:bg-white/10 hover:text-white',
               sidebarCollapsed ? 'justify-center px-2 py-3.5' : 'px-4 py-3.5'
             ]"
+            :aria-label="sidebarCollapsed ? tt(item.labelKey) : null"
             @mouseenter="sidebarCollapsed && showSidebarTip($event, tt(item.labelKey))"
             @mouseleave="hideSidebarTip" @focus="sidebarCollapsed && showSidebarTip($event, tt(item.labelKey))"
             @blur="hideSidebarTip">
@@ -297,10 +298,14 @@
                  挂到 body 后是独立的顶层元素，再按按钮位置用 fixed 定位。 -->
             <Teleport to="body">
               <div v-if="showLangMenu" class="fixed inset-0 z-[100]" @click="showLangMenu = false"></div>
-              <!-- 与「每页条数」菜单同一套 pop 过渡；本菜单贴在按钮下方展开，原点在顶边 -->
+              <!-- 与「每页条数」菜单同一套 pop 过渡；本菜单贴在按钮下方展开，原点在顶边。
+                   视觉审计 A-36：这里原来手拼 `app-menu-surface rounded-xl border py-1
+                   min-w-[8.5rem]`，是全站唯一没接入 .app-menu-panel 规范的下拉菜单
+                   （实测 119px 宽 / 14px 字号 / 31.5px 行高，其余菜单 168/12.25/39.5）。
+                   改用统一面板类后宽度、字号、项高自动与其它菜单一致。 -->
               <transition name="pop">
                 <div v-if="showLangMenu" ref="langMenuRef" role="menu"
-                  class="fixed z-[110] app-menu-surface rounded-xl border border-white/40 py-1 min-w-[8.5rem]"
+                  class="fixed z-[110] app-menu-panel lang-menu-panel"
                   style="--pop-origin-y: top; --pop-from-y: -6px"
                   :style="langMenuStyle">
                   <button v-for="l in SUPPORTED_LOCALES" :key="l.code" role="menuitemradio"
@@ -341,13 +346,19 @@
                    统一由 style.css 的 `#clock-tip` 一段决定，与 #sidebar-tip 和 v-tip
                    生成的 [id^=hover-tip] 是**同一份**声明 —— 全站气泡只有一套皮肤。
                    这里仅保留 tabular-nums：秒数每跳一次宽度都会变，等宽数字能避免
-                   气泡左右抖动，属于可读性而非风格差异。 -->
-              <div id="clock-tip" ref="clockTipRef" role="tooltip"
-                class="pointer-events-none fixed z-[120] whitespace-nowrap tabular-nums"
-                :class="showTimeTip ? 'opacity-100' : 'opacity-0'"
-                :style="clockTipStyle">
-                {{ timeDisplay }}
-              </div>
+                   气泡左右抖动，属于可读性而非风格差异。
+
+                   视觉审计 A-60：原来用 opacity-0 常驻 body（0,0 处 63×30、
+                   内容每秒刷新），读屏/辅助技术查询会先命中这个不可见节点。
+                   改为 v-if + fade：隐藏时 DOM 里干脆不存在（与 v-tip 同策略），
+                   显示时仍有原来的 0.15s 淡入。 -->
+              <transition name="fade">
+                <div v-if="showTimeTip" id="clock-tip" ref="clockTipRef" role="tooltip"
+                  class="pointer-events-none fixed z-[120] whitespace-nowrap tabular-nums"
+                  :style="clockTipStyle">
+                  {{ timeDisplay }}
+                </div>
+              </transition>
             </Teleport>
           </div>
         </div>
@@ -413,6 +424,30 @@ const sidebarTip = ref({ show: false, text: '', left: 0, top: 0, placement: 'rig
 let sidebarTipAnchor = null
 
 /**
+ * 视觉审计 A-35：侧栏气泡此前从不与触发元素建立 aria 关系（#sidebar-tip 有
+ * role=tooltip，但触发元素没有 aria-describedby），读屏永远读不到气泡内容。
+ * 这里照 useHoverTip.js:230-232 的做法：显示时给触发元素挂 aria-describedby，
+ * 隐藏时还原原来的值（按钮若本来就有描述，不能把它覆盖掉）。
+ */
+let sidebarTipDescribedEl = null
+let sidebarTipPrevDescribedby = null
+const describeSidebarTip = (el) => {
+  if (!el || typeof el.setAttribute !== 'function') return
+  if (sidebarTipDescribedEl === el) return
+  releaseSidebarTipDescription()
+  sidebarTipPrevDescribedby = el.getAttribute('aria-describedby')
+  el.setAttribute('aria-describedby', sidebarTipPrevDescribedby ? `${sidebarTipPrevDescribedby} sidebar-tip` : 'sidebar-tip')
+  sidebarTipDescribedEl = el
+}
+const releaseSidebarTipDescription = () => {
+  if (!sidebarTipDescribedEl) return
+  if (sidebarTipPrevDescribedby) sidebarTipDescribedEl.setAttribute('aria-describedby', sidebarTipPrevDescribedby)
+  else sidebarTipDescribedEl.removeAttribute('aria-describedby')
+  sidebarTipDescribedEl = null
+  sidebarTipPrevDescribedby = null
+}
+
+/**
  * 上方模式定位（需求三）：气泡水平居中于按钮、贴在按钮正上方。
  * 纵向空间不够（气泡顶边会超出视口）时翻到按钮下方，保证不纵向溢出；
  * 横向同样夹进视口 —— 收起态侧栏只有 64px，而「壁纸/主题」的气泡文案
@@ -438,6 +473,7 @@ const showSidebarTip = (e, text, placement = 'right') => {
   const el = e?.currentTarget || e?.target
   const r = el?.getBoundingClientRect()
   if (!r) return
+  describeSidebarTip(el)
   sidebarTipAnchor = { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }
   if (placement === 'top') {
     // 上方模式：先落一个占位坐标让气泡渲染出来，下一帧再按实测宽高精确对齐
@@ -461,6 +497,7 @@ const showSidebarTip = (e, text, placement = 'right') => {
 }
 
 const hideSidebarTip = () => {
+  releaseSidebarTipDescription()
   sidebarTip.value = { ...sidebarTip.value, show: false }
 }
 
@@ -488,6 +525,7 @@ const showBottomBtnTip = (e, name, stateSource) => {
   const el = e?.currentTarget || e?.target
   const r = el?.getBoundingClientRect()
   if (!r) return
+  describeSidebarTip(el)
   sidebarTipAnchor = { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom }
   const placement = sidebarCollapsed.value ? 'right' : 'top'
   sidebarTip.value = {
@@ -874,11 +912,28 @@ const onPageActionsKeydown = (event) => {
     event.stopPropagation()
     showPageActionsMenu.value = false
     pageActionsBtnRef.value?.focus()
+  } else if (event.key === 'Tab') {
+    // 视觉审计 A-68：原来没有 Tab 分支，焦点从末项移出后落到 body，
+    // 而 Esc 处理器绑在菜单元素上 —— 焦点不在菜单里就永不触发，菜单滞留。
+    // WAI-ARIA 菜单惯例：Tab/Shift+Tab 关闭菜单并把焦点交还触发器。
+    event.preventDefault()
+    showPageActionsMenu.value = false
+    pageActionsBtnRef.value?.focus()
   } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
     const buttons = Array.from(pageActionsMenuRef.value?.querySelectorAll('button') || [])
     const index = buttons.indexOf(document.activeElement)
     buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
+  }
+}
+/**
+ * A-68 兜底：焦点若已逃出菜单（例如点击菜单外但未点遮罩），Esc 仍应关闭。
+ * 菜单内的 Esc 由面板 @keydown 处理并 stopPropagation，不会走到这里。
+ */
+const onDocKeydownPageActions = (event) => {
+  if (event.key === 'Escape' && showPageActionsMenu.value) {
+    showPageActionsMenu.value = false
+    pageActionsBtnRef.value?.focus()
   }
 }
 watch(() => route.path, (path, oldPath) => {
@@ -947,12 +1002,15 @@ onMounted(() => {
   // 语言菜单：点外部关闭 + Esc 关闭 + 窗口变化时重新定位
   document.addEventListener('click', onDocClickLang)
   document.addEventListener('keydown', onKeydownLang)
+  // A-68：顶栏「更多」菜单的 Esc 兜底（焦点逃出菜单后仍可关闭）
+  document.addEventListener('keydown', onDocKeydownPageActions)
   window.addEventListener('resize', onResizeLang)
 
   onUnmountedHooks.push(() => {
     document.removeEventListener('visibilitychange', flushOnHide)
     document.removeEventListener('click', onDocClickLang)
     document.removeEventListener('keydown', onKeydownLang)
+    document.removeEventListener('keydown', onDocKeydownPageActions)
     window.removeEventListener('resize', onResizeLang)
   })
 })

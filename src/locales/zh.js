@@ -190,6 +190,7 @@ export default {
   'watching.viewRemaining': '查看等番 →',
   'watching.batchDeleteCount': '批量删除 ({count})',
   'watching.selectAll': '全选',
+  'watching.selectAllMixed': '部分已选（点击全选）',
   'watching.unselectAll': '取消全选',
   'watching.selectedCount': '已选择 {count} 项',
 

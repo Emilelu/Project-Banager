@@ -29,11 +29,18 @@
         <thead>
           <tr class="text-sm font-bold border-b border-white/20">
             <th v-if="batchMode" class="text-center px-2 py-2.5 text-primary-dark font-bold cursor-pointer select-none" @click="toggleSelectAll">
-              <div role="checkbox" tabindex="0" :aria-checked="isAllChecked ? 'true' : 'false'" :aria-label="tt('watching.selectAll')"
+              <!-- A-33：补半选态。此前 aria-checked 只有 true/false 二值、视觉也只有
+                   「全选对勾 / 空白」两种，勾 2/5 与 0 勾选长得一模一样，用户只能靠
+                   顶栏「批量删除 (N)」推断。现在部分勾选 = aria-checked="mixed" +
+                   主题色底 + 白色短横线；全选才是对勾。 -->
+              <div role="checkbox" tabindex="0"
+                :aria-checked="isAllChecked ? 'true' : (isPartiallyChecked ? 'mixed' : 'false')"
+                :aria-label="isPartiallyChecked ? tt('watching.selectAllMixed') : tt('watching.selectAll')"
                 @keydown.enter.prevent="toggleSelectAll" @keydown.space.prevent="toggleSelectAll"
                 class="w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-all mx-auto"
-                :class="isAllChecked?'bg-primary border-primary':'border-gray-300 bg-white/80 hover:border-primary'">
+                :class="(isAllChecked || isPartiallyChecked) ? 'bg-primary border-primary' : 'border-gray-300 bg-white/80 hover:border-primary'">
                 <svg v-if="isAllChecked" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                <span v-else-if="isPartiallyChecked" class="block w-2 h-[2px] rounded-full bg-white" aria-hidden="true"></span>
               </div>
             </th>
             <!-- 序号列：当前页内的显示顺序（1 起）。点击它即可选中该行，
@@ -85,6 +92,7 @@
           <tr v-for="(item, idx) in paginatedList" :key="item.id"
             :data-row-index="absoluteIndexOf(item)"
             :data-row-id="item.id"
+            tabindex="-1"
             class="transition-all duration-200 border-b border-white/10 list-item group"
             :class="[
               {
@@ -283,16 +291,21 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-        <div class="app-dialog app-menu-panel min-w-[10rem] context-menu">
-          <button @click="ctxEdit"
+        <!-- A-34：role=menu + 打开聚焦首项 + ↑↓ 循环 + Esc 还焦，
+             与顶栏「更多」菜单同一套标准（composables/useMenuKeyboard.js）。 -->
+        <div ref="contextMenuRef" class="app-dialog app-menu-panel min-w-[10rem] context-menu"
+          role="menu" :aria-label="tt('topbar.moreActions')" @keydown="onContextMenuKeydown">
+          <button role="menuitem" @click="ctxEdit"
             class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.edit') }}</button>
-          <button @click="ctxOpenUrl"
-            class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"
+          <!-- A-63：无链接时与追番页一致做成真禁用（:disabled + not-allowed），
+               不再「只是淡化、点了照旧生效为空动作」。 -->
+          <button role="menuitem" @click="ctxOpenUrl" :disabled="!contextMenu.item?.url"
+            class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             :class="{ 'opacity-40': !contextMenu.item?.url }"><AppIcon scale="sm" name="link" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('card.openLink') }}</button>
-          <button @click="ctxMoveToWatching"
+          <button role="menuitem" @click="ctxMoveToWatching"
             class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="tv" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('remaining.moveToWatching') }}</button>
           <div class="border-t border-white/20 my-1"></div>
-          <button @click="ctxDelete"
+          <button role="menuitem" @click="ctxDelete"
             class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('common.delete') }}</button>
         </div>
       </div>
@@ -530,6 +543,7 @@ import { setPageStats, setPageSelection, clearPageSelection, setPageActions, cle
 import RemainingTopControls from './RemainingTopControls.vue'
 import { defaultBgmUrl, openExternal } from '../composables/useEpisode'
 import { placeContextMenu } from '../composables/useContextMenu'
+import { focusFirstMenuItem, onMenuKeydown } from '../composables/useMenuKeyboard'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
 import { useErrorText } from '../composables/useErrorText'
@@ -956,6 +970,8 @@ const dialogMode = ref('add')
 const batchMode = ref(false)
 const checkedIds = ref([])
 const isAllChecked = computed(() => paginatedList.value.length > 0 && paginatedList.value.every(item => checkedIds.value.includes(item.id)))
+/** A-33：部分勾选（非空但未全选）——表头勾选框显示半选态 */
+const isPartiallyChecked = computed(() => !isAllChecked.value && checkedIds.value.length > 0 && paginatedList.value.some(item => checkedIds.value.includes(item.id)))
 
 /**
  * 点击行首序号 → 切换该行选中态。
@@ -1176,10 +1192,22 @@ const buildUrl = (item) => {
 const moveForm = ref({ day_of_week: '', time_slot: '' })
 
 const contextMenu = ref({ show: false, x: 0, y: 0, item: null })
+const contextMenuRef = ref(null)
+// A-34：Esc 关闭后把焦点还给触发行（行有 tabindex=-1，可编程聚焦）
+let contextMenuTriggerEl = null
+const restoreMenuFocus = (trigger) => nextTick(() => {
+  trigger?.focus?.()
+  if (!trigger || document.activeElement !== trigger) pageRootRef.value?.focus?.()
+})
+const onContextMenuKeydown = (event) => onMenuKeydown(
+  event, closeContextMenu, () => restoreMenuFocus(contextMenuTriggerEl))
 const openContextMenu = (e, item) => {
   selected.value = item
+  contextMenuTriggerEl = e?.currentTarget?.closest?.('tr') || e?.target?.closest?.('tr') || null
   // 贴边/贴底时自动翻转，避免菜单被视口裁掉
   placeContextMenu(contextMenu, e, { item })
+  // A-34：打开即聚焦第一项，键盘可直接 ↑↓ 选择
+  nextTick(() => focusFirstMenuItem(contextMenuRef.value))
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }

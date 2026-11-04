@@ -10,10 +10,18 @@
            仍一眼能分出成功/失败/警告（保留色相），但每个端点都压到 ≥4.7:1。
            用 color-mix(in srgb, <token> N%, black) 而不是写死十六进制，
            这样用户在 /appearance 里改主题色/配色时 toast 会跟着走。 -->
+      <!-- 入场动画只留 Vue <transition-group>（.toast-enter-active/.toast-enter-from）。
+           视觉审计 A-31：这里原来还挂着 Tailwind animate-slide-down（0.3s，关键帧含
+           opacity 0→1）。两套动画启动时序是竞态的 —— Vue enter 先跑完 slide-down 才从
+           ct=0 起播，把 opacity 拉回 0 再放一遍（实测「滑入→闪没→再淡入」，入场
+           0.77~0.86s）。只保留一套后 opacity 单调 0→1（设计 0.4s）。 -->
       <div v-for="t in toasts" :key="t.id"
-        class="toast-item px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white animate-slide-down max-w-[24rem] pointer-events-auto flex items-start gap-3"
+        class="toast-item px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white max-w-[24rem] pointer-events-auto flex items-start gap-3"
         :class="t.type === 'success' ? 'toast-success' : t.type === 'error' ? 'toast-error' : 'toast-warning'">
-        <span class="flex-1">{{ t.message }}</span>
+        <!-- A-32：flex-1 子项默认 min-width:auto，无空格长 token（URL/长英文词）不换行，
+             span 被撑到 1500~1809px（文本画出 336px 的 toast 盒，关闭按钮被推出视口）。
+             min-w-0 允许收缩，overflow-wrap:anywhere 在盒内强制断行（见 .toast-message）。 -->
+        <span class="toast-message flex-1 min-w-0">{{ t.message }}</span>
         <!-- 关闭按钮：**不能靠 opacity 调淡**——opacity 会把白字和底一起合成，
              实测 opacity:0.9 时按钮文字只有 4.0~4.2:1（正文需要 4.5）。
              改成不做透明度，靠「hover 加底色」表达可点状态（见 .toast-close）。
@@ -58,11 +66,25 @@ const toasts = useToasts()
     color-mix(in srgb, rgb(var(--c-warning)) 65%, black)
   );
 }
-/* 关闭按钮稍微放大命中区（纯文字 × 的可点区域只有 1 个字宽）。
+/* A-32：长无空格 token（URL/长英文词）必须在 toast 盒内断行。
+   overflow-wrap:anywhere 比 break-word 更狠（连超长 token 也允许在任意位置断开），
+   否则 span 会把盒子撑宽、文本直接画出圆角背景之外。 */
+.toast-message {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* 关闭按钮命中区（视觉审计 A-54）：纯文字 × 原来只有 16.73×14px，低于 WCAG 2.2
+   AA 2.5.8 的 24×24。这里用 min-width/min-height 撑到 24×24 并居中字形
+   （不靠 padding 扩，避免与 .toast-item 的 gap 叠加把盒子撑高）。
    用半透明白底代替 opacity：opacity 会同时淡化文字与底，把对比度一起拖下去；
    背景色只影响按钮区域、不影响文字颜色，因此不会降低可读性。
    全局 :focus-visible 会给出可见外描边（键盘用户能看到焦点位置）。 */
 .toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   font-size: 1rem;
   line-height: 1;
   padding: 0 0.25rem;

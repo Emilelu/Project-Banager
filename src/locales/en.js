@@ -194,6 +194,7 @@ export default {
   'watching.viewRemaining': 'View Waiting →',
   'watching.batchDeleteCount': 'Delete Selected ({count})',
   'watching.selectAll': 'Select All',
+  'watching.selectAllMixed': 'Partially selected (click to select all)',
   'watching.unselectAll': 'Clear Selection',
   'watching.selectedCount': '{count} selected',
 

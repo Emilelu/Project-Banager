@@ -351,13 +351,16 @@
       <div v-if="contextMenu.show" class="fixed z-[200]"
         style="--pop-origin-y: top; --pop-from-y: -4px"
         :style="{left:contextMenu.x+'px',top:contextMenu.y+'px'}">
-        <div class="app-dialog app-menu-panel min-w-[10rem] context-menu">
-          <button @click="ctxEdit" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
-          <button @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
-          <button @click="ctxMoveToRemaining" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
-          <button @click="ctxMoveToWatched" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="check" />{{ tt('watching.moveToWatched') }}</button>
+        <!-- A-34：补齐菜单语义与键盘操作（role=menu / 打开聚焦首项 / ↑↓ 循环 / Esc 还焦）。
+             与顶栏「更多」菜单同一套标准，见 composables/useMenuKeyboard.js。 -->
+        <div ref="contextMenuRef" class="app-dialog app-menu-panel min-w-[10rem] context-menu"
+          role="menu" :aria-label="tt('topbar.moreActions')" @keydown="onContextMenuKeydown">
+          <button role="menuitem" @click="ctxEdit" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="edit" /> {{ tt('watching.edit') }}</button>
+          <button role="menuitem" @click="ctxOpenUrl" :disabled="!contextMenu.item?.url" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:hover:bg-transparent" :class="{'opacity-40':!contextMenu.item?.url}"><AppIcon scale="sm" name="link" /> {{ tt('card.openLink') }}</button>
+          <button role="menuitem" @click="ctxMoveToRemaining" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="log" /> {{ tt('watching.moveToRemaining') }}</button>
+          <button role="menuitem" @click="ctxMoveToWatched" class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="check" />{{ tt('watching.moveToWatched') }}</button>
           <div class="border-t border-white/20 my-1"></div>
-          <button @click="ctxDelete" class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
+          <button role="menuitem" @click="ctxDelete" class="text-left px-4 py-2 text-sm hover:bg-danger/10 text-danger transition flex items-center gap-2"><AppIcon scale="sm" name="trash" /> {{ tt('common.delete') }}</button>
         </div>
       </div>
       </transition>
@@ -370,7 +373,8 @@
         <div v-if="emptyAreaMenu.show" class="fixed z-[200]"
           style="--pop-origin-y: top; --pop-from-y: -4px"
           :style="{ left: emptyAreaMenu.x + 'px', top: emptyAreaMenu.y + 'px' }">
-          <div class="app-menu-panel min-w-[10rem] context-menu">
+          <div ref="emptyAreaMenuRef" class="app-menu-panel min-w-[10rem] context-menu"
+            role="menu" :aria-label="tt('watching.addShow')" @keydown="onEmptyAreaMenuKeydown">
             <button type="button" role="menuitem" @click="emptyAreaAddShow"
               class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
               <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watching.addShow') }}</span>
@@ -388,7 +392,9 @@
         <div v-if="batchMenu.show" class="fixed z-[200]"
           style="--pop-origin-y: top; --pop-from-y: -4px"
           :style="{ left: batchMenu.x + 'px', top: batchMenu.y + 'px' }">
-          <div class="app-menu-panel min-w-[10rem] context-menu">
+          <div ref="batchMenuRef" class="app-menu-panel min-w-[10rem] context-menu"
+            role="menu" :aria-label="tt('watching.batchDeleteCount', { count: checkedIds.length })"
+            @keydown="onBatchMenuKeydown">
             <button type="button" role="menuitem" @click="batchDeleteFromMenu"
               class="flex items-center gap-2 text-left transition hover:bg-danger/10 text-danger whitespace-nowrap">
               <AppIcon scale="xs" name="trash" /><span class="flex-1">{{ tt('watching.batchDeleteCount', { count: checkedIds.length }) }}</span>
@@ -455,6 +461,7 @@ import { smartIncrement, smartDecrement, normalizeEpisodeInput, buildItemUrl, de
 import { showToast } from '../composables/useToast'
 import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions } from '../composables/usePageStats'
 import { placeContextMenu } from '../composables/useContextMenu'
+import { focusFirstMenuItem, onMenuKeydown } from '../composables/useMenuKeyboard'
 import { useDialogFocus } from '../composables/useDialogFocus'
 import { useI18n } from '../composables/useI18n'
 import { useErrorText } from '../composables/useErrorText'
@@ -625,7 +632,13 @@ const handleKeydown = (e) => {
     if (showDialog.value) { showDialog.value = false; return }
     if (showDateDialog.value) { showDateDialog.value = false; return }
     if (showConfirmDialog.value) { showConfirmDialog.value = false; return }
-    if (contextMenu.value.show) { contextMenu.value.show = false; return }
+    // A-13：菜单必须先于批量模式关闭。原来只处理 contextMenu，batchMenu /
+    // emptyAreaMenu 打开时按 Esc 会把 batchMode 退掉（勾选清空、菜单文案变 0），
+    // 菜单面板与 z-[199] 全屏遮罩却留着 —— 之后所有点击都被遮罩拦截。
+    // 次序与三套菜单的关闭链一致：先关菜单，再（下次 Esc）退批量模式。
+    if (batchMenu.value.show) { closeBatchMenu(); return }
+    if (emptyAreaMenu.value.show) { closeEmptyAreaMenu(); return }
+    if (contextMenu.value.show) { closeContextMenu(); return }
     if (batchMode.value) { batchMode.value = false; checkedIds.value = [] }
   }
 }
@@ -808,6 +821,9 @@ const applyTemplate = () => {
 }
 
 const contextMenu = ref({ show:false, x:0, y:0, item:null })
+const contextMenuRef = ref(null)
+// A-34：记住触发菜单的卡片，Esc 关闭后把焦点还回去（卡片本身 role=button/tabindex=0）
+let contextMenuTriggerEl = null
 
 /*
  * 周历空白处右键菜单。
@@ -817,9 +833,26 @@ const contextMenu = ref({ show:false, x:0, y:0, item:null })
  * 卡片右键是「编辑/打开链接/移至…/删除」，空白处只有「添加番剧」。
  */
 const emptyAreaMenu = ref({ show: false, x: 0, y: 0 })
+const emptyAreaMenuRef = ref(null)
+
+/**
+ * 菜单关闭后的焦点归还：先试触发行/卡片，不可聚焦（周历空白列）就退回页面根。
+ * 页面根有 tabindex=-1，能接住焦点，不会掉到 BODY（A-34 要求的「Esc 还焦」）。
+ */
+const restoreMenuFocus = (trigger) => nextTick(() => {
+  trigger?.focus?.()
+  if (!trigger || document.activeElement !== trigger) pageRootRef.value?.focus?.()
+})
+const onContextMenuKeydown = (event) => onMenuKeydown(
+  event, closeContextMenu, () => restoreMenuFocus(contextMenuTriggerEl))
+const onEmptyAreaMenuKeydown = (event) => onMenuKeydown(
+  event, closeEmptyAreaMenu, () => restoreMenuFocus(null))
+const onBatchMenuKeydown = (event) => onMenuKeydown(
+  event, closeBatchMenu, () => restoreMenuFocus(null))
 
 const openEmptyAreaMenu = (e) => {
   emptyAreaMenu.value = { show: true, x: e.clientX, y: e.clientY }
+  nextTick(() => focusFirstMenuItem(emptyAreaMenuRef.value))
 }
 
 const closeEmptyAreaMenu = () => { emptyAreaMenu.value.show = false }
@@ -832,10 +865,12 @@ const emptyAreaAddShow = () => {
 
 /** 批量勾选后右键 → 批量操作菜单（删除 / 移至等番 / 移至已看） */
 const batchMenu = ref({ show: false, x: 0, y: 0 })
+const batchMenuRef = ref(null)
 
 const openBatchMenu = (e) => {
   if (!batchMode.value || checkedIds.value.length === 0) return false
   batchMenu.value = { show: true, x: e.clientX, y: e.clientY }
+  nextTick(() => focusFirstMenuItem(batchMenuRef.value))
   return true
 }
 
@@ -859,8 +894,12 @@ const batchDeleteFromMenu = () => {
 }
 const openContextMenu = (e, item) => {
   selected.value = item
+  // A-34：卡片根元素（role=button, tabindex=0）作为 Esc 关闭后的还焦目标
+  contextMenuTriggerEl = e?.target?.closest?.('.watching-card') || e?.target || null
   // 贴边/贴底时自动翻转，避免菜单被视口裁掉
   placeContextMenu(contextMenu, e, { item })
+  // 打开即把焦点交给第一项，键盘用户不必再 Tab 穿过整页控件
+  nextTick(() => focusFirstMenuItem(contextMenuRef.value))
 }
 
 /**

@@ -1297,7 +1297,9 @@ describe('Toast 生命周期', () => {
     showToast('更新失败', 'error')
     showToast('更新失败', 'error')
     await flushPromises()
-    expect(wrapper.findAll('div.animate-slide-down')).toHaveLength(2)
+    // A-31 后 toast-item 不再挂 animate-slide-down（与 Vue enter 双重播放），
+    // 定位改用稳定的语义类 .toast-item
+    expect(wrapper.findAll('div.toast-item')).toHaveLength(2)
   })
 
   it('[缺陷#20] Toast 区域应可被读屏软件播报（aria-live）', async () => {

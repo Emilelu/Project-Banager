@@ -3815,6 +3815,24 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
   font-weight: 700;
 }
 
+/* ===== 视觉审计 A-11：菜单危险项红字对比不足 =====
+ * 三个页面的右键菜单危险项（删除 / 批量删除）用 --c-danger（239 68 68），
+ * 12.25px 属正文，需要 4.5:1。实测浅色玻璃菜单底上只有 3.3~3.76:1；
+ * 深色在 4.46~4.67:1 之间随壁纸派生底色摆动（不稳定达标）。
+ *
+ * 修法只作用于 .app-menu-panel 内的 .text-danger，不动全局 --c-danger
+ * （实底按钮「确认删除」的白字实测 5.87~9.4:1，本来就达标，不能一起改）：
+ *   浅色：--c-danger-dark 再混 82% 黑 → 约 rgb(180,31,31)，白底约 6.6:1、
+ *         实测浅玻璃底上仍 >5.5:1；
+ *   深色：danger 混 88% 白 → 约 rgb(241,90,68)，深菜单底上约 5.4:1。
+ * 色相仍是红，危险语义与普通项（灰）区分不变。 */
+html:not(.dark) .app-menu-panel .text-danger {
+  color: color-mix(in srgb, rgb(var(--c-danger-dark)) 82%, black);
+}
+.dark .app-menu-panel .text-danger {
+  color: color-mix(in srgb, rgb(var(--c-danger)) 88%, white);
+}
+
 /* 「每页 N 条」菜单自定义行内的「确定」按钮（视觉审计 A-02）：
    上面的 `.app-menu-panel > div > button { width:100% }` 会误伤它 ——
    它与固定宽输入框（w-[4.5rem]）同排 nowrap，width:100% 按行内容盒宽解析，
@@ -3975,6 +3993,13 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 }
 @media (max-width: 900px) {
   .app-sidebar:not(.sidebar-is-collapsed) { position: absolute; inset: 0 auto 0 0; z-index: 90; }
+  /* 视觉审计 A-70：≤900px 点 logo 展开侧栏时，aside 变成 absolute 覆盖层、脱离文档流，
+     .app-content 随之从 x=56 弹到 x=0 —— 正文整体左移 56px 并重新排版（文本回流）。
+     抽屉式交互要求底下的内容保持不动，所以这里给内容区保留收起态那 56px 的左侧空间
+     （margin 而不是 padding：margin 让 .app-content 的盒子起点仍在 x=56、宽度仍是
+     W-56，与收起态逐像素一致；padding 会让盒子从 x=0 起算，内部布局仍会变）。
+     展开的侧栏是覆盖层，叠在这 56px 上，符合抽屉预期。 */
+  .app-sidebar:not(.sidebar-is-collapsed) ~ .app-content { margin-left: 4rem; }
   .app-header { padding-left: 1rem; padding-right: 1rem; }
   .topbar-utilities { gap: 0.375rem; }
   .app-content > main { padding-left: 1rem; padding-right: 1rem; }
@@ -3996,6 +4021,26 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
     scroll-behavior: auto !important;
   }
   .page-appear, .toolbar-enter { transform: none !important; }
+
+  /* ===== 视觉审计 A-69：reduce 下菜单/Toast 滞留 opacity:0 =====
+   * 上面的 `transition-duration: 0.01ms` 会让 Chromium 不派发 transitionend
+   * （且 1e-05s 的科学计数法解析不稳），Vue 只能等超时兜底摘类，于是年份菜单
+   * 和 Toast 在出现后的 150~300ms 里仍停在 .pop-enter-from/.toast-enter-from
+   * （opacity:0）—— 用户看到「点了没反应，然后突然弹出」。
+   * 两件事一起做：
+   *   1) 给这两个过渡类一个字面量的 1ms 时长（!important 压过上面的 * 规则），
+   *      让 transitionend 正常触发；
+   *   2) enter-from 直接取终态（opacity 1 / 无位移），即使事件仍被合并，
+   *      首帧就已经可见 —— 「0.01ms 即时反馈」的目标真正落地。 */
+  .pop-enter-active, .pop-leave-active,
+  .toast-enter-active, .toast-leave-active {
+    transition-duration: 1ms !important;
+  }
+  .pop-enter-from,
+  .toast-enter-from {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* ===== Visual audit: record table layout, selection, skeleton, dialog actions ===== */

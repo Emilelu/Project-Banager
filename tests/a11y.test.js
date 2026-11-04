@@ -468,6 +468,55 @@ describe('批量勾选框：role=checkbox / aria-checked / 键盘切换', () => 
     expect(all.attributes('aria-checked')).toBe('true')
   })
 
+  it('等番页：部分勾选时全选框为半选态（aria-checked=mixed + 短横线，A-33）', async () => {
+    await mountRemaining([remainingRow({ name: '甲' }), remainingRow({ id: 2, name: '乙' })])
+    await enterBatchClean()
+
+    const boxes = wrapper.findAll('tbody [role="checkbox"]')
+    await boxes[0].trigger('keydown', { key: ' ' })
+    await nextTick()
+
+    const all = wrapper.find('thead [role="checkbox"]')
+    // 勾了 1/2：不能与「0 勾选」看起来一样
+    expect(all.attributes('aria-checked')).toBe('mixed')
+    expect(all.find('svg').exists()).toBe(false)
+    expect(all.find('span.bg-white').exists()).toBe(true)
+
+    // 半选时点全选 → 全选（true + 对勾）
+    await all.trigger('click')
+    await nextTick()
+    expect(all.attributes('aria-checked')).toBe('true')
+    expect(all.find('svg').exists()).toBe(true)
+  })
+
+  it('等番页：行右键菜单具备菜单语义与键盘操作（A-34 / A-63）', async () => {
+    await mountRemaining([remainingRow({ name: '无链接条目' })])
+    const row = wrapper.findAll('tbody tr')[0]
+    await row.trigger('contextmenu')
+    await flushPromises()
+    await nextTick()
+
+    const menu = wrapper.find('.context-menu')
+    expect(menu.exists()).toBe(true)
+    expect(menu.attributes('role')).toBe('menu')
+    const items = menu.findAll('[role="menuitem"]')
+    expect(items.length).toBe(4)
+    // 打开即聚焦首项
+    expect(document.activeElement).toBe(items[0].element)
+
+    // 无 url 时「打开链接」是真禁用（A-63：与追番页一致，不再只是淡化）
+    expect(items[1].attributes('disabled')).toBeDefined()
+    expect(items[1].classes()).toContain('opacity-40')
+
+    await menu.trigger('keydown', { key: 'ArrowDown' })
+    // 方向键跳过禁用项：从「编辑」直接到「移至追番」
+    expect(document.activeElement).toBe(items[2].element)
+
+    await menu.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('.context-menu').exists()).toBe(false)
+  })
+
   it('追番卡片勾选框暴露 role=checkbox / aria-checked，且键盘可切换', async () => {
     const cardWrapper = mount(WatchingCard, {
       props: { item: watchingRow({ name: '卡片番' }), batchMode: true, checked: false },
