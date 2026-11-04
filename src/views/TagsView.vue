@@ -188,7 +188,10 @@ const onRowContextMenu = (e, tag) => {
 
 const startRename = async (tag) => {
   editingId.value = tag.id
-  editName.value = tag.name
+  // 内置标签：编辑框给当前语言显示名。数据层存的是播种时的中文名（useTagLabel
+  // 反查翻译），直接绑 tag.name 会在非中文界面把中文原文弹回输入框（用户实测）。
+  // 非内置标签 tagLabel 原样返回 name，行为不变。
+  editName.value = tagLabel(tag, tt)
   await nextTick()
   const el = Array.isArray(editInput.value) ? editInput.value[0] : editInput.value
   el?.focus?.()
@@ -201,7 +204,9 @@ const cancelRename = () => {
 
 const saveRename = async (tag) => {
   const name = editName.value.trim()
-  if (!name || name === tag.name) { cancelRename(); return }
+  // 未实际改动：等于原中文名，或等于当前语言显示名（startRename 对内置标签
+  // 换算过、用户没改就保存）→ 不调 API，避免把内置标签的库里中文名覆盖成译文
+  if (!name || name === tag.name || name === tagLabel(tag, tt)) { cancelRename(); return }
   try {
     const res = await tagsApi.update(tag.id, { name })
     if (res?.data?.success) {
