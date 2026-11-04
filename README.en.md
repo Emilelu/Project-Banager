@@ -98,6 +98,9 @@ Import detects the format from the file type, no picker needed. Export is one cl
 
 Frosted and liquid glass, 6 presets, palette sampled from the wallpaper, and a random wallpaper
 background that can either rotate on every launch or be pinned. Dimming and blur are both tunable.
+Wallpaper sampling and preview go through a self-hosted CORS proxy (configured at the top of
+`useAppearance.js`); with no reachable proxy they degrade silently, and custom direct URLs are
+never sent to any proxy.
 
 ![Theme and background](docs/screenshots/appearance.jpg)
 
@@ -114,10 +117,10 @@ tuned separately for dark.
 pnpm install
 pnpm dev      # dev server
 pnpm build    # outputs dist/index.html (one HTML file, WASM inlined)
-pnpm test     # 473 tests / 14 files
+pnpm test     # 476 tests / 14 files
 ```
 
-The built file is about 1.6 MB, roughly 707 KB gzipped. The WASM is gzipped, then base64-inlined;
+The built file is about 1.6 MB, roughly 709 KB gzipped. The WASM is gzipped, then base64-inlined;
 at runtime it is restored with the native `DecompressionStream('gzip')` when available, falling back
 to a bundled pure-JS inflate. Neither path touches the network, so both work from `file://`.
 
@@ -127,8 +130,8 @@ to a bundled pure-JS inflate. Neither path touches the network, so both work fro
 | Page | Capabilities |
 |---|---|
 | Watching `/watching` | Week grid, time sorting, episode ± (zero-padded and decimal), progress percentage, link templates, monthly reminders |
-| Waiting `/remaining` | Table + paging, date sorting, drag to reorder, batch add, seasonal anime shortcut, tag filtering |
-| History `/watched` | Year grouping, date sorting, custom year labels, this-year and total stats, tag filtering |
+| Waiting `/remaining` | Table + paging, date sorting, drag to reorder, batch add, seasonal anime shortcut, top-bar search & tag filter |
+| History `/watched` | Year grouping, date sorting, custom year labels, this-year and total stats, top-bar search / tag / year filters |
 | Tags `/tags` | 12 built-ins + custom; create, rename, recolor, delete; built-ins cannot be deleted, renames propagate |
 | Theme `/appearance` | 6 preset palettes, sample from wallpaper or randomize per refresh, frosted / liquid glass, mask & blur tuning |
 | Import `/import` | Excel import page: sheet detection, week-layout parsing, merged year cells, hyperlinks, import log |
@@ -136,12 +139,13 @@ to a bundled pure-JS inflate. Neither path touches the network, so both work fro
 
 **Global**
 
-- Chinese / English / Japanese (589 aligned keys), CJK font family per language; light / dark / follow-system
+- Chinese / English / Japanese (596 aligned keys), CJK font family per language; light / dark / follow-system
 - Collapsible sidebar (15rem ↔ 4rem) grouped into lists / data / settings, icons with tooltips when collapsed
 - One shared color picker; root font size scales with the viewport for high-DPI screens
-- Responsive shell: page actions fold into a more-actions menu at ≤1100px, the sidebar collapses to
-  icons at ≤900px, and the title, counters and date stay on one line; tables scroll inside their
-  card on narrow screens instead of squeezing every column
+- Responsive shell: search, tag and year filters live in the global top bar above 1100px and
+  collapse to icons (tap for a panel input) at ≤1100px; page actions fold into a more-actions menu
+  at ≤1100px, the sidebar collapses to icons at ≤900px, and the title, counters and date stay on
+  one line; tables scroll inside their card on narrow screens instead of squeezing every column
 - Fixed table column widths (index / date / link / notes), so wide screens no longer give a
   date column a third of the width to hold a single `2026/01`
 - Skeleton rows render until the first data arrives, instead of flashing an empty state
