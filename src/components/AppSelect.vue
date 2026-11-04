@@ -77,9 +77,13 @@ const onDocPointerDown = (e) => {
   open.value = false
 }
 
-/** Esc 关闭 */
+/** Esc 关闭：捕获阶段 + stopPropagation —— 一次 Esc 只收下拉，不连宿主弹窗一起关（A-27） */
 const onKeydown = (e) => {
-  if (open.value && e.key === 'Escape') open.value = false
+  if (!open.value || e.key !== 'Escape') return
+  e.stopPropagation()
+  open.value = false
+  // 关闭后焦点还给触发器
+  nextTick(() => triggerRef.value?.focus?.())
 }
 
 /**
@@ -94,10 +98,10 @@ watch(
 
 if (typeof document !== 'undefined') {
   document.addEventListener('pointerdown', onDocPointerDown, true)
-  document.addEventListener('keydown', onKeydown)
+  document.addEventListener('keydown', onKeydown, true)
   onUnmounted(() => {
     document.removeEventListener('pointerdown', onDocPointerDown, true)
-    document.removeEventListener('keydown', onKeydown)
+    document.removeEventListener('keydown', onKeydown, true)
   })
 }
 </script>

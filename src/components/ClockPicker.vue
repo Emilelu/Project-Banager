@@ -13,6 +13,7 @@
  * 且缩放时不会因亚像素累积而错位。
  */
 import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
   /** 'HH:mm' 格式；空串表示未选 */
@@ -22,6 +23,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const { tt } = useI18n()
 
 const open = ref(false)
 const triggerRef = ref(null)
@@ -36,6 +39,8 @@ const dragging = ref(false)
 
 const PANEL_W = 280
 const MARGIN = 8
+/** 首帧估算高度：真实高度由 offsetHeight 复测（A-61：硬编码 338 与实测 321 差 17px） */
+const PANEL_H_EST = 338
 const SIZE = 220
 const CENTER = SIZE / 2
 
@@ -165,11 +170,7 @@ if (typeof window !== 'undefined') {
 }
 
 /* ---------------------------- 打开/关闭 + 定位 ---------------------------- */
-const toggle = () => {
-  if (open.value) {
-    open.value = false
-    return
-  }
+const placePanel = (measured = false) => {
   const btn = triggerRef.value
   if (!btn) return
   const r = btn.getBoundingClientRect()
@@ -179,29 +180,41 @@ const toggle = () => {
   }
 
   /*
-   * 纵向定位：面板 338px 高，很多触发器在页面上半部，
-   * 单纯向上展开会把 top 推到负数（实测 y=-25 被裁）。
-   * 因此先试上方，放不下翻到下方，都放不下就夹进视口。
+   * 纵向定位：先试上方，放不下翻到下方，都放不下就夹进视口。
+   * 面板高度不能写死（A-61）：首次打开先用估算值摆位避免从 (0,0) 闪一下，
+   * nextTick 面板挂载后再用 offsetHeight 复算 —— 下方展开分支的间距才等于 MARGIN。
    */
-  const PANEL_H = 338
+  const panelH = (measured && panelRef.value?.offsetHeight) || PANEL_H_EST
   const vh = window.innerHeight
   const spaceAbove = r.top - MARGIN
   const spaceBelow = vh - r.bottom - MARGIN
 
-  if (spaceAbove >= PANEL_H) {
+  let bottom
+  if (spaceAbove >= panelH) {
     // 上方够 → 底边贴按钮上沿
-    menuPos.value = { left, bottom: vh - r.top + MARGIN }
-  } else if (spaceBelow >= PANEL_H) {
+    bottom = vh - r.top + MARGIN
+  } else if (spaceBelow >= panelH) {
     // 下方够 → 顶边贴按钮下沿（用 bottom 表达：底边 = 视口高 - (按钮底 + 面板高 + 间距)）
-    menuPos.value = { left, bottom: vh - (r.bottom + MARGIN + PANEL_H) }
+    bottom = vh - (r.bottom + MARGIN + panelH)
   } else {
     // 都放不下 → 夹进视口（贴顶 MARGIN）
-    menuPos.value = { left, bottom: Math.max(MARGIN, vh - PANEL_H - MARGIN) }
+    bottom = Math.max(MARGIN, vh - panelH - MARGIN)
   }
+  menuPos.value = { left, bottom }
+}
+
+const toggle = () => {
+  if (open.value) {
+    open.value = false
+    return
+  }
+  if (!triggerRef.value) return
+  placePanel(false)
   open.value = true
   nextTick(() => {
     // 未选小时时默认进入「选小时」段
     segment.value = hour.value === null ? 'hour' : 'minute'
+    placePanel(true)
   })
 }
 
@@ -220,17 +233,21 @@ const onDocPointerDown = (e) => {
   open.value = false
 }
 
-/** Esc 关闭 */
+/** Esc 关闭：捕获阶段 + stopPropagation，一次 Esc 只收面板，不连宿主弹窗一起关（A-27） */
 const onKeydown = (e) => {
-  if (open.value && e.key === 'Escape') open.value = false
+  if (!open.value || e.key !== 'Escape') return
+  e.stopPropagation()
+  open.value = false
+  // 关闭后焦点还给触发按钮：否则焦点随面板卸载退回 body
+  nextTick(() => triggerRef.value?.focus?.())
 }
 
 if (typeof document !== 'undefined') {
   document.addEventListener('pointerdown', onDocPointerDown, true)
-  document.addEventListener('keydown', onKeydown)
+  document.addEventListener('keydown', onKeydown, true)
   onUnmounted(() => {
     document.removeEventListener('pointerdown', onDocPointerDown, true)
-    document.removeEventListener('keydown', onKeydown)
+    document.removeEventListener('keydown', onKeydown, true)
   })
 }
 
@@ -288,7 +305,7 @@ const clear = () => {
           <svg :width="SIZE" :height="SIZE" :viewBox="`0 0 ${SIZE} ${SIZE}`"
             @pointerdown="onPointerDown">
             <!-- 外圈底盘 -->
-            <circle :cx="CENTER" :cy="CENTER" :r="HOUR_R + 14" fill="rgba(255,255,255,0.5)"
+            <circle class="clock-plate" :cx="CENTER" :cy="CENTER" :r="HOUR_R + 14" fill="rgba(255,255,255,0.5)"
               stroke="rgba(0,0,0,0.06)" />
 
             <!-- 指针 -->
@@ -329,13 +346,13 @@ const clear = () => {
           <input v-if="useManual" v-model="manualInput" type="text" placeholder="23:30"
             class="clock-manual" @keydown.enter="applyManual" />
           <button v-else type="button" class="btn-base btn-sm btn-link" @click="useManual = true">
-            {{ '手动输入' }}
+            {{ tt('showDialog.manualInput') }}
           </button>
           <button v-if="useManual" type="button" class="btn-base btn-sm btn-primary" @click="applyManual">
-            确定
+            {{ tt('common.confirm') }}
           </button>
           <button type="button" class="btn-base btn-sm btn-link ml-auto opacity-70" @click="clear">
-            清空
+            {{ tt('common.clear') }}
           </button>
         </div>
       </div>
@@ -380,20 +397,24 @@ const clear = () => {
   color: #e5e7eb;
 }
 
-/* 顶部大字：选中的段用主题色 + 白底凸出 */
+/* 顶部大字：只有「当前编辑的段」用主题色 + 淡底凸出；
+   未选中段不再靠 opacity 弱化（A-29：0.45 压在面板上 light 2.32 / dark 3.79:1），
+   改用不透明灰阶，层级差由「有无主色底」表达，两主题均 ≥4.5:1。 */
 .clock-digit {
   font-size: 26px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   padding: 1px 8px;
   border-radius: var(--r-sm, 8px);
-  opacity: 0.45;
+  color: #4b5563;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 .clock-digit.is-active {
   opacity: 1;
-  color: rgb(var(--c-primary));
+  /* 浅色底上用 --c-primary-dark（该变量朝浅底收敛到 4.5:1）；
+     直接用 --c-primary 在随机配色下只有 2.9~3.0:1，26px 粗体也压在 AA 大字号线上。 */
+  color: rgb(var(--c-primary-dark));
   background: rgb(var(--c-primary) / 0.12);
 }
 
@@ -403,21 +424,25 @@ const clear = () => {
   touch-action: none;
 }
 
-/* 刻度数字 */
+/* 刻度数字（A-29）：不再用 opacity 弱化 —— opacity 会连同底色一起淡化，
+   分钟数字实测压到 1.46~1.78:1。改用「不透明但降一档的灰阶」保持层级：
+   浅色 #374151/#4b5563 压在近白圆盘上 7:1 以上；深色 #e5e7eb/#cbd5e1
+   压在深色圆盘上同样 ≥4.5:1（圆盘深色下改为 12% 白，见 .dark .clock-plate）。 */
 .clock-num {
   font-size: 10.5px;
   font-weight: 600;
-  fill: currentColor;
+  fill: #374151;
   pointer-events: none;
-  transition: opacity 0.15s ease, fill 0.15s ease;
+  transition: fill 0.15s ease;
 }
 .clock-num-min {
-  font-size: 9px;
-  opacity: 0.55;
+  font-size: 10px;
+  fill: #4b5563;
 }
 .clock-num.is-off,
 .clock-num.is-dim {
-  opacity: 0.35;
+  opacity: 1;
+  fill: #4b5563;
 }
 .clock-num.is-on {
   fill: #fff;
@@ -445,5 +470,33 @@ const clear = () => {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgb(var(--c-primary) / 0.3);
   color: #e5e7eb;
+}
+
+/* ==================== 深色（本工程写 .dark .xxx，不写 :global） ==================== */
+/* 50% 白圆盘压深色面板后合成约 rgb(140,137,148)：浅色文字只剩 2.6~2.8:1。
+   降到 12% 白让圆盘仍是「比面板亮一档」的盘面，同时保住亮字的对比度。 */
+.dark .clock-plate {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(255, 255, 255, 0.16);
+}
+.dark .clock-digit {
+  color: #cbd5e1;
+}
+.dark .clock-digit.is-active {
+  color: rgb(var(--c-primary-light));
+  background: rgb(var(--c-primary-light) / 0.16);
+}
+.dark .clock-num {
+  fill: #e5e7eb;
+}
+.dark .clock-num-min {
+  fill: #cbd5e1;
+}
+.dark .clock-num.is-off,
+.dark .clock-num.is-dim {
+  fill: #cbd5e1;
+}
+.dark .clock-num.is-on {
+  fill: #fff;
 }
 </style>

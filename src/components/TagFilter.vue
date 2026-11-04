@@ -203,6 +203,9 @@ const onDocClick = (e) => {
 }
 const onKeydown = (e) => {
   if (e.key === 'Escape' && open.value) {
+    // 捕获阶段监听 + stopPropagation：面板上的 Esc 只收筛选菜单。
+    // 否则事件继续冒泡到各页 document 级 Esc 处理（等番页会把批量模式一并退出，A-27）。
+    e.stopPropagation()
     open.value = false
     // 关闭后焦点归还触发按钮：否则焦点此时落在已被移除的菜单项上，会退回 body
     nextTick(() => triggerRef.value?.focus?.())
@@ -213,12 +216,12 @@ const onResize = () => { if (open.value) measureMenu() }
 onMounted(() => {
   loadTags()
   document.addEventListener('click', onDocClick)
-  document.addEventListener('keydown', onKeydown)
+  document.addEventListener('keydown', onKeydown, true)
   window.addEventListener('resize', onResize)
 })
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
-  document.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('keydown', onKeydown, true)
   window.removeEventListener('resize', onResize)
 })
 
@@ -260,8 +263,15 @@ defineExpose({ loadTags })
 .tag-filter-chip:hover {
   background: rgb(var(--c-primary) / 0.2);
 }
-:global(.dark) .tag-filter-chip {
-  color: rgb(var(--c-primary-light));
+/* 深色反色（A-03）：scoped 里必须直接写 `.dark .xxx`；
+   写成 `:global(.dark) .xxx` 会被本工程 Vue 编译成空选择器，规则完全不生效，
+   深色下会沿用浅色的深色文字，压在深底上只剩 1.3~2.6:1。
+   文字取纯白而不是 --c-primary-light：该变量只保证「压在 0.12 亮度的深色玻璃上
+   4.5:1」，而 chip 自身还叠了 16% 同色底，背景会被提亮；白字在该底上实测 ~9:1，
+   随机配色（wallpaper 取色）下也不会掉到 4.5 以下。 */
+.dark .tag-filter-chip {
+  color: #fff;
   background: rgb(var(--c-primary-light) / 0.16);
+  border-color: rgb(var(--c-primary-light) / 0.45);
 }
 </style>

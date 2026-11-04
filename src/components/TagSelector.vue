@@ -163,21 +163,26 @@ defineExpose({ loadTags, startCreate })
   align-items: center;
   padding: 0.125rem 0.5rem;
   border-radius: 0.5rem;
-  font-size: 0.6875rem;
+  /* A-03/A-30：0.6875rem(9.625px) 提到 0.75rem(10.5px)，与 TagFilter / V-13 徽章档一致 */
+  font-size: 0.75rem;
   line-height: 1.25rem;
   transition: all 0.15s ease;
   white-space: nowrap;
   cursor: pointer;
 }
 
-/* 已选：实色底 + 白字，颜色取标签自身的 color */
+/* 已选：实色底 + 白字，颜色取标签自身的 color。
+   A-30：500 级高饱和色直接铺底时白字只有 3.53~3.76:1（#EF4444 3.76 / #EC4899 3.53），
+   先把底色与黑色混合压深到 60% 再铺（参照 ToastHost 的 color-mix 做法）：
+   内置 12 色 + 取色器预设里最亮的黄绿 #84CC16 也有 5.07:1，其余更高。 */
 .tag-chip-on {
-  background: var(--tag-color);
+  background: color-mix(in srgb, var(--tag-color) 60%, black);
   color: #fff;
-  border: 1px solid var(--tag-color);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 60%, black);
 }
 .tag-chip-on:hover {
-  filter: brightness(1.1);
+  /* 原 brightness(1.1) 会把底色提亮、反而拉低白字对比度，改为压暗一档 */
+  filter: brightness(0.92);
 }
 
 /* 未选：淡色底 + **同色但显著压暗**的文字。
@@ -185,12 +190,14 @@ defineExpose({ loadTags, startCreate })
    （#EF4444 / #10B981 / #EC4899 / #8B5CF6…），压在「12% 同色淡底 + 白色玻璃」上
    实测约 2.5:1，远低于正文 4.5:1。
    与黑色的混合比例是**按最差色相反推**的：只混 72% 时紫/青/灰几档仍只有 3.3~4.1:1
-   （实测 日常 3.8 / 科幻 4.07 / 搞笑 3.35 / 治愈 3.74），压到 55% 后全部 ≥4.6:1。
-   代价是颜色更沉，但保留了色相区分度，且「已选/未选」仍靠底色的有无来区分。
+   （实测 日常 3.8 / 科幻 4.07 / 搞笑 3.35 / 治愈 3.74）。
+   A-03 复核：弹窗玻璃实际亮度低于纯白（浅色实测底约 181~198 灰阶），
+   55% 混黑在真实渲染底上仍有 3.8~4.0:1，故再压到 40%（最差黄绿仍 ≥4.7）；
+   颜色更沉，但保留了色相区分度，「已选/未选」仍靠底色的有无来区分。
    深色模式在下方另有规则反转为亮阶。 */
 .tag-chip-off {
   background: color-mix(in srgb, var(--tag-color) 12%, transparent);
-  color: color-mix(in srgb, var(--tag-color) 55%, black);
+  color: color-mix(in srgb, var(--tag-color) 40%, black);
   border: 1px solid color-mix(in srgb, var(--tag-color) 30%, transparent);
 }
 .tag-chip-off:hover {
@@ -207,9 +214,10 @@ defineExpose({ loadTags, startCreate })
   background: rgb(var(--c-primary) / 0.08);
 }
 
-/* 深色模式下未选标签：淡底提亮（否则看不见），文字同步反转为亮阶，
-   避免沿用浅色模式的深阶字压在深紫卡片上（深字压深底同样不可读）。 */
-:global(.dark) .tag-chip-off {
+/* 深色模式下未选标签：淡底提亮（否则看不见），文字同步反转为亮阶。
+   A-03：scoped 里必须直接写 `.dark .xxx` —— 原来写 `:global(.dark) .tag-chip-off`
+   会被本工程 Vue 编译成空选择器，深色下沿用浅色深字，压在深底上只有 1.3~2.3:1。 */
+.dark .tag-chip-off {
   background: color-mix(in srgb, var(--tag-color) 22%, transparent);
   color: color-mix(in srgb, var(--tag-color) 55%, white);
 }
