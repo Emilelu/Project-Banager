@@ -157,7 +157,7 @@
               <a v-else :href="item.url ? buildUrl(item) : defaultBgmUrl(item)" target="_blank" rel="noopener"
                 @click.stop @mousedown.middle.stop
                 :aria-label="tt('card.openLinkLabel', { name: item.name })"
-                class="text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
+                class="cell-link text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
             </td>
             <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'notes')"
               @dblclick.stop="onFieldDblclick(item, 'notes')"
@@ -1680,9 +1680,14 @@ const unpinLeavingGroup = (el) => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  min-width: 0;
   flex-wrap: nowrap;
   overflow: hidden;
+  /* 表格列宽内容自适应（table-layout:auto）下，本块的固有宽度会成为名称列的
+     min-content —— 长名称会把整张表撑到与最长名称等宽（768px 实测表宽 1173px、
+     名称列不截断）。width:0 让固有贡献为 0，min-width:100% 保证实际渲染仍铺满
+     单元格；名称列于是收缩为「剩余宽度」，长名称由内部 .truncate 省略号收尾。 */
+  width: 0;
+  min-width: 100%;
 }
 /* 行首元素（封面 / 占位槽）与表头图标对齐：由 style.css 里
    table td.editable-cell 的 padding-left 统一负责，此处不再单独补偿。 */

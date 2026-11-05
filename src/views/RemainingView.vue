@@ -101,7 +101,7 @@
                 'is-odd': idx % 2 === 0,
               },
               canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
-              dragIndex >= 0 && absoluteIndexOf(item) === dragIndex ? 'opacity-40' : '',
+              dragIndex >= 0 && dragReal && absoluteIndexOf(item) === dragIndex ? 'opacity-40' : '',
               dragOverIndex >= 0 && absoluteIndexOf(item) === dragOverIndex && absoluteIndexOf(item) !== dragIndex
                 ? 'ring-2 ring-primary/60 ring-inset' : ''
             ]"
@@ -189,7 +189,7 @@
               <a v-else :href="item.url ? buildUrl(item) : defaultBgmUrl(item)" target="_blank" rel="noopener"
                 @click.stop @mousedown.middle.stop
                 :aria-label="tt('card.openLinkLabel', { name: item.name })"
-                class="text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
+                class="cell-link text-xs text-primary hover:text-primary-dark truncate block">{{ item.url || 'bgm.tv' }}</a>
             </td>
             <td class="px-3 py-2.5 editable-cell" v-bind="editCellProps(item, 'notes')"
               @dblclick.stop="onFieldDblclick(item, 'notes')"
@@ -210,8 +210,10 @@
         </tbody>
       </table>
       <!-- 末尾放置区：表格最后一行紧贴容器底边，指针一越过末行就离开容器、
-           导致「拖到末尾」总是失败。拖动时在此处补一条可放置带，命中即移到末尾。 -->
-      <div v-if="dragIndex >= 0" class="h-10 -mt-px" aria-hidden="true"
+           导致「拖到末尾」总是失败。拖动时在此处补一条可放置带，命中即移到末尾。
+           必须 dragReal（真实位移 ≥ 8px）才渲染：单击抖动触发的幽灵 dragstart
+           若立即渲染这条 h-10 带，会在末行下方闪现一条行高空白（Bug：连点闪行）。 -->
+      <div v-if="dragIndex >= 0 && dragReal" class="h-10 -mt-px" aria-hidden="true"
         :class="dragOverEnd ? 'bg-primary/15 ring-2 ring-primary/50 ring-inset' : ''"></div>
     </div>
 
@@ -483,22 +485,6 @@
       </transition>
     </Teleport>
 
-    <!-- 季度新番下拉菜单 -->
-    <Teleport to="body">
-      <!-- 季节菜单在按钮下方展开：原点顶边、起始位移朝上，与全站 pop 动效一致 -->
-      <transition name="pop">
-      <div v-if="showSeasonMenu" class="fixed z-[200] season-menu"
-        style="--pop-origin-y: top; --pop-from-y: -6px"
-        :style="{left: seasonMenuPos.x + 'px', top: seasonMenuPos.y + 'px'}">
-        <div class="app-dialog app-menu-panel min-w-[11.25rem] context-menu">
-          <a v-for="s in seasonLinks" :key="s.label" :href="s.url" target="_blank" rel="noopener"
-            class="block px-4 py-2 text-sm whitespace-nowrap hover:bg-primary/10 transition text-gray-700">{{ s.label }}</a>
-        </div>
-      </div>
-      </transition>
-      <div v-if="showSeasonMenu" class="fixed inset-0 z-[199]" @click="showSeasonMenu=false"></div>
-    </Teleport>
-
     <!-- 批量添加对话框 -->
     <Teleport to="body">
       <transition name="modal-overlay">
@@ -615,6 +601,40 @@ const dragIndex = ref(-1)
 const dragOverIndex = ref(-1)
 const isManualOrder = computed(() => sortField.value === MANUAL || sortField.value === '')
 
+/**
+ * 幽灵拖拽抑制（表格连点闪行修复）。
+ *
+ * 现象：快速单击各行切换选中时，有概率在表格末行下方闪现一条行高的空带然后消失，
+ * 同时被点的行闪暗一下。根因：行是 draggable 的，Chromium 的拖拽启动阈值只有几 px，
+ * 快速连点时指针难免抖动超阈 → 触发原生 dragstart → dragIndex 被置位 →
+ * 末尾放置带（h-10，实测 35px）插入卡片、行加 opacity-40；紧接着 mouseup 触发
+ * dragend 全部复原 —— 一次「带拖拽语义的点击」造成一次完整的布局闪烁。
+ * （tmp/fix-tables-repro.mjs 实测：卡片高 242 → 277 → 243。）
+ *
+ * 修法：视觉与放置放行都延迟到「拖拽真实位移 ≥ DRAG_REAL_DIST」之后（dragReal）。
+ * 单击抖动的位移远小于该阈值，dragstart/dragend 期间不再产生任何 DOM/样式变化；
+ * 真拖拽移动 8px 后行为与原来完全一致（放置带、行高亮、drop 放行）。
+ * 合成事件（jsdom 测试的 trigger('dragover')）没有坐标，按放行处理，不影响单测。
+ */
+const DRAG_REAL_DIST = 8
+const dragReal = ref(false)
+let dragOrigin = null
+const markDragReal = (e) => {
+  if (dragReal.value) return true
+  const x = e?.clientX
+  const y = e?.clientY
+  if (dragOrigin == null || typeof x !== 'number' || typeof y !== 'number'
+    || Number.isNaN(x) || Number.isNaN(y)) {
+    dragReal.value = true
+    return true
+  }
+  if (Math.hypot(x - dragOrigin.x, y - dragOrigin.y) >= DRAG_REAL_DIST) {
+    dragReal.value = true
+    return true
+  }
+  return false
+}
+
 const enterManualOrder = () => {
   if (sortField.value !== MANUAL) {
     sortField.value = MANUAL
@@ -668,6 +688,14 @@ const onDragStart = (e, index) => {
   // 手动序延后到 doReorder（drop 成功）才进入。
   dragIndex.value = index
   dragOverIndex.value = index
+  // 幽灵拖拽抑制：记录 dragstart 时的指针位置作为位移基准；
+  // 此刻一律视为「尚未成为真拖拽」，放置带/行压暗/高亮都不渲染（见 dragReal 注释）。
+  const sx = e?.clientX
+  const sy = e?.clientY
+  dragOrigin = (typeof sx === 'number' && typeof sy === 'number' && !Number.isNaN(sx) && !Number.isNaN(sy))
+    ? { x: sx, y: sy }
+    : null
+  dragReal.value = false
   try {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', String(sortedRemainingList.value[index]?.id ?? ''))
@@ -676,6 +704,8 @@ const onDragStart = (e, index) => {
 
 const onDragOver = (e, index) => {
   if (!canDrag.value || dragIndex.value < 0) return
+  // 未超过真实拖拽阈值（单击抖动）时不放行 drop、不高亮，避免闪烁
+  if (!markDragReal(e)) return
   e.preventDefault()
   try { e.dataTransfer.dropEffect = 'move' } catch { /* ignore */ }
   if (dragOverIndex.value !== index) dragOverIndex.value = index
@@ -689,6 +719,7 @@ const onDragEnd = () => {
   dragIndex.value = -1
   dragOverIndex.value = -1
   dragOverEnd.value = false
+  dragReal.value = false
 }
 
 // ===== 表格级拖放（解决「拖到末行之外拖不动」）=====
@@ -719,6 +750,8 @@ const rowIndexAtPointer = (clientY) => {
 
 const onTableDragOver = (e) => {
   if (!canDrag.value || dragIndex.value < 0) return
+  // 未超过真实拖拽阈值（单击抖动）时不放行 drop、不点亮末尾放置带
+  if (!markDragReal(e)) return
   e.preventDefault()
   try { e.dataTransfer.dropEffect = 'move' } catch { /* ignore */ }
   const idx = rowIndexAtPointer(e.clientY)
@@ -1001,7 +1034,6 @@ const handleKeydown = (e) => {
     if (showMoveDialog.value) { showMoveDialog.value = false; return }
     if (showConfirmDialog.value) { showConfirmDialog.value = false; return }
     if (showBatchAddDialog.value) { showBatchAddDialog.value = false; return }
-    if (showSeasonMenu.value) { showSeasonMenu.value = false; return }
     if (contextMenu.value.show) { contextMenu.value.show = false; return }
     if (showPageSizeMenu.value) { showPageSizeMenu.value = false; return }
     if (batchMode.value) { batchMode.value = false; checkedIds.value = [] }
@@ -1064,44 +1096,25 @@ const currentSeasonLink = computed(() => {
 })
 
 // 季度新番链接（用户可选择查看本年 1/4/7/10 月的新番）
-const showSeasonMenu = ref(false)
-const seasonMenuBtn = ref(null)
-const seasonMenuPos = ref({ x: 0, y: 0 })
-const seasonLinks = computed(() => {
-  const year = new Date().getFullYear()
-  const link = (season, month, y = year) =>
-    ({ label: tt('remaining.seasonLink', { year: y, season: tt(season), month }), url: `https://yuc.wiki/${y}${String(month).padStart(2, '0')}` })
-  return [
-    link('remaining.seasonWinter', 1),
-    link('remaining.seasonSpring', 4),
-    link('remaining.seasonSummer', 7),
-    link('remaining.seasonAutumn', 10),
-    link('remaining.seasonWinter', 1, year + 1),
-    { label: tt('remaining.seasonUpcoming'), url: 'https://yuc.wiki/new' },
-  ]
-})
+// 「查看新番」的下拉菜单已移除：工具栏迁入顶栏（A-01）后，菜单锚点 ref
+// （seasonMenuBtn，原页内按钮的 ref）随之失联，菜单固定落在视口 (0,0)；
+// 且 document 级 onDocClick 的外点关闭只认 .season-trigger，顶栏渲染的按钮
+// 不带该 class → 菜单在同一个 click 事件里开了又关，表现为「点击无反应」。
+// 现按按钮语义收敛为：点击直接 openExternal 打开外部新番页面（见 openSeasonTracker）。
 
-const toggleSeasonMenu = () => {
-  if (showSeasonMenu.value) {
-    showSeasonMenu.value = false
-    return
-  }
-  if (seasonMenuBtn.value) {
-    const rect = seasonMenuBtn.value.getBoundingClientRect()
-    seasonMenuPos.value = { x: rect.left, y: rect.bottom + 4 }
-  }
-  showSeasonMenu.value = true
-}
+/**
+ * 「查看新番」：打开外部新番页面（新番卫星观测站，未开播新番一览）。
+ * 必须走 openExternal（window.open + noopener,noreferrer），与行内链接、
+ * 右键菜单「打开链接」同一条路径；file:// 双击场景与 http 下行为一致（已实测）。
+ * 与「本季新番」按钮的分工：本季新番 = 当前季度的排期页；查看新番 = 新番总览页。
+ */
+const openSeasonTracker = () => openExternal('https://yuc.wiki/new')
 
 // 点击表格行和交互元素以外的区域时取消选中（document 级监听，覆盖页面留白）
 const onDocClick = (e) => {
   // 「每页几条」下拉：点菜单外任意位置关闭（按钮自身由 toggle 处理，不算外部）
   if (showPageSizeMenu.value && !e.target.closest('.page-size-menu, .page-size-trigger')) {
     showPageSizeMenu.value = false
-  }
-  // 季节菜单同理
-  if (showSeasonMenu.value && !e.target.closest('.season-menu, .season-trigger')) {
-    showSeasonMenu.value = false
   }
   if (editing.value && !e.target.closest('input, select, textarea')) {
     saveEdit()
@@ -1610,11 +1623,9 @@ watch(
   { immediate: true },
 )
 
-/** 本季新番：外链，新标签打开 */
+/** 本季新番：外链，新标签打开（与查看新番统一走 openExternal 这一条路径） */
 const openSeasonLink = () => {
-  if (typeof window !== 'undefined' && currentSeasonLink.value?.url) {
-    window.open(currentSeasonLink.value.url, '_blank', 'noopener')
-  }
+  if (currentSeasonLink.value?.url) openExternal(currentSeasonLink.value.url)
 }
 
 /**
@@ -1630,7 +1641,7 @@ watch(
   () => {
     const items = [
       { key: 'season-link', icon: 'tv', label: currentSeasonLink.value.label, onClick: openSeasonLink },
-      { key: 'season-menu', icon: 'calendar', label: tt('remaining.viewSeasons'), onClick: toggleSeasonMenu },
+      { key: 'season-tracker', icon: 'calendar', label: tt('remaining.viewSeasons'), onClick: openSeasonTracker },
       { key: 'add', icon: 'plus', label: tt('remaining.add'), onClick: openAddDialog },
       { key: 'batch-add', icon: 'upload', label: tt('remaining.batchAdd'), onClick: openBatchAddDialog },
     ]
@@ -1789,9 +1800,15 @@ const unpinLeavingGroup = (el) => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  min-width: 0;
   flex-wrap: nowrap;
   overflow: hidden;
+  /* 表格列宽内容自适应（table-layout:auto）下，本块的固有宽度会成为名称列的
+     min-content —— 长名称会把整张表撑到与最长名称等宽（768px 实测表宽 1173px、
+     名称列不截断）。width:0 让固有贡献为 0，min-width:100% 保证实际渲染仍铺满
+     单元格；名称列于是收缩为「剩余宽度」，长名称由内部 .truncate 省略号收尾。
+     （WatchingView 无 record-table，不受影响。） */
+  width: 0;
+  min-width: 100%;
 }
 /* 行首元素（封面 / 占位槽）与表头图标对齐：由 style.css 里
    table td.editable-cell 的 padding-left 统一负责，此处不再单独补偿。 */

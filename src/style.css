@@ -4068,11 +4068,15 @@ html:not(.dark) .app-menu-panel .text-danger {
 }
 
 /* ===== Visual audit: record table layout, selection, skeleton, dialog actions ===== */
-/* 表格固定布局：关键列定宽，名称/备注吃剩余空间 */
-/* 表格固定布局：序号/日期/链接/备注定宽，名称吃剩余空间。
-   min-width 保证窄屏时表格不被挤扁，改为卡片内横向滚动。 */
+/* 表格列宽内容自适应：table-layout fixed（全列定宽）改 auto。
+   改前问题：番剧名称列过宽、日期/链接/备注列大量空白（固定 9/10.5/15rem 与
+   实际内容宽度无关，短内容列留大片空白、长名称列反而被压）。
+   方案：日期/链接/备注列用「width:1% 收缩拟合」——列宽 = 内容实际宽度
+   （th 的 nowrap 列名是下限，en「Due Date」+图标 ~121px 的 A-37 保障仍在），
+   且不参与剩余空间分配；名称列吃掉全部剩余宽度，过长省略号（.name-with-tags）。
+   min-width 保证窄屏时表格不被挤扁，改为卡片内横向滚动（≤900px / 901~1100px 同前）。 */
 .record-table {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   min-width: 56rem;
 }
@@ -4085,17 +4089,28 @@ html:not(.dark) .app-menu-panel .text-danger {
 }
 .record-table .col-check { width: 2.75rem; }
 .record-table .col-index { width: 3.5rem; }
-/* 视觉审计 A-37：en 列名「Due Date」+ 日历/信息/排序箭头图标需 ~121px，
-   8.5rem(119px) 仍差 2~3px（1920 档 139 vs 136 同样差 3px）—— 方案A 缩短文案 +
-   方案B 加宽列并用：8.5rem → 9rem（126px / 1920 档 144px），名称列为 auto 吸收，
-   notes 不动；zh/ja 与各档位实测均不再出现「📅 …」整体省略号。 */
-.record-table .col-date { width: 9rem; }
-.record-table .col-url { width: 10.5rem; }
-.record-table .col-notes { width: 15rem; }
+.record-table .col-date { width: 1%; }
+.record-table .col-url { width: 1%; }
+.record-table .col-notes { width: 1%; }
 .record-table .col-name { width: auto; }
 .record-table .col-tail { width: 0; }
 .record-table th,
 .record-table td { overflow: hidden; text-overflow: ellipsis; }
+/* 链接列内容上限：真实 URL 是无断点的连续串，其 min-content = 整条 URL 宽，
+   不设上限会把整列撑到与最长 URL 等宽、名称列被挤扁。内层块级元素上的
+   px max-width 能可靠封顶固有宽度贡献（col 上的 max-width 反而不可靠），
+   超出部分由既有 .truncate 省略号收尾。 */
+.record-table .cell-link { max-width: 13rem; }
+/* 备注列内容上限：同上，长备注封顶 16rem，超出省略号。 */
+.record-table .cell-notes { max-width: 16rem; }
+/* 内容自适应下，行内编辑输入框的固有宽度（size 属性 ≈ 20ch ≈ 177px）会成为
+   所在列的 max-content 贡献，双击进入编辑的瞬间列宽跳一下。width:0 让它对
+   列宽计算的贡献为 0，min-width:100% 保证实际渲染仍铺满单元格（与原 w-full
+   等效）。只作用于表格行内；WatchingCard 的同名输入框不受影响。 */
+.record-table .inline-edit-input {
+  width: 0;
+  min-width: 100%;
+}
 /* 窄屏：在卡片内部横向滚动，列不再被压缩到不可读 */
 .tbl-scroll {
   overflow-x: auto;
