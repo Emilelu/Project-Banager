@@ -464,6 +464,23 @@ const openPanel = async () => {
   await nextTick()
   placePanel(true)
   panelRef.value?.focus?.()
+  scheduleSettleReanchor()
+}
+
+/**
+ * 宿主弹窗（.app-dialog）入场动画是 0.4s 长尾 spring（style.css .modal-enter-active）：
+ * 用户在动画尾程点开面板时，placePanel 量到的是触发器的**中间坐标**，
+ * 面板从此钉死在那里，不再跟随触发点（实测 1440×900 残留 9.2px 横向 / 14.9px 纵向偏差，
+ * gap 从 6px 涨到 20.9px）。动画基本结束（350ms）后按触发器最终位置重锚定一次，
+ * 重锚定同时重算视口翻转/夹紧与 --pop-origin-y/--pop-from-y（镜像 ClockPicker 同款机制）。
+ */
+const settleTimer = ref(null)
+const scheduleSettleReanchor = () => {
+  if (settleTimer.value) clearTimeout(settleTimer.value)
+  settleTimer.value = setTimeout(() => {
+    settleTimer.value = null
+    if (panelOpen.value) placePanel(true)
+  }, 350)
 }
 
 const closePanel = (returnFocus = false) => {
@@ -504,6 +521,17 @@ onUnmounted(() => {
   document.removeEventListener('keydown', onDocKeydown, true)
   window.removeEventListener('resize', onViewportChange)
   window.removeEventListener('scroll', onViewportChange, true)
+  if (settleTimer.value) clearTimeout(settleTimer.value)
+})
+
+// 内层视图切换（点面板头部年月区域 → 月份/年份快选层）会改变面板高度：
+// days 网格 6 行最高，months/years 只有 4 行。切换后必须重跑 placePanel，
+// 否则：① 面板从 months 切回 days 向下长高时底部可能越过视口（above/clamp 摆放下）；
+// ② above 摆放时底边不再贴住触发器。重跑同时刷新 --pop-origin-y/--pop-from-y，
+// 让「选择层」始终锚定触发元素并按视口翻转/夹紧。
+watch(view, () => {
+  if (!panelOpen.value) return
+  nextTick(() => { if (panelOpen.value) placePanel(true) })
 })
 
 defineExpose({ open: openPanel, close: () => closePanel(), parsed })

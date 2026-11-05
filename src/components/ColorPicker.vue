@@ -17,18 +17,22 @@
     </button>
 
     <!-- 自研取色面板：必须 Teleport 到 body + fixed。
-         祖先带 backdrop-filter 会成为 fixed 的包含块（项目踩过 200px 偏移的坑）。 -->
+         祖先带 backdrop-filter 会成为 fixed 的包含块（项目踩过 200px 偏移的坑）。
+         过渡复用全站 pop（缩放 + 位移 + 方向变量），弹出/关闭与其他自制弹层同一语言；
+         :css="popCss" 是卸载保护：宿主（弹窗/页面）整体卸载时离场过渡若还在跑，
+         会在 DOM 已移除后继续操作子树（jsdom 抛 insertBefore/subTree 异常，同 DatePicker）。 -->
     <Teleport to="body">
-      <div
-        v-if="panelOpen"
-        ref="panelRef"
-        class="cp-panel app-menu-surface rounded-xl border p-3"
-        role="dialog"
-        aria-modal="false"
-        :aria-label="tt('color.pick')"
-        data-colorpicker-panel
-        :style="panelStyle"
-      >
+      <transition name="pop" :css="popCss">
+        <div
+          v-if="panelOpen"
+          ref="panelRef"
+          class="cp-panel app-menu-surface rounded-xl border p-3"
+          role="dialog"
+          aria-modal="false"
+          :aria-label="tt('color.pick')"
+          data-colorpicker-panel
+          :style="panelStyle"
+        >
         <!-- 饱和度 / 明度面板：横向饱和度、纵向明度 -->
         <div
           ref="svRef"
@@ -82,7 +86,8 @@
           <button type="button" class="btn-base btn-sm btn-neutral" @click="cancel">{{ tt('common.cancel') }}</button>
           <button type="button" class="btn-base btn-sm btn-primary" @click="confirm">{{ tt('common.confirm') }}</button>
         </div>
-      </div>
+        </div>
+      </transition>
     </Teleport>
   </div>
 </template>
@@ -98,7 +103,9 @@
  *   用户明确要求：取色器要自研，不要浏览器自带。
  *
  * 本实现：HSV 模型 + 自绘饱和度/明度面板 + 色相条 + HEX 输入 + 14 个预设色。
- * 面板走 Teleport + fixed（祖先 backdrop-filter 会劫持 fixed 定位，项目已踩过）。
+ * 面板走 Teleport + fixed（祖先 backdrop-filter 会劫持 fixed 定位，项目已踩过），
+ * 弹出/关闭复用全站 pop 过渡并写入 --pop-origin-y / --pop-from-y 方向变量，
+ * 面板打开期间跟随 resize / 滚动重新锚定；卸载时关掉过渡（:css="popCss"）。
  *
  * 交互：
  *   · 点色块开/关面板；面板内按住拖动实时改色
@@ -108,7 +115,7 @@
  *
  * 无障碍：aria-haspopup / aria-expanded、role=dialog、预设色 role=option、Esc 关闭后焦点归位。
  */
-import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
@@ -133,7 +140,16 @@ const triggerRef = ref(null)
 const panelRef = ref(null)
 const svRef = ref(null)
 const panelOpen = ref(false)
-const panelStyle = ref({})
+// 面板定位：left/top + placement（below/above）。
+// placement 驱动 --pop-origin-y / --pop-from-y，弹出动画从锚点一侧长出来
+// （与 DatePicker / ClockPicker / AppSelect 同一套全站 pop 语言）。
+const panelPos = ref({ left: 0, top: 0, placement: 'below' })
+const panelStyle = computed(() => ({
+  left: `${panelPos.value.left}px`,
+  top: `${panelPos.value.top}px`,
+  '--pop-origin-y': panelPos.value.placement === 'above' ? 'bottom' : 'top',
+  '--pop-from-y': panelPos.value.placement === 'above' ? '6px' : '-6px',
+}))
 
 const hue = ref(0)
 const sat = ref(100)
@@ -210,43 +226,62 @@ watch(
 )
 
 // ---------- 面板定位与开关 ----------
-async function open() {
-  colorBeforeOpen = props.value || ''
-  syncFromValue(props.value)
-  panelOpen.value = true
-  await nextTick()
-  positionPanel()
-  document.addEventListener('pointerdown', onOutside, true)
-  document.addEventListener('keydown', onKey)
-}
+// 卸载保护：宿主卸载时关掉离场过渡，元素立即移除（同 DatePicker / ClockPicker）
+const popCss = ref(true)
 
-/** 面板定位：优先出现在色块下方，下方空间不足则翻到上方，并夹进视口 */
-function positionPanel() {
+/** 面板尺寸估算（打开前先摆一次，避免首帧落在 (0,0)/静态位置闪一下）：
+ *  16.5rem 面板 + SV/色相条/预设/actions，根字号 14 时实测约 231×314。
+ *  估算只用于首帧，下一帧用 offsetWidth/offsetHeight 校正。 */
+const PANEL_W = 240
+const PANEL_H = 330
+const MARGIN = 8
+const GAP = 8
+
+/** 面板定位：优先出现在色块下方，下方空间不足则翻到上方，并夹进视口。
+ *  placement 同时决定弹出方向变量（above → 从底边长出来）。 */
+function placePanel(measure = true) {
   const t = triggerRef.value
-  const panel = panelRef.value
-  if (!t || !panel) return
-  const MARGIN = 8
-  const GAP = 8
+  if (!t) return
   const tr = t.getBoundingClientRect()
-  const pw = panel.offsetWidth
-  const ph = panel.offsetHeight
+  const pw = (measure && panelRef.value?.offsetWidth) || PANEL_W
+  const ph = (measure && panelRef.value?.offsetHeight) || PANEL_H
 
   let left = tr.left
   if (left + pw > window.innerWidth - MARGIN) left = window.innerWidth - pw - MARGIN
   if (left < MARGIN) left = MARGIN
 
   let top = tr.bottom + GAP
+  let placement = 'below'
   if (top + ph > window.innerHeight - MARGIN) {
     const above = tr.top - GAP - ph
-    top = above >= MARGIN ? above : Math.max(MARGIN, window.innerHeight - ph - MARGIN)
+    if (above >= MARGIN) {
+      top = above
+      placement = 'above'
+    } else {
+      // 上下都放不下（超小窗口）：整体夹进视口
+      top = Math.max(MARGIN, window.innerHeight - ph - MARGIN)
+    }
   }
-  panelStyle.value = { left: left + 'px', top: top + 'px' }
+  panelPos.value = { left: Math.round(left), top: Math.round(top), placement }
+}
+
+async function open() {
+  colorBeforeOpen = props.value || ''
+  syncFromValue(props.value)
+  // 先按估算尺寸摆一次再打开：transition 进场首帧就必须已在锚点位置
+  placePanel(false)
+  panelOpen.value = true
+  await nextTick()
+  placePanel(true)
+}
+
+/** 面板开着时跟随视口/容器变化：滚动（capture 捕获容器内滚动）与 resize 都重新锚定 */
+function onViewportChange() {
+  if (panelOpen.value) placePanel(true)
 }
 
 function close() {
   panelOpen.value = false
-  document.removeEventListener('pointerdown', onOutside, true)
-  document.removeEventListener('keydown', onKey)
   triggerRef.value?.focus?.()
 }
 
@@ -277,21 +312,32 @@ function cancel() {
 }
 
 function onOutside(e) {
+  // 监听器常驻（面板开着才动作）：与 DatePicker 同款，避免 open/close 反复增删
+  if (!panelOpen.value) return
   if (panelRef.value?.contains(e.target)) return
   if (triggerRef.value?.contains(e.target)) return
   cancel()
 }
 
 function onKey(e) {
-  if (e.key === 'Escape') {
-    e.stopPropagation()
-    cancel()
-  }
+  if (!panelOpen.value || e.key !== 'Escape') return
+  e.stopPropagation()
+  cancel()
 }
 
+onMounted(() => {
+  document.addEventListener('pointerdown', onOutside, true)
+  document.addEventListener('keydown', onKey)
+  window.addEventListener('resize', onViewportChange)
+  window.addEventListener('scroll', onViewportChange, true)
+})
+
 onBeforeUnmount(() => {
+  popCss.value = false
   document.removeEventListener('pointerdown', onOutside, true)
   document.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', onViewportChange)
+  window.removeEventListener('scroll', onViewportChange, true)
 })
 
 // ---------- 拖动选取 ----------

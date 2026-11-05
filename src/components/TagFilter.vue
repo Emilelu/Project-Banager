@@ -28,7 +28,6 @@
                · Esc 关闭后焦点回到触发按钮（由 onKeydown 处理） -->
           <div v-if="open" ref="menuRef" role="menu" :aria-label="tt('tags.filterLabel')"
             class="fixed z-[110] app-menu-panel min-w-[12rem] max-h-[60vh] overflow-y-auto"
-            style="--pop-origin-y: top; --pop-from-y: -6px"
             :style="menuStyle"
             @keydown="onMenuKeydown">
             <!-- 清空筛选 -->
@@ -98,7 +97,10 @@ const allTags = ref([])
 const open = ref(false)
 const triggerRef = ref(null)
 const menuRef = ref(null)
-const menuPos = ref({ left: 0, top: 0 })
+// placement 记录菜单最终在触发点的上/下侧，驱动方向变量：
+// 向下弹 = 从顶边长出来（origin top）；向上翻 = 从底边长出来（origin bottom）。
+// 此前方向变量写死 top，视口下方放不下翻到上方时动画仍向下长，方向是反的。
+const menuPos = ref({ left: 0, top: 0, placement: 'below' })
 
 const selected = computed(() =>
   String(props.modelValue || '').split(',').map(s => s.trim()).filter(Boolean),
@@ -107,6 +109,8 @@ const selected = computed(() =>
 const menuStyle = computed(() => ({
   left: `${menuPos.value.left}px`,
   top: `${menuPos.value.top}px`,
+  '--pop-origin-y': menuPos.value.placement === 'above' ? 'bottom' : 'top',
+  '--pop-from-y': menuPos.value.placement === 'above' ? '6px' : '-6px',
 }))
 
 const measureMenu = () => {
@@ -120,8 +124,12 @@ const measureMenu = () => {
   const margin = 8
   const left = Math.min(Math.max(b.left, margin), Math.max(margin, window.innerWidth - w - margin))
   let top = b.bottom + gap
-  if (top + h > window.innerHeight - margin) top = b.top - h - gap
-  menuPos.value = { left: Math.round(left), top: Math.round(top) }
+  let placement = 'below'
+  if (top + h > window.innerHeight - margin) {
+    top = b.top - h - gap
+    placement = 'above'
+  }
+  menuPos.value = { left: Math.round(left), top: Math.round(top), placement }
 }
 
 /**
