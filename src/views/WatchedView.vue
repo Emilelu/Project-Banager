@@ -348,7 +348,13 @@
                        输入框只留 placeholder 里的示例；校验错误与精度提示仍外显（见下）。 -->
                   <span class="inline-flex items-center gap-1 cursor-help"
                     v-tip="tt('record.dateFormatsHint')">{{ tt('moveWatched.date') }}<AppIcon scale="xs" name="info" class="text-gray-400" /></span>
-                  <button type="button" @click="dateManualInput=!dateManualInput" class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
+                  <!-- 显式 aria-label：按钮外层是 <label>（首行文本「观看日期」），
+                       原生 label 关联会抢占按钮的可访问名，读屏播报成「观看日期」按钮。
+                       aria-label 优先级高于 label 关联，这里镜像按钮可见文字
+                       （显示「可切换到的另一个模式」），名称与动作一致。 -->
+                  <button type="button" @click="dateManualInput=!dateManualInput"
+                    :aria-label="dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput')"
+                    class="text-xs text-primary hover:text-primary-dark transition">{{ dateManualInput ? tt('record.useDatePicker') : tt('showDialog.manualInput') }}</button>
                 </label>
                 <input v-if="dateManualInput" v-model="form.watch_date" type="text" :placeholder="tt('moveWatched.datePlaceholder')"
                   :aria-label="tt('record.dateFormatsHint')"
@@ -375,7 +381,11 @@
                        formShowTimePicker=false 时当前是时钟网格 → 标签显示「手动输入」；
                        =true 时当前是文本输入 → 标签显示「时钟选择」。
                        此前写反了（显示的是当前模式），用户点标签会得到与预期相反的控件。 -->
-                  <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
+                  <!-- 显式 aria-label：同上方日期切换按钮 —— label 文本「时间（可选）」
+                       会抢占可访问名；这里镜像可见文字（「可切换到的另一个模式」）。 -->
+                  <button type="button" @click="formShowTimePicker=!formShowTimePicker"
+                    :aria-label="formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput')"
+                    class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
                 </label>
                 <div v-if="!formShowTimePicker" class="relative">
                   <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">

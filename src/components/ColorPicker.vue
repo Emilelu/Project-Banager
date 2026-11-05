@@ -195,7 +195,12 @@ function hexToHsv(hexStr) {
   }
   if (h < 0) h += 360
   const sv = max === 0 ? 0 : (d / max) * 100
-  return { h: Math.round(h), s: Math.round(sv), v: Math.round(max * 100) }
+  // h/s/v 保留全精度浮点（**不要 Math.round**）：内部 HSV 是唯一的取色真源，
+  // 预设色块 / HEX 输入走「hex → HSV → hex」往返，整数舍入会把
+  // #10b981 变成 #11ba82、#ef4444 变成 #f04343（±1~2/通道）。
+  // 浮点往返误差 ~1e-16，远小于 0.5/255 的量化半格，hsvToHex 末端的
+  // Math.round 能精确还原原通道值；拖动路径（startSv/startHue）仍各自取整。
+  return { h, s: sv, v: max * 100 }
 }
 
 /** 外部 value → 内部 HSV */
@@ -398,7 +403,7 @@ function applyHex() {
 .color-picker-wrapper {
   position: relative;
   flex-shrink: 0;
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   /* 描边由 wrapper 负责，色块本身不再单独描边，避免双层描边 */
   box-shadow: 0 0 0 1px rgb(var(--c-primary) / 0.25) inset;
   overflow: hidden;
@@ -448,7 +453,7 @@ function applyHex() {
 .cp-sv {
   position: relative;
   height: 8.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   cursor: crosshair;
   overflow: hidden;
   touch-action: none;
@@ -510,7 +515,7 @@ function applyHex() {
   width: 2rem;
   height: 2rem;
   flex: 0 0 auto;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   border: 1px solid rgb(255 255 255 / 0.5);
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
 }
@@ -522,7 +527,7 @@ function applyHex() {
   min-width: 0;
   padding: 0 0.5rem;
   height: 2rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   background: rgb(255 255 255 / 0.7);
   border: 1px solid rgb(var(--c-primary) / 0.2);
 }

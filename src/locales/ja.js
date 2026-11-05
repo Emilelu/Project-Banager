@@ -441,6 +441,7 @@ export default {
   'theme.customUrlPlaceholder': 'https://... 画像の直リンク',
   'theme.customUrlHint': '直リンクを入力して「完了」を押すと適用・保存されます。「変更」を押す必要はありません。',
   'theme.autoSwitchHint': '現在の壁紙に固定し、再読み込みしても変わらないようにします（安定した画像 URL の解決には CORS プロキシが必要）',
+  'theme.backgroundSource': '壁紙ソース',
   'theme.backgroundPreview': '背景プレビュー',
   'theme.previewFailed': '画像の読み込みに失敗しました。別の画像をお試しください',
   'theme.openOriginalHint': '現在の壁紙リンクを新しいタブで開く',

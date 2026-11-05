@@ -664,7 +664,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25rem;
@@ -725,7 +725,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   justify-content: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
@@ -1059,7 +1059,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 .btn-mini {
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1093,7 +1093,7 @@ html:not(.dark) body.adaptive .app-btn-ghost {
 .btn-step {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2495,7 +2495,7 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   -webkit-backdrop-filter: blur(20px) saturate(1.7);
   backdrop-filter: blur(20px) saturate(1.7);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   box-shadow: 0 12px 40px rgba(31, 38, 135, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
   padding: 0.375rem 0.625rem;
   font-size: 0.8214rem;
@@ -3148,7 +3148,7 @@ td .truncate {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   font-size: 0.71875rem;
   font-weight: 600;
   line-height: 1rem;
@@ -3179,7 +3179,7 @@ td .truncate {
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.25rem;
@@ -3476,7 +3476,7 @@ td .truncate {
 .btn-link {
   height: 34px;
   padding: 0 1rem;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   font-size: 0.875rem;
   line-height: 1.25rem;
   gap: 0.375rem;
@@ -3490,7 +3490,7 @@ td .truncate {
   width: 34px;
   height: 34px;
   padding: 0;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 
@@ -3520,7 +3520,9 @@ td .truncate {
   width: auto;
   height: 50px;
   padding: 0 15px;
-  border-radius: 16px;
+  /* 圆角走令牌（运行时本就被文件末令牌区的 --r-md 覆盖，这里声明与实际一致）；
+     尺寸/字号按用户裁定保持固定 px 不随根字号缩放（见上方 2026-11-05 注）。 */
+  border-radius: var(--r-md);
   font-size: 18px;
   line-height: 1;
   gap: 7.5px;
@@ -3544,7 +3546,8 @@ td .truncate {
   height: 50px;
   min-width: 50px;
   padding: 0;
-  border-radius: 16px;
+  /* 圆角同上：运行时已被令牌区 --r-md 覆盖，声明对齐实际值 */
+  border-radius: var(--r-md);
   font-size: 18px;
   line-height: 1;
   gap: 0;
@@ -3562,10 +3565,9 @@ td .truncate {
   flex: 0 0 auto;
 }
 
-/* 深色模式下「每页」触发器的描边与页码保持一致 */
-.dark .page-size-trigger {
-  border-radius: 10px;
-}
+/* 深色模式不再单独写死 10px 圆角：旧规则 (0,2,0) 特异性压过文件末令牌区，
+   导致 dark=10px 恒定、light=var(--r-md) 随根字号缩放，两端不一致；
+   删除后 dark 与 light 统一走令牌区 .page-size-trigger 的 --r-md。 */
 
 
 /* 分页卡片：内距与圆角按调参结果固定。
@@ -3576,7 +3578,7 @@ td .truncate {
   padding-bottom: 15px;
   padding-left: 30px;
   padding-right: 30px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
 }
 
 /* 分页按钮组间距 8px（原模板 gap-1 = 3.5px） */
@@ -3964,8 +3966,20 @@ html:not(.dark) .app-menu-panel .text-danger {
 .sidebar-footer-actions > button { min-width: 0; transform: none !important; }
 .app-header { flex-shrink: 0; gap: 0.75rem; }
 .topbar-heading { flex: 0 1 auto; overflow: hidden; }
-.topbar-title { flex-shrink: 0; white-space: nowrap; }
-.topbar-stats { flex-shrink: 0; }
+/* 顶栏挤压时的让位顺序（实测 1104px：heading 被压到 94~140px，而内容宽 145~223px）：
+   标题先让位 —— 页面名称在侧栏导航里还有一份，冗余度最高。flex-shrink 999 +
+   4rem 下限（图标 + 1 字 + 省略号），标题压到下限后缺口才轮给计数徽章；
+   徽章里 is-neutral（「总计」类次要信息）再先塌。旧规则 title/stats 都
+   flex-shrink:0，空间不足时内容溢出 heading 盒被 overflow:hidden 硬裁，
+   徽章被后绘的搜索框/年份钮拦腰盖住（audit3：1104 档 remaining/watched 11 组 BAD）。
+   让位后所有收窄都以省略号收场，徽章与控件矩形不再重叠。 */
+.topbar-title { flex-shrink: 999; min-width: 4rem; white-space: nowrap; overflow: hidden; }
+/* h1 是 flex 容器，省略号必须落在文字 span 上（匿名 flex 项不参与 text-overflow） */
+.topbar-title-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar-stats { min-width: 0; overflow: hidden; }
+/* 徽章 display:block 才能让 text-overflow 生效（同 .topbar-selection 的既有策略） */
+.topbar-stats .topbar-stat { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar-stats .topbar-stat.is-neutral { flex-shrink: 999; }
 .topbar-selection { overflow: hidden; }
 .topbar-selection-name { flex-shrink: 0; white-space: nowrap; }
 .topbar-actions { flex-shrink: 0; }

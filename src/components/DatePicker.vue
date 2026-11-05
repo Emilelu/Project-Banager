@@ -551,7 +551,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
   width: 100%;
   padding: 0.625rem 1rem;
   border: 1px solid rgb(var(--c-primary) / 0.2);
-  border-radius: 0.75rem;
+  border-radius: var(--r-md);
   background: rgba(255, 255, 255, 0.8);
   font-size: 0.875rem;
   line-height: 1.25rem;
@@ -642,7 +642,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   border: 0;
   background: transparent;
   color: #4b5563;
@@ -656,7 +656,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
 .dp-title {
   flex: 1;
   padding: 0.25rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   border: 0;
   background: transparent;
   font-size: 0.875rem;
@@ -705,7 +705,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
 .dp-day {
   height: 2.25rem;
   border: 1px solid transparent;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   background: transparent;
   font-size: 0.8125rem;
   line-height: 1.2;
@@ -743,7 +743,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
 .dp-cell-lg {
   padding: 0.5rem 0;
   border: 1px solid transparent;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   background: transparent;
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
@@ -788,7 +788,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
 .dp-precision-btn {
   padding: 0.3125rem 0.25rem;
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   background: transparent;
   font-size: 0.6875rem;
   color: #4b5563;
@@ -813,7 +813,7 @@ defineExpose({ open: openPanel, close: () => closePanel(), parsed })
 .dp-action {
   padding: 0.375rem 0.5rem;
   border: 1px solid rgb(var(--c-primary) / 0.22);
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   background: rgba(255, 255, 255, 0.72);
   font-size: 0.75rem;
   color: rgb(var(--c-primary));

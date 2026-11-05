@@ -442,6 +442,7 @@ export default {
   'theme.customUrlPlaceholder': 'https://... direct image URL',
   'theme.customUrlHint': 'Paste a direct link and click Done to apply and save; no need to press Change again.',
   'theme.autoSwitchHint': 'Pin the current wallpaper so it no longer changes on refresh (requires the CORS proxy to resolve a stable image URL)',
+  'theme.backgroundSource': 'Wallpaper source',
   'theme.backgroundPreview': 'Background preview',
   'theme.previewFailed': 'Image failed to load, try another one',
   'theme.openOriginalHint': 'Open the current wallpaper link in a new tab',

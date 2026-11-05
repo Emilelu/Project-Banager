@@ -162,7 +162,7 @@ defineExpose({ loadTags, startCreate })
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   /* A-03/A-30：0.6875rem(9.625px) 提到 0.75rem(10.5px)，与 TagFilter / V-13 徽章档一致 */
   font-size: 0.75rem;
   line-height: 1.25rem;

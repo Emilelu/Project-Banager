@@ -435,6 +435,7 @@ export default {
   'theme.customUrlPlaceholder': 'https://... 直链图片地址',
   'theme.customUrlHint': '填写直链后点击「完成」即应用并保存，无需再点「换一张」。',
   'theme.autoSwitchHint': '固定为当前这张壁纸，刷新不再换图（需跨域代理可用才能解析出稳定图床地址）',
+  'theme.backgroundSource': '壁纸图源',
   'theme.backgroundPreview': '背景预览',
   'theme.previewFailed': '图片加载失败，请换一张',
   'theme.openOriginalHint': '在新标签页打开当前壁纸链接',

@@ -168,7 +168,10 @@
           <div :key="currentTitle" class="topbar-heading flex items-center gap-3 min-w-0">
             <h1 class="topbar-title text-lg font-bold gradient-text flex items-center gap-2" :title="currentTitle">
               <AppIcon scale="md" :name="currentIcon" />
-              {{ currentTitle }}
+              <!-- 文字必须包一层 span：h1 是 flex 容器，text-overflow 对匿名 flex 项
+                   不生效；顶栏空间不足时标题先让位收缩（.topbar-title，shrink 999 +
+                   4rem 下限），省略号由 .topbar-title-text 呈现，:title 悬浮兜底全名。 -->
+              <span class="topbar-title-text">{{ currentTitle }}</span>
             </h1>
             <!-- 计数徽章：视觉与顶栏其它元素协调 —— 高度 24px、圆角 8px、
                  字号 11.5px、左右内边距 8px，与顶栏按钮的 36px 图标块并排不突兀 -->

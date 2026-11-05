@@ -255,7 +255,7 @@ defineExpose({ loadTags })
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-sm);
   /* 视觉审计 A-15：字号从 0.6875rem(9.625px) 提到 0.75rem(10.5px，根字号 14 档)，
      与 V-13 统一后的全站徽章档一致；浅色文字用 78% 混黑的钳暗主色深端、底改淡
      （primary/0.08）—— 修复前浅色合成底上仅 1.97~3.85:1，钳暗后以同条件像素法复测。 */
