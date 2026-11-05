@@ -180,9 +180,14 @@
             <!-- 当前选中：原本在卡片里独占一行，用户要求移到顶栏标题右侧。
                  复用 .topbar-stat 徽章样式，前面加一个状态圆点。
                  不放进上面的 title-swap transition 里 —— 它随选中项变化，
-                 但页面标题不变时不该整块重放动画。 -->
-            <transition name="sel-anim">
-              <div v-if="topbarSelection" class="topbar-selection flex items-center gap-2 min-w-0" v-tip="topbarSelection.name">
+                 但页面标题不变时不该整块重放动画。
+                 过渡用独立的 topbar-sel（不用按钮组的 sel-anim）：sel-anim 离场会把元素
+                 position:absolute 摆到 flex 容器内容盒起点（实测整块瞬移到标题左侧盖住
+                 标题才消失）；topbar-sel 留在文档流内收拢（max-width→0），右侧元素平滑左移。
+                 v-tip 显示完整记录名 —— 名称徽章按省略策略可能截断，气泡兜底可读性。 -->
+            <transition name="topbar-sel">
+              <div v-if="topbarSelection" class="topbar-selection flex items-center gap-2 min-w-0"
+                v-tip="topbarSelection.items?.[0]?.text || topbarSelection.name">
                 <span class="inline-block w-1.5 h-1.5 rounded-full shrink-0"
                   :class="topbarSelection.dot === 'danger' ? 'bg-danger' : 'bg-primary'"></span>
                 <span class="topbar-selection-name text-xs text-gray-500">{{ topbarSelection.name }}</span>

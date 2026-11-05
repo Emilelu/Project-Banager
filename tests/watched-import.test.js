@@ -206,6 +206,24 @@ async function openYearMenu(scope) {
   }
 }
 
+/**
+ * 年份菜单的行内操作钮（fix-topbar：编辑/删除不再是菜单底部两项，
+ * 而是各年份行右侧的小图标钮，aria-label 沿用「编辑年份/删除年份」）。
+ * 菜单 Teleport 到 body —— 与 openYearMenu/buttonByText 的回退同因，
+ * 从整份 document 按「行文本 + aria-label」定位。
+ */
+function yearRowButton(yearText, ariaLabel) {
+  const row = [...document.querySelectorAll('.year-row')].find((r) => r.textContent.includes(yearText))
+  if (!row) throw new Error(`year-row not found: ${yearText}`)
+  const btn = row.querySelector(`[aria-label="${ariaLabel}"]`)
+  if (!btn) throw new Error(`year-row button not found: ${ariaLabel}`)
+  return {
+    trigger: () => { btn.click(); return Promise.resolve() },
+    exists: () => true,
+    element: btn,
+  }
+}
+
 
 /**
  * 按 aria-label 查找按钮。
@@ -759,7 +777,8 @@ describe('已看历史 · 年份维护', () => {
 
     mocks.watchedYearsApi.getAll.mockResolvedValue(ok([]))
     await openYearMenu(wrapper)
-    await buttonByText(wrapper, '删除年份').trigger('click')
+    // fix-topbar：删除入口已上移为 2025 行的行内删除钮
+    await yearRowButton('2025', '删除年份').trigger('click')
     await flushPromises()
     dialogButton('确认删除').click()
     await flushPromises()
@@ -804,7 +823,8 @@ describe('已看历史 · 年份维护', () => {
     // 改名后 db 层已把该组记录的 watch_date 迁到新标签，因此新分组能查到
     mocks.watchedApi.getByYear.mockImplementation(async () => ok([makeItem(1, '甲', '2025~2026')]))
     await openYearMenu(wrapper)
-    await buttonByText(wrapper, '编辑年份').trigger('click')
+    // fix-topbar：编辑入口已上移为 2025 行的行内编辑钮（弹窗预填该行年份，逻辑不变）
+    await yearRowButton('2025', '编辑年份').trigger('click')
     await flushPromises()
     // 弹窗内第一个文本输入框（占位文案可能变，选择器放宽）
     const dlgEl = document.querySelector('.app-dialog')

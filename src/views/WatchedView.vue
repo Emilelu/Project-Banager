@@ -983,8 +983,12 @@ const openConfirmDialog = () => {
   showConfirmDialog.value = true
 }
 
-const openDeleteYearDialog = () => {
-  const y = years.value.find(y => y.year_label === selectedYear.value)
+/**
+ * 打开「删除年份」确认框。
+ * @param {string} [label] 年份菜单行内删除按钮带的年份标签；缺省（旧路径）删除当前选中年份
+ */
+const openDeleteYearDialog = (label = '') => {
+  const y = years.value.find(y => y.year_label === (label || selectedYear.value))
   if (!y) return
   confirmTarget.value = y.year_label
   confirmAction.value = 'deleteYear'
@@ -1023,7 +1027,15 @@ const confirmActionFn = async () => {
     if (!y) return
     try {
       const res = await watchedYearsApi.delete(y.id)
-      if (res.data.success) { showToast(tt('toast.yearDeleted')); await fetchYears(); if (years.value.length > 0) { selectedYear.value = years.value[0].year_label } else { selectedYear.value = '' } await fetchData() }
+      if (res.data.success) {
+        showToast(tt('toast.yearDeleted'))
+        await fetchYears()
+        // 只有删的是「当前选中年份」才重选 —— 行内删除其他年份不应劫持当前筛选
+        if (selectedYear.value === confirmTarget.value) {
+          selectedYear.value = years.value.length > 0 ? years.value[0].year_label : ''
+        }
+        await fetchData()
+      }
       else showToast(errorText(res.data, tt, 'toast.delFailed'),'error')
     } catch { showToast(tt('toast.delFailed'),'error') }
   } else if (confirmAction.value === 'delete') {
@@ -1242,8 +1254,12 @@ const openAddYearDialog = () => {
   showYearDialog.value = true
 }
 
-const editYearLabel = () => {
-  const y = years.value.find(y => y.year_label === selectedYear.value)
+/**
+ * 打开「编辑年份」弹窗（预填该年份现名）。
+ * @param {string} [label] 年份菜单行内编辑按钮带的年份标签；缺省（旧路径）编辑当前选中年份
+ */
+const editYearLabel = (label = '') => {
+  const y = years.value.find(y => y.year_label === (label || selectedYear.value))
   if (!y) return
   yearDialogMode.value = 'edit'
   editingYearId.value = y.id
@@ -1264,12 +1280,17 @@ const saveYearForm = async () => {
         await fetchData()
       } else { showToast(errorText(res.data, tt, 'toast.addFailed'),'error') }
     } else {
+      // 记下被编辑年份的原名：改名后只有它本来就是「当前选中年份」才切换选中，
+      // 行内编辑其他年份不应劫持用户当前的年份筛选
+      const prevLabel = years.value.find(y => y.id === editingYearId.value)?.year_label
       const res = await watchedYearsApi.update(editingYearId.value, yearForm.value)
       if (res.data.success) {
         showToast(tt('toast.yearUpdated'))
         showYearDialog.value = false
         await fetchYears()
-        selectedYear.value = yearForm.value.year_label
+        if (prevLabel !== undefined && selectedYear.value === prevLabel) {
+          selectedYear.value = yearForm.value.year_label
+        }
         await fetchData()
       } else { showToast(errorText(res.data, tt, 'toast.updateFailed'),'error') }
     }
@@ -1529,8 +1550,9 @@ watch(
           'onUpdate:tagFilter': (v) => { tagFilter.value = v },
           'onPickYear': (label) => pickYear(label),
           'onAddYear': () => openAddYearDialog(),
-          'onEditYear': () => editYearLabel(),
-          'onDeleteYear': () => openDeleteYearDialog(),
+          // 行内编辑/删除带 { label }（点的是哪一行就操作哪个年份）；label 缺省时回落到当前选中年份
+          'onEditYear': (payload) => editYearLabel(payload?.label),
+          'onDeleteYear': (payload) => openDeleteYearDialog(payload?.label),
         },
       },
     ])

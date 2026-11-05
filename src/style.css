@@ -1187,6 +1187,33 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   transition: transform 0.3s var(--ease-spring);
 }
 
+/* ==================== 顶栏「当前选中」块进出场（topbar-sel，独立于 sel-anim） ==================== */
+/* 为什么不沿用按钮组的 .sel-anim-*：sel-anim 的离场规则把元素 position:absolute —— 对
+   transition-group 里的按钮是对的（原地淡出 + -move 归位），但选中块是 .topbar-heading
+   （flex 容器）的普通子项，绝对定位后按规范被当作「唯一假想子项」摆到内容盒起点
+   （justify-content:flex-start）—— 实测（tmp/fix-topbar-baseline.json）：离场后 62ms 内
+   整块从 left=467 瞬移到 left=232（正好压在标题上）盖住标题文字，约 300ms 后才消失。
+   改为「留在文档流内收拢」：max-width→0 + margin-right→-0.75rem（精确抵消标题行 gap-3，
+   两者都是 rem 随根字号同步缩放），标题行宽度逐帧收窄，右侧搜索/操作按钮随之平滑左移；
+   动画结束时元素卸载，布局无跳变。进场同构反向（0 宽展开 + 渐入），左右观感一致。 */
+.topbar-selection.topbar-sel-enter-active,
+.topbar-selection.topbar-sel-leave-active {
+  transition: opacity 0.3s var(--ease-spring), max-width 0.3s var(--ease-spring),
+    margin-right 0.3s var(--ease-spring);
+}
+/* 离场比进场短（0.22s），与按钮组的离场节奏一致，收得干脆 */
+.topbar-selection.topbar-sel-leave-active {
+  transition-duration: 0.22s;
+  transition-timing-function: var(--ease-exit);
+}
+.topbar-selection.topbar-sel-enter-from,
+.topbar-selection.topbar-sel-leave-to {
+  opacity: 0;
+  /* (0,2,0) 双类选择器压过下方 .topbar-selection { max-width: 20rem } 的封顶 */
+  max-width: 0;
+  margin-right: -0.75rem;
+}
+
 /* ==================== 折叠/展开统一过渡 ==================== */
 /*
  * 用于所有「点一下展开、再点一下收起」的区块（如主题页的「自定义颜色」「遮罩与模糊」）。
@@ -1233,6 +1260,8 @@ html:not(.dark) body.adaptive .app-btn-ghost {
   .sel-anim-enter-active,
   .sel-anim-leave-active,
   .sel-anim-move,
+  .topbar-selection.topbar-sel-enter-active,
+  .topbar-selection.topbar-sel-leave-active,
   .collapse-enter-active,
   .collapse-leave-active {
     transition: none;
@@ -3938,12 +3967,35 @@ html:not(.dark) .app-menu-panel .text-danger {
 .topbar-title { flex-shrink: 0; white-space: nowrap; }
 .topbar-stats { flex-shrink: 0; }
 .topbar-selection { overflow: hidden; }
-.topbar-selection-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-selection-name { flex-shrink: 0; white-space: nowrap; }
 .topbar-actions { flex-shrink: 0; }
 .topbar-utilities { flex-shrink: 0; }
 .topbar-clock { white-space: nowrap; }
 .topbar-more { display: none; }
 .topbar-actions-menu { max-width: calc(100vw - 16px); max-height: calc(100vh - 32px); overflow-y: auto; }
+
+/* ===== topbar-selection 宽度分配与省略策略 =====
+ * 修复前实测（1440，seed 长名 45 字记录选中）：整块被挤到 15.7px，「当前选中:」标签
+ * 压到 3.4px（scrollWidth 53 完全不可读），长名徽章 410px 溢出被 overflow 裁切 ——
+ * 原省略策略（label 打省略号）打错了对象：label 是短的，长的记录名在徽章里。
+ * 新分配（让位优先级从低到高）：
+ *   日期徽章（is-neutral，次要信息）→ 记录名徽章（flex-shrink 999 先塌缩的是日期）→
+ *   「当前选中:」标签（shrink-0 永不压缩）→ 圆点（shrink-0）。
+ * 徽章改 display:block 才能让 text-overflow 生效（inline-flex 容器内是匿名 flex 项，
+ * text-overflow 不生效）；overflow:hidden 同时把徽章的自动最小尺寸归 0，允许收缩。
+ * max-width 封顶避免超长记录名把标题行的内在宽度撑到几百 px、挤瘪搜索框。 */
+.topbar-selection { max-width: 20rem; }
+.topbar-selection .topbar-stat {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+.topbar-selection .topbar-stat.is-neutral {
+  max-width: 8rem;
+  flex-shrink: 999; /* 空间紧张时日期先塌缩，记录名尽量多留 */
+}
 .record-table tbody tr { border-bottom-color: rgb(var(--c-primary-dark) / 0.18); }
 .dark .record-table tbody tr { border-bottom-color: rgb(255 255 255 / 0.14); }
 .record-table tbody tr.is-selected,
@@ -4018,7 +4070,9 @@ html:not(.dark) .app-menu-panel .text-danger {
   .topbar-actions { display: none; }
   .topbar-more { display: block; margin-right: auto; flex-shrink: 0; }
   .topbar-heading { gap: 0.5rem; }
-  .topbar-selection-name { max-width: 8rem; }
+  /* 旧规则错把 8rem 上限挂在「当前选中:」标签上（标签本来就短）——
+     该省略的是长记录名徽章，这里收紧窄档的徽章封顶。 */
+  .topbar-selection .topbar-stat { max-width: 8rem; }
 }
 @media (max-width: 900px) {
   .app-sidebar:not(.sidebar-is-collapsed) { position: absolute; inset: 0 auto 0 0; z-index: 90; }

@@ -29,59 +29,70 @@
             style="--pop-origin-y: top; --pop-from-y: -6px"
             :style="yearMenuStyle"
             :aria-label="tt('watched.yearSelect')">
-            <!-- 全部年份 -->
+            <!-- 全部年份（内置行，无行内操作） -->
             <button type="button" role="menuitemradio"
               :aria-checked="selectedYear === '__all__' ? 'true' : 'false'"
               @click="pickYear('__all__')"
               class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
               :class="selectedYear === '__all__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
-              <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-primary"></span>
+              <span class="year-dot w-1.5 h-1.5 rounded-full shrink-0 bg-primary"></span>
               <span class="flex-1">{{ tt('watched.allYears') }}</span>
               <span :class="selectedYear === '__all__' ? 'text-primary' : 'text-gray-300'">
                 <AppIcon v-if="selectedYear === '__all__'" scale="xs" name="check" />
               </span>
             </button>
 
-            <!-- 各年份 -->
-            <button v-for="y in years" :key="y.year_label" type="button" role="menuitemradio"
-              :aria-checked="selectedYear === y.year_label ? 'true' : 'false'"
-              @click="pickYear(y.year_label)"
-              class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
-              :class="selectedYear === y.year_label ? 'font-semibold text-gray-800' : 'text-gray-600'">
-              <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-sakura"></span>
-              <span class="flex-1">{{ y.year_label }}</span>
-              <span :class="selectedYear === y.year_label ? 'text-primary' : 'text-gray-300'">
-                <AppIcon v-if="selectedYear === y.year_label" scale="xs" name="check" />
+            <!-- 各年份：行内带 编辑/删除 小图标钮。结构必须是 row div[role=none] >
+                 主按钮 + 操作钮，不能 button 套 button（HTML 非法）；
+                 主按钮几何仍由全局 .app-menu-panel > div > button 规则统一，
+                 操作钮用 .year-row-btn 压掉该规则的 width:100%/padding（先例
+                 .page-size-menu .pager-confirm-btn）。 -->
+            <div v-for="y in years" :key="y.year_label" role="none" class="year-row flex items-center pr-1.5">
+              <button type="button" role="menuitemradio"
+                :aria-checked="selectedYear === y.year_label ? 'true' : 'false'"
+                @click="pickYear(y.year_label)"
+                class="year-row-main flex-1 min-w-0 flex items-center gap-2 px-3 py-2 text-sm text-left transition whitespace-nowrap"
+                :class="selectedYear === y.year_label ? 'font-semibold text-gray-800' : 'text-gray-600'">
+                <span class="year-dot w-1.5 h-1.5 rounded-full shrink-0 bg-sakura"></span>
+                <span class="flex-1">{{ y.year_label }}</span>
+                <span :class="selectedYear === y.year_label ? 'text-primary' : 'text-gray-300'">
+                  <AppIcon v-if="selectedYear === y.year_label" scale="xs" name="check" />
+                </span>
+              </button>
+              <span class="year-row-actions flex items-center shrink-0">
+                <button type="button" role="menuitem" class="year-row-btn"
+                  :aria-label="tt('watched.editYear')" v-tip="tt('watched.editYear')"
+                  @click.stop="emitYearEdit(y.year_label)">
+                  <AppIcon scale="xs" name="edit" />
+                </button>
+                <button type="button" role="menuitem" class="year-row-btn text-danger"
+                  :aria-label="tt('watched.deleteYear')" v-tip="tt('watched.deleteYear')"
+                  @click.stop="emitYearDelete(y.year_label)">
+                  <AppIcon scale="xs" name="trash" />
+                </button>
               </span>
-            </button>
+            </div>
 
-            <!-- 未归类 -->
+            <!-- 未归类（内置行，无行内操作） -->
             <div class="menu-sep"></div>
             <button type="button" role="menuitemradio"
               :aria-checked="selectedYear === '__unclassified__' ? 'true' : 'false'"
               @click="pickYear('__unclassified__')"
               class="flex items-center gap-2 px-3 py-2 text-sm text-left transition hover:bg-primary/10 whitespace-nowrap"
               :class="selectedYear === '__unclassified__' ? 'font-semibold text-gray-800' : 'text-gray-600'">
-              <span class="w-1.5 h-1.5 rounded-full shrink-0 bg-warning"></span>
+              <span class="year-dot w-1.5 h-1.5 rounded-full shrink-0 bg-warning"></span>
               <span class="flex-1">{{ tt('watched.unclassified') }}</span>
               <span :class="selectedYear === '__unclassified__' ? 'text-primary' : 'text-gray-300'">
                 <AppIcon v-if="selectedYear === '__unclassified__'" scale="xs" name="check" />
               </span>
             </button>
 
-            <!-- 年份 CRUD 收进本菜单（原第一卡迁顶栏时一并跟过来，弹窗逻辑仍在 view） -->
+            <!-- 年份 CRUD：编辑/删除已上移到各年份行内（带该行 label 给 view），
+                 底部只保留「添加年份」。 -->
             <div class="menu-sep"></div>
             <button type="button" role="menuitem" @click="runCrud('add-year')"
               class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
               <AppIcon scale="xs" name="plus" /><span class="flex-1">{{ tt('watched.addYear') }}</span>
-            </button>
-            <button v-if="hasRealYear" type="button" role="menuitem" @click="runCrud('edit-year')"
-              class="flex items-center gap-2 text-left transition hover:bg-primary/10 whitespace-nowrap">
-              <AppIcon scale="xs" name="edit" /><span class="flex-1">{{ tt('watched.editYear') }}</span>
-            </button>
-            <button v-if="hasRealYear" type="button" role="menuitem" @click="runCrud('delete-year')"
-              class="flex items-center gap-2 text-left transition hover:bg-danger/10 text-danger whitespace-nowrap">
-              <AppIcon scale="xs" name="trash" /><span class="flex-1">{{ tt('watched.deleteYear') }}</span>
             </button>
           </div>
         </transition>
@@ -100,8 +111,8 @@
  *
  * 年份菜单的 UI 机制（开合/测量/外点/Esc/resize 重定位）从 WatchedView 原样搬过来，
  * 因为触发按钮与菜单面板的 refs 都在这个组件里；「选了哪个年份、怎么拉数据、
- * 怎么增删改」留在 view —— 菜单项只 emit，view 的 pickYear/openAddYearDialog/
- * editYearLabel/openDeleteYearDialog 原逻辑不动。
+ * 怎么增删改」留在 view —— 菜单项只 emit。各年份行的行内 编辑/删除 钮带该行
+ * { label } emit，view 用它定位年份（弹窗预填 / 确认框瞄准），不再依赖当前选中态。
  */
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import TopbarSearchBox from './TopbarSearchBox.vue'
@@ -140,10 +151,6 @@ const yearMenuLabel = computed(() => {
   return props.selectedYear || tt('watched.allYears')
 })
 
-/** 是否选中了真实年份（CRUD 菜单项只在此时出现，与 view 原条件一致） */
-const hasRealYear = computed(() =>
-  !!props.selectedYear && props.selectedYear !== '__unclassified__' && props.selectedYear !== '__all__')
-
 const measureYearMenu = () => {
   const btn = yearTriggerRef.value
   const menu = yearMenuRef.value
@@ -173,10 +180,21 @@ const pickYear = (label) => {
   emit('pick-year', label)
 }
 
-/** 年份 CRUD：先关菜单再交给 view（view 打开对应弹窗） */
+/** 年份 CRUD：先关菜单再交给 view（view 打开对应弹窗）；目前只有「添加年份」走这里 */
 const runCrud = (event) => {
   showYearMenu.value = false
   emit(event)
+}
+
+/** 行内编辑/删除：带该行的年份 label 交给 view —— view 用它定位年份，
+ *  编辑弹窗预填该年份、删除确认框瞄准该年份（不再依赖「当前选中年份」） */
+const emitYearEdit = (label) => {
+  showYearMenu.value = false
+  emit('edit-year', { label })
+}
+const emitYearDelete = (label) => {
+  showYearMenu.value = false
+  emit('delete-year', { label })
 }
 
 // 点击外部 / Esc / 滚动时关闭；Esc 后焦点归还触发按钮
@@ -206,3 +224,38 @@ onUnmounted(() => {
   window.removeEventListener('resize', onYearResize)
 })
 </script>
+
+<style scoped>
+/* ===== 年份菜单行内操作（fix-topbar） =====
+ * 菜单 Teleport 到 body，scoped 的 data-v 属性仍在节点上，规则照常生效；
+ * 深色直接写 .dark 前缀（本工程 scoped 里 :global(.dark) 会编译成空选择器，见 AGENTS.md）。 */
+
+/* ① 色点与文字间距：全局菜单项规则 .app-menu-panel [role=menuitemradio] 给的 gap 是
+ *    7px（特异性 (0,2,0) 压过模板上的 gap-2，实测色点右缘→文字左缘 6.9px，太贴），
+ *    给色点加 5px 外距凑到 ≈12px。 */
+.year-dot { margin-right: 5px; }
+
+/* 行内 编辑/删除 小图标钮：压掉全局 .app-menu-panel > div > button 的
+ * width:100% / 菜单项 padding / gap（同 .page-size-menu .pager-confirm-btn 先例），
+ * 固定 24×24 方钮，圆角走 --r-* 令牌。 */
+.year-row-btn {
+  width: 1.7143rem; /* 24px @ root 14 */
+  height: 1.7143rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--r-sm);
+}
+/* 危险项悬停底色跟语义走红，不用全局菜单项的主题色底 */
+.year-row-btn.text-danger:hover { background: rgb(var(--c-danger) / 0.12); }
+.dark .year-row-btn.text-danger:hover { background: rgb(var(--c-danger) / 0.2); }
+
+/* 年份行整体悬停高亮（含操作钮区，避免高亮在主按钮与操作钮之间断开）；
+   主按钮自带的菜单项 hover 底色让位 —— 用后代链抬高特异性压过全局
+   .app-menu-panel [role=menuitemradio]:hover，不依赖源码顺序。 */
+.year-row:hover { background: rgb(var(--c-primary) / 0.1); }
+.year-row .year-row-main:hover { background: transparent; }
+</style>
