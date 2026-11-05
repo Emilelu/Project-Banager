@@ -11,7 +11,7 @@
  *   · 面板/按钮/触发器全部 rem 几何，随根字号缩放
  *   · 手动输入 / 清空 作为兜底保留在面板底部
  */
-import { computed, nextTick, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onUnmounted, ref } from 'vue'
 import { useI18n } from '../composables/useI18n'
 
 const props = defineProps({
@@ -28,15 +28,23 @@ const { tt } = useI18n()
 const open = ref(false)
 const triggerRef = ref(null)
 const panelRef = ref(null)
-const menuPos = ref({ left: 0, bottom: 0 })
+/** 面板定位：top 锚定（镜像 DatePicker），placement 决定弹出方向的原点变量 */
+const panelPos = ref({ left: 0, top: 0, placement: 'below' })
+
+/** 卸载时关闭离场过渡：宿主 DOM 移除后过渡继续跑会抛 jsdom 异常（同 DatePicker） */
+const popCss = ref(true)
+onBeforeUnmount(() => { popCss.value = false })
 
 /** 面板宽度估算（20rem @ 根 14 ≈ 280px）；实测阶段用 offsetWidth 校正 */
 const PANEL_W = 280
 const MARGIN = 8
 
 const panelStyle = computed(() => ({
-  left: menuPos.value.left + 'px',
-  bottom: menuPos.value.bottom + 'px',
+  left: `${panelPos.value.left}px`,
+  top: `${panelPos.value.top}px`,
+  maxHeight: `calc(100vh - ${MARGIN * 2}px)`,
+  '--pop-origin-y': panelPos.value.placement === 'above' ? 'bottom' : 'top',
+  '--pop-from-y': panelPos.value.placement === 'above' ? '6px' : '-6px',
 }))
 
 const hour = computed(() => {
@@ -71,30 +79,33 @@ const selectMinute = (m) => {
 }
 
 /* ---------------------------- 打开/关闭 + 定位 ---------------------------- */
-const placePanel = (measured = false) => {
+const placePanel = (measured = true) => {
   const btn = triggerRef.value
   if (!btn) return
   const r = btn.getBoundingClientRect()
-  // 水平居中于触发按钮，两侧越界时夹进视口；面板宽随根字号缩放（rem），
-  // measured 阶段用实测宽，首帧用常量估算。
+  // 水平居中于触发按钮（用户要求），两侧越界时夹进视口。
+  // 面板宽随根字号缩放（rem），measured 阶段用实测宽，首帧用常量估算。
   const pw = (measured && panelRef.value?.offsetWidth) || PANEL_W
   let left = r.left + r.width / 2 - pw / 2
-  left = Math.min(Math.max(MARGIN, left), window.innerWidth - pw - MARGIN)
+  left = Math.min(Math.max(MARGIN, left), Math.max(MARGIN, window.innerWidth - pw - MARGIN))
 
-  const panelH = (measured && panelRef.value?.offsetHeight) || 200
+  // 纵向：优先向上（与旧版观感一致）；上方放不下且下方放得下翻到下方；
+  // 两头都放不下（超小窗口）整体夹进视口（镜像 DatePicker）。
+  const ph = (measured && panelRef.value?.offsetHeight) || 200
   const vh = window.innerHeight
-  const spaceAbove = r.top - MARGIN
-  const spaceBelow = vh - r.bottom - MARGIN
-
-  let bottom
-  if (spaceAbove >= panelH) {
-    bottom = vh - r.top + MARGIN
-  } else if (spaceBelow >= panelH) {
-    bottom = vh - (r.bottom + MARGIN + panelH)
-  } else {
-    bottom = Math.max(MARGIN, vh - panelH - MARGIN)
+  let top = r.top - ph - MARGIN
+  let placement = 'above'
+  if (top < MARGIN) {
+    const below = r.bottom + MARGIN
+    if (below + ph <= vh - MARGIN) {
+      top = below
+      placement = 'below'
+    } else {
+      top = Math.max(MARGIN, vh - ph - MARGIN)
+    }
   }
-  menuPos.value = { left, bottom }
+  top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, vh - ph - MARGIN))
+  panelPos.value = { left: Math.round(left), top: Math.round(top), placement }
 }
 
 const toggle = () => {
@@ -180,8 +191,9 @@ const clear = () => {
     <Teleport to="body">
       <div v-if="open" class="fixed inset-0 z-[100]" @click="open = false"></div>
 
-      <div v-if="open" ref="panelRef" role="dialog" class="clock-panel app-menu-panel fixed z-[110]"
-        :style="panelStyle">
+      <transition name="pop" :css="popCss">
+        <div v-if="open" ref="panelRef" role="dialog" class="clock-panel app-menu-panel fixed z-[110]"
+          :style="panelStyle">
         <!-- 小时网格：24 个「HH:00」 -->
         <div class="clock-grid">
           <button v-for="h in 24" :key="'h' + h" type="button"
@@ -211,7 +223,8 @@ const clear = () => {
             {{ tt('common.clear') }}
           </button>
         </div>
-      </div>
+        </div>
+      </transition>
     </Teleport>
   </div>
 </template>
@@ -245,11 +258,11 @@ const clear = () => {
   outline-offset: 1px;
 }
 
-/* 面板：20rem @ 根 14 ≈ 280px，随根字号等比缩放；旧版同为 20rem 宽 + 内部滚动 */
+/* 面板：20rem @ 根 14 ≈ 280px，随根字号等比缩放；maxHeight 由 placePanel 内联
+   （calc(100vh - 2×MARGIN)，超小窗口时面板内部滚动） */
 .clock-panel {
   width: 20rem;
   padding: 0.75rem;
-  max-height: 13rem;
   overflow-y: auto;
   color: #374151;
 }

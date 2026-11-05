@@ -9,11 +9,14 @@
  *   面板 .app-menu-panel（14px 圆角 / blur(20px) / 白 82% 底 / 白 40% 描边 / 双层阴影）
  *   菜单项整行可点、左对齐、hover 主题色低透底、选中项主题色加粗。
  *
- * 定位：Teleport 到 body + fixed，坐标用 bottom 定位（不需要知道菜单高度）。
- * 为什么必须 Teleport：祖先只要带 backdrop-filter / transform，fixed 就会被
- * 当成包含块，气球会偏移（项目里 .glass 卡片全都有 backdrop-filter）。
+ * 定位（2026-11-05 对齐 DatePicker 参照实现）：
+ *   · Teleport 到 body + fixed + top 锚定；优先向上展开（与旧版观感一致），
+ *     上方放不下翻到下方，两头都放不下整体夹进视口 + 内部滚动；
+ *   · placement 写入 --pop-origin-y / --pop-from-y，弹出动画从锚点一侧长出来
+ *     （此前本菜单没有弹出动画，用户要求全站统一补全）；
+ *   · 必须 Teleport：祖先带 backdrop-filter / transform 时 fixed 会被当包含块，实测偏移 200px。
  */
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onBeforeUnmount, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({
   /** v-model 绑定值 */
@@ -32,13 +35,21 @@ const emit = defineEmits(['update:modelValue', 'change'])
 
 const open = ref(false)
 const triggerRef = ref(null)
-const menuPos = ref({ left: 0, bottom: 0 })
+const panelRef = ref(null)
+const panelPos = ref({ left: 0, top: 0, placement: 'above' })
 const MENU_W = 200
 const MARGIN = 8
 
+/** 卸载时关闭离场过渡：宿主 DOM 移除后过渡继续跑会抛异常（同 DatePicker） */
+const popCss = ref(true)
+onBeforeUnmount(() => { popCss.value = false })
+
 const menuStyle = computed(() => ({
-  left: menuPos.value.left + 'px',
-  bottom: menuPos.value.bottom + 'px',
+  left: `${panelPos.value.left}px`,
+  top: `${panelPos.value.top}px`,
+  maxHeight: `calc(100vh - ${MARGIN * 2}px)`,
+  '--pop-origin-y': panelPos.value.placement === 'above' ? 'bottom' : 'top',
+  '--pop-from-y': panelPos.value.placement === 'above' ? '6px' : '-6px',
 }))
 
 /** 当前选中项的显示文字 */
@@ -47,21 +58,43 @@ const currentLabel = computed(() => {
   return hit ? hit.label : props.placeholder
 })
 
+const placeMenu = (measured = true) => {
+  const btn = triggerRef.value
+  if (!btn) return
+  const r = btn.getBoundingClientRect()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const w = (measured && panelRef.value?.offsetWidth) || MENU_W
+  const h = (measured && panelRef.value?.offsetHeight) || 180
+
+  let left = Math.min(Math.max(r.left, MARGIN), Math.max(MARGIN, vw - w - MARGIN))
+
+  // 优先向上展开（旧版观感）；上方放不下且下方放得下翻到下方；
+  // 两头都放不下（超小窗口）整体夹进视口，maxHeight 兜底内部滚动。
+  let top = r.top - h - MARGIN
+  let placement = 'above'
+  if (top < MARGIN) {
+    const below = r.bottom + MARGIN
+    if (below + h <= vh - MARGIN) {
+      top = below
+      placement = 'below'
+    } else {
+      top = Math.max(MARGIN, vh - h - MARGIN)
+    }
+  }
+  top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, vh - h - MARGIN))
+  panelPos.value = { left: Math.round(left), top: Math.round(top), placement }
+}
+
 const toggle = () => {
   if (open.value) {
     open.value = false
     return
   }
-  const btn = triggerRef.value
-  if (!btn) return
-  const r = btn.getBoundingClientRect()
-  let left = r.left
-  if (left + MENU_W > window.innerWidth - MARGIN) {
-    left = Math.max(MARGIN, window.innerWidth - MENU_W - MARGIN)
-  }
-  // bottom 定位：菜单底边贴在触发器上方 MARGIN 处，高度多少都自动向上展开
-  menuPos.value = { left: left, bottom: window.innerHeight - r.top + MARGIN }
+  if (!triggerRef.value) return
+  placeMenu(false)
   open.value = true
+  nextTick(() => placeMenu(true))
 }
 
 const pick = (opt) => {
@@ -86,16 +119,6 @@ const onKeydown = (e) => {
   nextTick(() => triggerRef.value?.focus?.())
 }
 
-/**
- * 触发器宽度跟随选项里最长的那条文字，避免菜单宽度与触发器宽度不一致时视觉错位。
- */
-watch(
-  () => open.value,
-  (v) => {
-    if (v) nextTick(() => {})
-  },
-)
-
 if (typeof document !== 'undefined') {
   document.addEventListener('pointerdown', onDocPointerDown, true)
   document.addEventListener('keydown', onKeydown, true)
@@ -119,20 +142,22 @@ if (typeof document !== 'undefined') {
 
     <Teleport to="body">
       <div v-if="open" class="fixed inset-0 z-[100]" @click="open = false"></div>
-      <div v-if="open" role="listbox" class="app-menu-panel fixed z-[110] max-h-[18rem] overflow-y-auto"
-        :style="menuStyle">
-        <button v-for="opt in options" :key="String(opt.value)" type="button" role="option"
-          :aria-selected="opt.value === modelValue ? 'true' : 'false'"
-          class="app-select-item" @click="pick(opt)">
-          <span class="w-4 shrink-0" aria-hidden="true">
-            <svg v-if="opt.value === modelValue" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
-            </svg>
-          </span>
-          <span class="truncate">{{ opt.label }}</span>
-        </button>
-      </div>
+      <transition name="pop" :css="popCss">
+        <div v-if="open" ref="panelRef" role="listbox" class="app-menu-panel fixed z-[110] overflow-y-auto"
+          :style="menuStyle">
+          <button v-for="opt in options" :key="String(opt.value)" type="button" role="option"
+            :aria-selected="opt.value === modelValue ? 'true' : 'false'"
+            class="app-select-item" @click="pick(opt)">
+            <span class="w-4 shrink-0" aria-hidden="true">
+              <svg v-if="opt.value === modelValue" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+              </svg>
+            </span>
+            <span class="truncate">{{ opt.label }}</span>
+          </button>
+        </div>
+      </transition>
     </Teleport>
   </div>
 </template>

@@ -8,7 +8,8 @@
        是 position:fixed 的包含块，fixed 子元素必须挂 body 才不会偏移。 -->
   <div class="topbar-page-controls flex items-center gap-3 min-w-0">
     <!-- 年份选择：与「标签筛选」完全一致的下拉样式（.filter-trigger） -->
-    <div class="relative inline-block">
+    <!-- 年份/标签筛选是紧凑胶囊，不参与挤压（搜索框负责弹性缩减长度） -->
+    <div class="relative inline-block shrink-0">
       <button ref="yearTriggerRef" type="button" @click="toggleYearMenu"
         class="filter-trigger year-filter-trigger transition"
         :class="{ 'is-active': selectedYear !== '__all__' }"
@@ -89,7 +90,7 @@
 
     <TopbarSearchBox :model-value="search" :placeholder="tt('watched.searchPlaceholder')"
       @update:model-value="emit('update:search', $event)" />
-    <TagFilter :model-value="tagFilter" @update:model-value="emit('update:tagFilter', $event)" />
+    <TagFilter :model-value="tagFilter" @update:model-value="emit('update:tagFilter', $event)" class="shrink-0" />
   </div>
 </template>
 
