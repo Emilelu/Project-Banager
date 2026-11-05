@@ -205,11 +205,10 @@ body:not([data-glass='liquid']) .sidebar-bg {
 /* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
    所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放 */
 html {
-  /* 根字号缩放曲线（第二期修复后重调）：
-     · ≤1680px 维持 14px 下限；1920px 基线 16px 不变（全站既有调参基准）
-     · 1920 以上进陡段：4K@150%（视口 2560）≈ 25px、4K@125%（视口 3072）≈ 32px、
-       4K@100%（视口 3840）封顶 36px —— 大屏不再「字号跟不上视口」 */
-  font-size: clamp(14px, calc(16px + (100vw - 1920px) * 0.014), 36px);
+  /* 根字号随视口宽度缩放：1920px 屏为默认 16px，2K/4K 屏整体放大（最高约 1.75 倍），
+     所有 rem 单位的 Tailwind 类（文字、间距、按钮、弹窗）随之等比缩放。
+     2026-11-05：用户反馈加陡后的曲线在 4K@125%（视口 3072）观感过大，退回原始曲线。 */
+  font-size: clamp(14px, 0.8333vw, 28px);
 }
 
 /* 全局字体
@@ -872,45 +871,46 @@ html:not(.dark) body.adaptive .app-btn-ghost {
  * 与 .btn-mini / .btn-step / .seg-btn 一致，避免小按钮 hover 时"拖沓"。
  */
 .btn-sm {
-  /* 28px/10.5px 太小（分页栏的「每页 N 条」等按钮看起来像缩小版），
-     调到 30px/11.5px：仍是次级档（比 .btn-base 的 34px 小），但可读性正常。 */
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 10px;
-  font-size: 11.5px;
-  line-height: 16px;
-  gap: 5px;
+  /* 30px/11.5px @根14 的几何，全部 rem 化：大根字号（4K）下随全局等比放大，
+     不再出现「按钮比周围文字小一圈」的 px 锁死问题。
+     rem 换算基准 = 14px（-1.0714 4 位小数），1440 档像素级不变。 */
+  height: 2.1429rem;
+  padding: 0 1rem;
+  border-radius: var(--r-md);
+  font-size: 0.8214rem;
+  line-height: 1.1429rem;
+  gap: 0.3571rem;
   transition: transform 0.25s var(--ease-spring), box-shadow 0.2s var(--ease-spring),
     background-color 0.2s var(--ease-spring), background-image 0.2s var(--ease-spring),
     opacity 0.2s var(--ease-spring), border-color 0.2s var(--ease-spring),
     color 0.2s var(--ease-spring);
 }
-/* 只带图标的小方块：几何与 .btn-sm 等高，宽度收成正方形 */
+/* 只带图标的小方块：几何与 .btn-sm 等高，宽度收成正方形（rem 化，随根字号缩放） */
 .btn-icon {
-  height: 34px;
-  width: 34px;
+  height: 2.4286rem;
+  width: 2.4286rem;
   padding: 0;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   gap: 0;
 }
 /* 小号纯图标（卡片行内编辑/删除、色块重置换原）：与 .btn-sm 同高 */
 .btn-sm.btn-icon {
-  height: 30px;
-  width: 30px;
+  height: 2.1429rem;
+  width: 2.1429rem;
   padding: 0;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   gap: 0;
 }
 /* 小号「文字按钮」（没有任何底色，只靠 color 表达层级）：用于「手动输入 / 时钟选择 /
    插入集数 / 自定义颜色」这类弹窗内的次要切换。显式声明透明底，避免继承
    Tailwind bg-* 时忽有忽无；hover 只换文字色 + 极淡主色底，不改变几何。 */
 .btn-link {
-  height: 30px;
-  padding: 0 8px;
-  border-radius: 8px;
-  font-size: 11.5px;
-  line-height: 16px;
-  gap: 5px;
+  height: 2.1429rem;
+  padding: 0 0.5714rem;
+  border-radius: var(--r-sm);
+  font-size: 0.8214rem;
+  line-height: 1.1429rem;
+  gap: 0.3571rem;
   background: transparent;
   border: 1px solid transparent;
   color: rgb(var(--c-primary-dark));
@@ -2469,7 +2469,7 @@ body.palette-animating.adaptive .sidebar-bg [class*="text-white"] {
   border-radius: 0.5rem;
   box-shadow: 0 12px 40px rgba(31, 38, 135, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
   padding: 0.375rem 0.625rem;
-  font-size: 11.5px;
+  font-size: 0.8214rem;
   line-height: 1.25rem;
   font-weight: 500;
   color: #374151; /* gray-700，与侧栏气泡的 text-gray-700 一致 */
@@ -3484,15 +3484,16 @@ td .truncate {
      实测触发器内容 159px > 内容盒 154px，固定 186px + overflow:hidden
      会把 ja 文字裁掉 5px（scrollWidth 189 > clientWidth 184）；
      zh/en 恰好满宽零余量，字体度量一漂移就裁。min-width 保底
-     「与页码按钮同宽」的设计，文案更宽时自然放宽。 */
-  min-width: 186px;
+     「与页码按钮同宽」的设计，文案更宽时自然放宽。
+     全部 rem 化（÷14）：大根字号（4K）下与全站一起等比缩放。 */
+  min-width: 13.2857rem;
   width: auto;
-  height: 50px;
-  padding: 0 15px;
-  border-radius: 16px;
-  font-size: 18px;
+  height: 3.5714rem;
+  padding: 0 1.0714rem;
+  border-radius: var(--r-md);
+  font-size: 1.2857rem;
   line-height: 1;
-  gap: 7.5px;
+  gap: 0.5357rem;
   /* 盒子高度是硬约束：内部图标/文字不能把盒子撑高（否则 height 会失效） */
   min-height: 0;
   max-height: none;
@@ -3502,19 +3503,19 @@ td .truncate {
 }
 /* 内部图标随盒高走，避免 18px 字号配 12px 小图标显得失衡 */
 .page-size-trigger .app-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.2857rem;
+  height: 1.2857rem;
   flex: 0 0 auto;
 }
 
-/* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
+/* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形 */
 .pager-btn {
-  width: 50px;
-  height: 50px;
-  min-width: 50px;
+  width: 3.5714rem;
+  height: 3.5714rem;
+  min-width: 3.5714rem;
   padding: 0;
-  border-radius: 16px;
-  font-size: 18px;
+  border-radius: var(--r-md);
+  font-size: 1.2857rem;
   line-height: 1;
   gap: 0;
   /* 同上：高度是硬约束，内容不得撑高 */
@@ -3526,26 +3527,23 @@ td .truncate {
 }
 /* 上下页箭头图标：与 18px 字号相配，不随 .btn-icon 的 16px 规则 */
 .pager-btn .app-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.2857rem;
+  height: 1.2857rem;
   flex: 0 0 auto;
 }
 
-/* 深色模式下「每页」触发器的描边与页码保持一致 */
-.dark .page-size-trigger {
-  border-radius: 10px;
-}
+/* 深色模式圆角曾单独写 10px（浅色 16px）—— 浅深不一致，已统一为 var(--r-md)。 */
 
 
 /* 分页卡片：内距与圆角按调参结果固定。
    为什么用 :has()：分页卡片与其它 .glass 卡片共用同一个 class，
    只有它内部含 .page-size-trigger，用它精确区分（Chrome 105+/Edge/Safari 15.4+ 支持）。 */
 .glass:has(.page-size-trigger) {
-  padding-top: 15px;
-  padding-bottom: 15px;
-  padding-left: 30px;
-  padding-right: 30px;
-  border-radius: 14px;
+  padding-top: 1.0714rem;
+  padding-bottom: 1.0714rem;
+  padding-left: 2.1429rem;
+  padding-right: 2.1429rem;
+  border-radius: var(--r-lg);
 }
 
 /* 分页按钮组间距 8px（原模板 gap-1 = 3.5px） */
@@ -3557,24 +3555,22 @@ td .truncate {
 /* ==================== RADIUS SCALE — unified ==================== */
 /*
  * 全项目圆角统一为 5 档语义令牌（原来散落 7/10/10.5/12/14/16 六种值）。
+ * 2026-11-05：令牌全部 rem 化（÷14），随根字号缩放；同时把 md 对齐到输入框
+ * 实际使用的 Tailwind rounded-xl（0.75rem = 10.5px@14），sm 对齐 rounded-lg
+ * （0.5rem = 7px@14）—— 按钮/输入框/触发器/卡片用同一套值，不再有 0.5px 级差。
  *
- * 为什么分档而不是全部一个值：
- *   半径必须随元素尺寸走 —— 14px 半径放在 28px 的徽章上会变成半圆，
- *   6px 半径放在 1188px 的卡片上几乎看不出来。同一尺寸层内必须同值，
- *   这才是「统一」的实际含义。
- *
- * 分档规则：
- *   xs   6px    徽章 / chip / 气泡 / Logo / 小图标块
- *   sm   8px    输入框内的小部件、进度条槽
- *   md  10px    所有按钮（btn-base / btn-sm / btn-icon / btn-primary 全部）
- *   lg  14px    所有卡片 / 面板 / 下拉菜单 / 弹窗内容区
- *   pill 999px  胶囊与圆形（装饰圆、色块、头像、开关）
+ * 分档规则（@根14 像素等价）：
+ *   xs 0.4286rem ≈ 6px   徽章 / chip / 气泡 / Logo / 小图标块
+ *   sm 0.5rem    ≈ 7px   输入框内的小部件、进度条槽（= rounded-lg）
+ *   md 0.75rem   ≈ 10.5px 所有按钮 / 输入框 / 触发器（= rounded-xl）
+ *   lg 1rem      = 14px   所有卡片 / 面板 / 下拉菜单 / 弹窗内容区（= rounded-2xl）
+ *   pill 999px   胶囊与圆形（装饰圆、色块、头像、开关）
  */
 :root {
-  --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 10px;
-  --r-lg: 14px;
+  --r-xs: 0.4286rem;
+  --r-sm: 0.5rem;
+  --r-md: 0.75rem;
+  --r-lg: 1rem;
   --r-pill: 999px;
 }
 
@@ -3730,14 +3726,14 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
  * 与 Tailwind 的 text-[...] 同优先级时后者被覆盖，实测字号一直没变。
  */
 .quick-fill-btn {
-  height: 34px !important;
-  font-size: 9.6px !important;
-  padding: 0 10px !important;
-  gap: 4px !important;
+  height: 2.4286rem !important;
+  font-size: 0.6857rem !important;
+  padding: 0 0.7143rem !important;
+  gap: 0.2857rem !important;
 }
 .quick-fill-btn .app-icon {
-  width: 12px !important;
-  height: 12px !important;
+  width: 0.8571rem !important;
+  height: 0.8571rem !important;
 }
 
 

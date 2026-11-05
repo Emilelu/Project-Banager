@@ -48,7 +48,7 @@
           :class="gi > 0 ? (sidebarCollapsed ? 'mt-3 pt-3 border-t border-white/10' : 'mt-5') : ''">
           <!-- 分区标题（收起时改为一条细分割线，已由上面的 border 表达） -->
           <div v-if="!sidebarCollapsed"
-            class="sidebar-section-label px-3 mb-1.5 text-[11px] font-semibold tracking-wide text-white/60">
+            class="sidebar-section-label px-3 mb-1.5 text-[0.7857rem] font-semibold tracking-wide text-white/60">
             {{ tt(group.labelKey) }}
           </div>
           <router-link v-for="item in group.items" :key="item.path" :to="item.path"
