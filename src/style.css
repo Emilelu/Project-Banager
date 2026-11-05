@@ -3485,15 +3485,16 @@ td .truncate {
      会把 ja 文字裁掉 5px（scrollWidth 189 > clientWidth 184）；
      zh/en 恰好满宽零余量，字体度量一漂移就裁。min-width 保底
      「与页码按钮同宽」的设计，文案更宽时自然放宽。
-     全部 rem 化（÷14）：大根字号（4K）下与全站一起等比缩放。 */
-  min-width: 13.2857rem;
+     2026-11-05：本块是当年按 50px/18px 调参锁定的固定 px 设计，
+     用户确认分页栏不随根字号缩放（rem 化后在 4K 下巨大得突兀），维持 px。 */
+  min-width: 186px;
   width: auto;
-  height: 3.5714rem;
-  padding: 0 1.0714rem;
-  border-radius: var(--r-md);
-  font-size: 1.2857rem;
+  height: 50px;
+  padding: 0 15px;
+  border-radius: 16px;
+  font-size: 18px;
   line-height: 1;
-  gap: 0.5357rem;
+  gap: 7.5px;
   /* 盒子高度是硬约束：内部图标/文字不能把盒子撑高（否则 height 会失效） */
   min-height: 0;
   max-height: none;
@@ -3503,19 +3504,19 @@ td .truncate {
 }
 /* 内部图标随盒高走，避免 18px 字号配 12px 小图标显得失衡 */
 .page-size-trigger .app-icon {
-  width: 1.2857rem;
-  height: 1.2857rem;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
 }
 
-/* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形 */
+/* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
 .pager-btn {
-  width: 3.5714rem;
-  height: 3.5714rem;
-  min-width: 3.5714rem;
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
   padding: 0;
-  border-radius: var(--r-md);
-  font-size: 1.2857rem;
+  border-radius: 16px;
+  font-size: 18px;
   line-height: 1;
   gap: 0;
   /* 同上：高度是硬约束，内容不得撑高 */
@@ -3527,23 +3528,26 @@ td .truncate {
 }
 /* 上下页箭头图标：与 18px 字号相配，不随 .btn-icon 的 16px 规则 */
 .pager-btn .app-icon {
-  width: 1.2857rem;
-  height: 1.2857rem;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
 }
 
-/* 深色模式圆角曾单独写 10px（浅色 16px）—— 浅深不一致，已统一为 var(--r-md)。 */
+/* 深色模式下「每页」触发器的描边与页码保持一致 */
+.dark .page-size-trigger {
+  border-radius: 10px;
+}
 
 
 /* 分页卡片：内距与圆角按调参结果固定。
    为什么用 :has()：分页卡片与其它 .glass 卡片共用同一个 class，
    只有它内部含 .page-size-trigger，用它精确区分（Chrome 105+/Edge/Safari 15.4+ 支持）。 */
 .glass:has(.page-size-trigger) {
-  padding-top: 1.0714rem;
-  padding-bottom: 1.0714rem;
-  padding-left: 2.1429rem;
-  padding-right: 2.1429rem;
-  border-radius: var(--r-lg);
+  padding-top: 15px;
+  padding-bottom: 15px;
+  padding-left: 30px;
+  padding-right: 30px;
+  border-radius: 14px;
 }
 
 /* 分页按钮组间距 8px（原模板 gap-1 = 3.5px） */
@@ -3803,10 +3807,12 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
   align-items: center;
   gap: 7px;
   /* 纵向 11px：原来 7px 太紧，项与项之间几乎贴在一起。
-     11px 让每项高度约 39.5px，读起来有呼吸感，仍保持整行可点的列表观感。 */
-  padding: 11px 14px;
+     11px 让每项高度约 39.5px，读起来有呼吸感，仍保持整行可点的列表观感。
+     2026-11-05：padding 与 line-height 全部 rem 化 —— 原先 font-size 随根字号
+     放大而 line-height 锁 17.5px，4K 下文字高出行盒被上下裁切（用户实测截图）。 */
+  padding: 0.7857rem 1rem;
   font-size: 0.875rem;
-  line-height: 17.5px;
+  line-height: 1.25rem;
   text-align: left;
   white-space: nowrap;
   transition: background-color 0.15s ease;
@@ -3878,11 +3884,12 @@ html:not(.dark) .app-menu-panel .text-danger {
   display: flex;
   align-items: center;
   gap: 7px;
-  /* 与 .app-menu-panel [role=menuitem] 完全同几何（11px 14px / 0.875rem / 17.5px）：
-     全站菜单项一套间距，AppSelect 不再自养一份（原 12px 右距 + 1.4 行高）。 */
-  padding: 11px 14px;
+  /* 与 .app-menu-panel [role=menuitem] 完全同几何（0.7857rem 1rem / 0.875rem / 1.25rem）：
+     全站菜单项一套间距，AppSelect 不再自养一份（原 12px 右距 + 1.4 行高）。
+     line-height 用 rem：4K 大根字号下随字号一起放大，避免文字高出行盒被裁。 */
+  padding: 0.7857rem 1rem;
   font-size: 0.875rem;
-  line-height: 17.5px;
+  line-height: 1.25rem;
   text-align: left;
   color: #374151;
   background: transparent;
