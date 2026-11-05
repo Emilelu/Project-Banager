@@ -294,17 +294,25 @@
           <div class="relative glass rounded-2xl shadow-2xl w-[33rem] border border-white/40 pointer-events-auto app-dialog" ref="clearDialogRef" role="dialog" aria-modal="true" aria-labelledby="watched-clear-title">
             <!-- 正文与图二（批量删除确认）保持同一结构：只放图标 + 标题 + 说明，
                  动作按钮统一收进底部栏 —— 原来两个横向大长条按钮显得过重，
-                 且与其它确认弹窗的按钮位置不一致。 -->
+                 且与其它确认弹窗的按钮位置不一致。
+                 大图标与同页删除确认弹窗同一写法（scale=xl + text-danger + flex 居中，
+                 35px 实测）；图标用 sweep（扫帚）——与追番页/等番页的「清空」入口一致，
+                 原先用 clear（垃圾桶形）与「删除」在视觉上难以区分（用户反馈过的点）。 -->
             <div class="px-6 py-5 text-center">
-              <div class="text-4xl mb-3" aria-hidden="true"><AppIcon scale="sm" name="clear" /></div>
+              <div class="mb-3 flex justify-center" aria-hidden="true">
+                <AppIcon scale="xl" class="text-danger" name="sweep" />
+              </div>
               <h3 id="watched-clear-title" class="text-lg font-bold text-gray-800 mb-2">{{ tt('clearScope.title') }}</h3>
               <p class="text-sm text-gray-500">{{ tt('clearScope.hint') }}</p>
             </div>
-            <!-- 三个按钮并排一行（不换行）：cancel 固定宽度，两个动作按钮等分剩余空间。
-                 原来用 flex-wrap 时最长那个会被挤到第二行，视觉不整齐。 -->
-            <div class="clear-scope-actions px-6 py-4 border-t border-white/20 grid gap-2.5">
+            <!-- 底部栏对齐同页删除确认弹窗的规范：flex 居中 + gap-3，按钮按语义取色 ——
+                 主危险操作（清空所有）红底 btn-danger，次级操作（取消/清空当前年份）
+                 中性描边 btn-neutral。按钮内文字永不折行（btn-base 的 white-space:nowrap），
+                 容器 flex-wrap 兜底：日/英文案更长、一行放不下时整颗按钮换行居中，
+                 而不是像旧 grid 等分那样把文字挤成两三行（修复前实测 en 文案折 3 行）。 -->
+            <div class="clear-scope-actions px-6 py-4 border-t border-white/20 flex justify-center gap-3">
               <button @click="showClearDialog=false" class="btn-base btn-neutral">{{ tt('common.cancel') }}</button>
-              <button v-if="showClearYearButton" @click="doClearYear" class="btn-base btn-toned">
+              <button v-if="showClearYearButton" @click="doClearYear" class="btn-base btn-neutral">
                 {{ tt('clearScope.clearYear', { year: yearDisplayName(selectedYear) }) }}
               </button>
               <button @click="doClearAll" class="btn-base btn-danger">
@@ -363,7 +371,11 @@
               <div>
                 <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
                   <span>{{ tt('moveWatched.time') }}</span>
-                  <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.manualInput') : tt('showDialog.clockPicker') }}</button>
+                  <!-- 切换标签语义：必须显示「可切换到的另一个模式」（与日期切换同一规则）。
+                       formShowTimePicker=false 时当前是时钟网格 → 标签显示「手动输入」；
+                       =true 时当前是文本输入 → 标签显示「时钟选择」。
+                       此前写反了（显示的是当前模式），用户点标签会得到与预期相反的控件。 -->
+                  <button type="button" @click="formShowTimePicker=!formShowTimePicker" class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
                 </label>
                 <div v-if="!formShowTimePicker" class="relative">
                   <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">

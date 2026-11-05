@@ -3720,24 +3720,29 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
 }
 
 
-/* ---------- 快速填充按钮：外壳 34px、内部字号压小 ---------- */
+/* ---------- 快速填充按钮：外壳收紧（28px）、内部字号压小 ---------- */
 /*
- * 需求：B站视频 / 空间搜索 / 全站搜索三个按钮「调大点」但「字调小点」。
- * 外壳用 .btn-base 的高度（34px），字号压到 9.6px —— 中文字在窄按钮里不挤，
- * 同时按钮本身比原来（30px）更高，点起来更好按。
+ * 需求沿革：① B站视频 / 空间搜索 / 全站搜索三个按钮「调大点」但「字调小点」
+ * → 外壳 34px + 字号 9.6px；② 2026-11-06 视觉复审裁定 34px 外壳配 9.6px 小字
+ * 「上下留空太多」→ 高度收到 2rem（28px，与 .btn-sm 物理档一致）、横向内距
+ * 收到 0.5714rem（8px）。字号 9.6px 是①的用户裁定，保持不动。
  *
- * 为什么要 !important：`.btn-sm` 里写死了 font-size: 11.5px，
+ * 与相邻输入框的几何协调：链接 URL 输入框高 37px / 圆角 --r-md(10.5px)，
+ * 按钮继承 .btn-sm 的 --r-md 圆角与输入框同值，高度矮于输入框（次级行不抢主行）。
+ *
+ * 为什么要 !important：`.btn-sm` 里写死了 font-size: 11.5px / height: 2.1429rem，
  * 与 Tailwind 的 text-[...] 同优先级时后者被覆盖，实测字号一直没变。
+ * 全部尺寸走 rem（基准 14px），根字号缩放时按钮等比跟随。
  */
 .quick-fill-btn {
-  height: 2.4286rem !important;
+  height: 2rem !important;
   font-size: 0.6857rem !important;
-  padding: 0 0.7143rem !important;
+  padding: 0 0.5714rem !important;
   gap: 0.2857rem !important;
 }
 .quick-fill-btn .app-icon {
-  width: 0.8571rem !important;
-  height: 0.8571rem !important;
+  width: 0.7857rem !important;
+  height: 0.7857rem !important;
 }
 
 
@@ -4211,9 +4216,12 @@ html:not(.dark) .record-table tbody tr.list-item:not(.is-selected):not(.is-check
   50% { opacity: 1; }
 }
 .dark .record-skeleton-bar { background: rgb(var(--c-primary-light) / 0.22); }
-/* 清空范围弹窗：按钮按内容换行排列，短屏/大字号下不溢出卡片 */
-.clear-scope-actions { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
-.clear-scope-actions > button { white-space: normal; word-break: break-word; min-height: 2.125rem; }
+/* 清空范围弹窗底部三按钮：排布已对齐同页删除确认弹窗（flex justify-center + gap-3，
+   见 WatchedView 模板注释）。这里只保留一条兜底：
+   按钮文字永不折行（btn-base 的 white-space:nowrap 负责按钮内部），
+   文案过长的语言（en 文案 44 字符实测需 ~584px > 弹窗可用 420px）整颗按钮换行居中，
+   而不是旧 grid 等分方案把文字挤成 2-3 行（修复前实测）。 */
+.clear-scope-actions { flex-wrap: wrap; }
 
 /* ==================== 周历拖拽跨列改星期（审计 A-40，任务书「拖拽排序跨列」） ==================== */
 /* 拖源卡片：拖拽期间降透明度，明确「被拖走的是它」；drop/dragend 后由视图层复位。
