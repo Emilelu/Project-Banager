@@ -851,7 +851,8 @@ const onBatchMenuKeydown = (event) => onMenuKeydown(
   event, closeBatchMenu, () => restoreMenuFocus(null))
 
 const openEmptyAreaMenu = (e) => {
-  emptyAreaMenu.value = { show: true, x: e.clientX, y: e.clientY }
+  // placeContextMenu：跟随鼠标 + 视口翻转/收拢（与右键菜单同一套定位器）
+  placeContextMenu(emptyAreaMenu, e)
   nextTick(() => focusFirstMenuItem(emptyAreaMenuRef.value))
 }
 
@@ -869,7 +870,7 @@ const batchMenuRef = ref(null)
 
 const openBatchMenu = (e) => {
   if (!batchMode.value || checkedIds.value.length === 0) return false
-  batchMenu.value = { show: true, x: e.clientX, y: e.clientY }
+  placeContextMenu(batchMenu, e)
   nextTick(() => focusFirstMenuItem(batchMenuRef.value))
   return true
 }
