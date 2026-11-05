@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://emilelu.github.io/pbm.html"><img alt="Live demo" src="https://img.shields.io/badge/demo-online-22c55e?style=flat-square&logo=googlechrome&logoColor=white"></a>
   <img alt="version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-7C3AED?style=flat-square">
-  <img alt="473 tests passing" src="https://img.shields.io/badge/tests-473%20passing-2ea44f?style=flat-square">
+  <img alt="476 tests passing" src="https://img.shields.io/badge/tests-476%20passing-2ea44f?style=flat-square">
   <img alt="languages zh en ja" src="https://img.shields.io/badge/languages-zh%20%7C%20en%20%7C%20ja-orange?style=flat-square">
   <img alt="single file 1.6 MB" src="https://img.shields.io/badge/single%20file-1.6%20MB-ff69b4?style=flat-square">
   <img alt="license MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -28,7 +28,7 @@
 
 1. Grab the built `dist/index.html`, or just open the [live demo](https://emilelu.github.io/pbm.html)
 2. **Double-click** that HTML file — that's the whole install (it even runs from `file://`, WASM is inlined)
-3. Moving machines? Sidebar → "Import & Export → Database backup (.db)", carry the file with you
+3. Moving machines? Sidebar → "Settings → Import & Export" → "Database backup (.db)", carry the file with you
 
 No Node runtime, no account, no server. And with no backend there is nothing that can expire.
 
@@ -49,7 +49,7 @@ IndexedDB. Close the tab, cut the network, copy the file to an offline machine �
 - 🔄 **Three states** — move entries between Waiting, Watching and Watched with a click or context menu, progress follows along
 - 🏷️ **Tags** — 12 built-in tags (Action / Slice of Life / Romance / Fantasy…) plus your own; multi-select (OR) filtering on list pages
 - 🎨 **Appearance** — 6 preset palettes, colors sampled from the wallpaper, random-per-refresh; frosted glass or liquid glass
-- 🌏 **Three languages** — 中文 / English / 日本語 (551 keys aligned key by key), plus a proper dark mode
+- 🌏 **Three languages** — 中文 / English / 日本語 (597 keys aligned key by key), plus a proper dark mode
 - 📦 **Five formats** — xlsx / csv / json / md / db: full backups as well as human-readable text exports
 - 🔒 **Nothing leaves the browser** — no backend, no analytics, no sign-in; the data is only on your own disk
 
@@ -66,15 +66,17 @@ month is called out at the top of the page.
 ### Waiting — queued up before it airs
 
 Table plus paging, sorted by expected date, with batch add and drag-to-reorder. The "seasonal anime"
-button jumps straight to the current season, so adding a show takes one click. Column widths are
-fixed, so a wide screen no longer stretches the date column; on narrow screens the table scrolls
-inside its card instead of squeezing every column.
+button opens the current season page on yuc.wiki, so adding a show takes one click. Table columns
+auto-fit their content — links and notes are capped, the name column takes the rest and ellipsizes —
+so wide screens waste no space; on narrow screens the table scrolls inside its card instead of
+squeezing every column.
 
 ![Waiting list](docs/screenshots/remaining.jpg)
 
 ### History — filed by year
 
-Grouped by year with this-year and all-time totals; year labels can be renamed or added.
+Grouped by year with this-year and all-time totals; each row of the year menu carries inline
+edit / delete buttons, so renaming, deleting or adding a year never requires switching the filter.
 Each entry carries tags, a link and a note, so future-you can remember why it was on the list.
 
 ![Watch history](docs/screenshots/watched.jpg)
@@ -129,9 +131,9 @@ to a bundled pure-JS inflate. Neither path touches the network, so both work fro
 
 | Page | Capabilities |
 |---|---|
-| Watching `/watching` | Week grid, time sorting, episode ± (zero-padded and decimal), progress percentage, link templates, monthly reminders |
+| Watching `/watching` | Week grid, time sorting, episode ± (zero-padded and decimal), progress percentage, link templates, monthly reminders, one-click add from the top bar |
 | Waiting `/remaining` | Table + paging, date sorting, drag to reorder, batch add, seasonal anime shortcut, top-bar search & tag filter |
-| History `/watched` | Year grouping, date sorting, custom year labels, this-year and total stats, top-bar search / tag / year filters |
+| History `/watched` | Year grouping, date sorting, inline year edit / delete / create, this-year and total stats, top-bar search / tag / year filters |
 | Tags `/tags` | 12 built-ins + custom; create, rename, recolor, delete; built-ins cannot be deleted, renames propagate |
 | Theme `/appearance` | 6 preset palettes, sample from wallpaper or randomize per refresh, frosted / liquid glass, mask & blur tuning |
 | Import `/import` | Excel import page: sheet detection, week-layout parsing, merged year cells, hyperlinks, import log |
@@ -139,18 +141,25 @@ to a bundled pure-JS inflate. Neither path touches the network, so both work fro
 
 **Global**
 
-- Chinese / English / Japanese (596 aligned keys), CJK font family per language; light / dark / follow-system
-- Collapsible sidebar (15rem ↔ 4rem) grouped into lists / data / settings, icons with tooltips when collapsed
+- Chinese / English / Japanese (597 aligned keys), CJK font family per language; light / dark / follow-system
+- Collapsible sidebar (15rem ↔ 4rem) grouped into lists / settings, icons with tooltips when collapsed
 - One shared color picker; root font size scales with the viewport for high-DPI screens
+- Menus, tooltips and the date/time/color panels anchor to the cursor or trigger, flip and clamp
+  inside the viewport, and share one pop transition; time is picked from a button grid
+  (24 `HH:00` + 12 five-minute `:MM` buttons, manual input kept)
+- List-clearing actions use a broom icon, distinct from the trash icon reserved for delete,
+  consistent across all three pages and their confirm dialogs
 - Responsive shell: search, tag and year filters live in the global top bar above 1100px and
   collapse to icons (tap for a panel input) at ≤1100px; page actions fold into a more-actions menu
   at ≤1100px, the sidebar collapses to icons at ≤900px, and the title, counters and date stay on
-  one line; tables scroll inside their card on narrow screens instead of squeezing every column
-- Fixed table column widths (index / date / link / notes), so wide screens no longer give a
-  date column a third of the width to hold a single `2026/01`
+  one line; under pressure the top bar shrinks the search box first (10rem floor) and ellipsizes
+  the title and badges instead of hiding or overlapping them
+- Table columns auto-fit their content — links and notes capped, the name column takes the rest
+  and ellipsizes — so wide screens waste no space; on narrow screens the table scrolls inside its card
 - Skeleton rows render until the first data arrives, instead of flashing an empty state
 - `.db` backup with a rollback snapshot before a restore; structured imports report success/failure counts
-- Fully keyboard operable, focus trap, Esc to close; help dialog collects shortcuts in one place
+- Fully keyboard operable, focus trap, Esc to close; oversized dialogs cap at the viewport height
+  and scroll internally; help dialog collects shortcuts in one place
 - Honours `prefers-reduced-motion`: animations and transitions drop to near-zero duration
 
 </details>
@@ -166,7 +175,7 @@ src/
 ├── components/    AppIcon · WatchingCard · ColorPicker · TagSelector · TagFilter · HelpDialog
 ├── composables/   theme, appearance, i18n, dates, episodes, focus trap…
 ├── db/            index.js (schema/migrations), excelImporter, excelExporter, structuredImporter
-├── locales/       three language packs, zh / en / ja (551 keys)
+├── locales/       three language packs, zh / en / ja (597 keys)
 ├── router/        routes (including /tags, /appearance, /transfer)
 ├── views/         Watching · Waiting · History · Import · Tags · Theme · Import & Export
 └── style.css      global styles and theme variables
