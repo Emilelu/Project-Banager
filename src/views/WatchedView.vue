@@ -374,49 +374,13 @@
                 </p>
                 <p v-if="formDateValidationError" class="text-xs text-danger mt-1">{{ formDateValidationError }}</p>
               </div>
-              <div>
-                <label class="flex items-center justify-between text-sm font-medium text-gray-700 mb-1">
-                  <span>{{ tt('moveWatched.time') }}</span>
-                  <!-- 切换标签语义：必须显示「可切换到的另一个模式」（与日期切换同一规则）。
-                       formShowTimePicker=false 时当前是时钟网格 → 标签显示「手动输入」；
-                       =true 时当前是文本输入 → 标签显示「时钟选择」。
-                       此前写反了（显示的是当前模式），用户点标签会得到与预期相反的控件。 -->
-                  <!-- 显式 aria-label：同上方日期切换按钮 —— label 文本「时间（可选）」
-                       会抢占可访问名；这里镜像可见文字（「可切换到的另一个模式」）。 -->
-                  <button type="button" @click="formShowTimePicker=!formShowTimePicker"
-                    :aria-label="formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput')"
-                    class="text-xs text-primary hover:text-primary-dark transition">{{ formShowTimePicker ? tt('showDialog.clockPicker') : tt('showDialog.manualInput') }}</button>
-                </label>
-                <div v-if="!formShowTimePicker" class="relative">
-                  <div class="time-picker-trigger w-full h-10 flex items-center justify-center border border-primary/20 rounded-xl bg-white/80 cursor-pointer hover:border-primary/40 transition" @click="formShowTimeDropdown=!formShowTimeDropdown">
-                    <span class="text-sm font-mono" :class="formTime?'text-gray-800':'text-gray-400'">{{ formTime || tt('showDialog.clickToPickTime') }}</span>
-                    <svg class="w-4 h-4 ml-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                  </div>
-                  <div v-if="formShowTimeDropdown" class="time-picker-dropdown absolute z-50 mt-1 w-full glass rounded-xl shadow-2xl border border-white/30 p-3 max-h-52 overflow-y-auto">
-                    <div class="grid grid-cols-6 gap-1">
-                      <button v-for="h in 24" :key="'fh'+h" @click="formSelectTimeHour(h-1)"
-                        class="px-2 py-1.5 text-xs rounded-lg transition btn-press"
-                        :class="parseInt(formTime?.split(':')[0])===h-1?'bg-primary text-white font-bold':'hover:bg-primary/10 text-gray-700'">
-                        {{ String(h-1).padStart(2,'0') }}:00
-                      </button>
-                    </div>
-                    <div class="border-t border-white/20 my-2"></div>
-                    <div class="grid grid-cols-6 gap-1">
-                      <button v-for="m in 12" :key="'fm'+m" @click="formSelectTimeMinute((m-1)*5)"
-                        class="px-2 py-1.5 text-xs rounded-lg transition btn-press"
-                        :class="parseInt(formTime?.split(':')[1])===(m-1)*5?'bg-secondary text-white font-bold':'hover:bg-secondary/10 text-gray-700'">
-                        :{{ String((m-1)*5).padStart(2,'0') }}
-                      </button>
-                    </div>
-                  </div>
-                  <div v-if="formShowTimeDropdown" class="fixed inset-0 z-40" @click="formShowTimeDropdown=false"></div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">{{ tt('moveWatched.time') }}</label>
+                  <!-- 2026-11-06：内联 24+12 按钮网格下拉统一替换为全站 ClockPicker
+                       （按钮网格 + pop 动画 + 手动输入/清空内置），界面与追番页添加弹窗完全一致；
+                       外部「手动输入/时钟选择」切换标签随之移除（组件内部自带手动输入）。 -->
+                  <ClockPicker v-model="formTime" :aria-label="tt('moveWatched.time')" />
                 </div>
-                <div v-else class="flex items-center gap-2">
-                  <input v-model="formTime" type="text" placeholder="HH:mm"
-                    class="flex-1 px-4 py-2.5 border border-primary/20 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
-                  <button @click="formTime=''" class="btn-base btn-sm btn-neutral shrink-0">{{ tt('record.clearTime') }}</button>
-                </div>
-              </div>
               <div>
                 <!-- 封面图 URL（用户早期要求的「番剧封面图，可参考 Bangumi 番组计划」）。
                      只做「粘贴直链 → 实时预览」，不在客户端调用 Bangumi API
@@ -517,6 +481,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { watchedApi, watchedYearsApi, batchApi } from '../db/api'
 import { validateDate, extractYear, extractAllYears, compareDateKey, todayStr } from '../composables/useDatePicker'
 import DatePicker from '../components/DatePicker.vue'
+import ClockPicker from '../components/ClockPicker.vue'
 import { showToast } from '../composables/useToast'
 import { setPageStats, setPageSelection, clearPageSelection, setPageActions, clearPageActions, setPageControls, clearPageControls } from '../composables/usePageStats'
 import WatchedTopControls from './WatchedTopControls.vue'
@@ -568,21 +533,9 @@ const searchQuery = ref('')
 // 标签筛选：逗号分隔的已选标签名，空串表示不筛选
 const tagFilter = ref('')
 
-// 时间选择器
+// 时间选择器（ClockPicker 按钮网格组件，v-model 为 'HH:mm'）
 const formTime = ref('')
-const formShowTimePicker = ref(false)
-const formShowTimeDropdown = ref(false)
 const formDateValidationError = ref('')
-
-const formSelectTimeHour = (h) => {
-  const currentMin = formTime.value ? formTime.value.split(':')[1] || '00' : '00'
-  formTime.value = `${String(h).padStart(2,'0')}:${currentMin}`
-}
-const formSelectTimeMinute = (m) => {
-  const currentHour = formTime.value ? formTime.value.split(':')[0] || '00' : '00'
-  formTime.value = `${currentHour}:${String(m).padStart(2,'0')}`
-  formShowTimeDropdown.value = false
-}
 
 // 年份降序排列
 const sortedYears = computed(() => {
@@ -1333,8 +1286,6 @@ const openAddDialog = () => {
   }
   formDateValidationError.value = ''
   formCoverFailed.value = false
-  formShowTimePicker.value = false
-  formShowTimeDropdown.value = false
   showDialog.value = true
   focusNameInput()
 }
@@ -1373,8 +1324,6 @@ const openEditDialog = () => {
   formCoverFailed.value = false
   formTime.value = timePart
   formDateValidationError.value = ''
-  formShowTimePicker.value = false
-  formShowTimeDropdown.value = false
   showDialog.value = true
   focusNameInput()
 }

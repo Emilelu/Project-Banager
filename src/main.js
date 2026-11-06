@@ -61,6 +61,31 @@ document.addEventListener(
   true,
 )
 
+/**
+ * Shift 专项兜底（用户要求：按 Shift 不得选中任何元素）。
+ *
+ * 上面的 selectstart 守卫拦不住「已有选区的延伸」：Chromium 里 Shift+单击
+ * 从上次点击的锚点延伸选区时**不触发 selectstart**（只有新选区才触发），
+ * 实测仍会反蓝。这里双保险：
+ *   · mousedown 捕获阶段直接 preventDefault —— 掐断延伸起点；
+ *   · click 后清掉任何残留选区。
+ * 输入控件不受影响（输入框内的 Shift+方向键/Home/End 走 keydown 路径）。
+ */
+document.addEventListener(
+  'mousedown',
+  (e) => {
+    if (e.shiftKey) e.preventDefault()
+  },
+  true,
+)
+document.addEventListener(
+  'click',
+  (e) => {
+    if (e.shiftKey) window.getSelection()?.removeAllRanges()
+  },
+  true,
+)
+
 console.log('[boot] main.js start')
 
 async function boot() {

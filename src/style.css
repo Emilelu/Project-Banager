@@ -1198,13 +1198,14 @@ html:not(.dark) body.adaptive .app-btn-ghost {
    动画结束时元素卸载，布局无跳变。进场同构反向（0 宽展开 + 渐入），左右观感一致。 */
 .topbar-selection.topbar-sel-enter-active,
 .topbar-selection.topbar-sel-leave-active {
-  transition: opacity 0.3s var(--ease-spring), max-width 0.3s var(--ease-spring),
-    margin-right 0.3s var(--ease-spring);
+  transition: opacity 0.35s var(--ease-spring), max-width 0.35s var(--ease-spring),
+    margin-right 0.35s var(--ease-spring);
 }
-/* 离场比进场短（0.22s），与按钮组的离场节奏一致，收得干脆 */
+/* 离场 0.3s --ease-smooth（2026-11-06 用户反馈 0.22s ease-exit 生硬不丝滑），
+   与进场同一曲线家族，淡出 + 收拢更连贯 */
 .topbar-selection.topbar-sel-leave-active {
-  transition-duration: 0.22s;
-  transition-timing-function: var(--ease-exit);
+  transition-duration: 0.3s;
+  transition-timing-function: var(--ease-smooth);
 }
 .topbar-selection.topbar-sel-enter-from,
 .topbar-selection.topbar-sel-leave-to {
@@ -1638,40 +1639,8 @@ html[lang='zh-CN'] .font-mono {
   cursor: pointer;
 }
 
-/* 时间选择器触发框 - 深色模式 */
-.dark .time-picker-trigger {
-  background: rgba(20, 15, 40, 0.6) !important;
-  border-color: rgb(var(--c-primary)/0.3) !important;
-  color: #e2e8f0 !important;
-}
-
-.dark .time-picker-trigger:hover {
-  border-color: rgb(var(--c-primary)/0.5) !important;
-}
-
-/* 时间选择器下拉面板 - 深色模式 */
-.dark .time-picker-dropdown {
-  background: rgba(20, 15, 40, 0.95) !important;
-  border-color: rgb(var(--c-primary)/0.3) !important;
-}
-
-.dark .time-picker-dropdown button {
-  color: #cbd5e1 !important;
-}
-
-.dark .time-picker-dropdown button:hover {
-  background: rgb(var(--c-primary)/0.15) !important;
-}
-
-.dark .time-picker-dropdown button.bg-primary {
-  background: rgb(var(--c-primary)/0.7) !important;
-  color: #ffffff !important;
-}
-
-.dark .time-picker-dropdown button.bg-secondary {
-  background: rgb(var(--c-secondary)/0.7) !important;
-  color: #ffffff !important;
-}
+/* 2026-11-06：内联时间下拉（.time-picker-trigger/.time-picker-dropdown）已由
+   全站 ClockPicker 组件统一替换，其深色模式规则一并删除。 */
 
 /* 右键菜单 */
 .dark .glass.py-1 {
@@ -3514,18 +3483,19 @@ td .truncate {
      会把 ja 文字裁掉 5px（scrollWidth 189 > clientWidth 184）；
      zh/en 恰好满宽零余量，字体度量一漂移就裁。min-width 保底
      「与页码按钮同宽」的设计，文案更宽时自然放宽。
-     2026-11-05：本块是当年按 50px/18px 调参锁定的固定 px 设计，
-     用户确认分页栏不随根字号缩放（rem 化后在 4K 下巨大得突兀），维持 px。 */
-  min-width: 186px;
+     2026-11-05：本块是当年按 50px/18px 调参锁定的固定 px 设计。
+     2026-11-06：恢复 rem 化（÷14，1440 档像素级不变）——用户要求
+     分页栏在 2K/4K 随根字号缩放（px 锁定导致 2K 与 4K 同大）。 */
+  min-width: 13.2857rem;
   width: auto;
-  height: 50px;
-  padding: 0 15px;
+  height: 3.5714rem;
+  padding: 0 1.0714rem;
   /* 圆角走令牌（运行时本就被文件末令牌区的 --r-md 覆盖，这里声明与实际一致）；
-     尺寸/字号按用户裁定保持固定 px 不随根字号缩放（见上方 2026-11-05 注）。 */
+     尺寸/字号随根字号缩放（见上方 2026-11-06 注）。 */
   border-radius: var(--r-md);
-  font-size: 18px;
+  font-size: 1.2857rem;
   line-height: 1;
-  gap: 7.5px;
+  gap: 0.5357rem;
   /* 盒子高度是硬约束：内部图标/文字不能把盒子撑高（否则 height 会失效） */
   min-height: 0;
   max-height: none;
@@ -3535,20 +3505,20 @@ td .truncate {
 }
 /* 内部图标随盒高走，避免 18px 字号配 12px 小图标显得失衡 */
 .page-size-trigger .app-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.2857rem;
+  height: 1.2857rem;
   flex: 0 0 auto;
 }
 
 /* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
 .pager-btn {
-  width: 50px;
-  height: 50px;
-  min-width: 50px;
+  width: 3.5714rem;
+  height: 3.5714rem;
+  min-width: 3.5714rem;
   padding: 0;
   /* 圆角同上：运行时已被令牌区 --r-md 覆盖，声明对齐实际值 */
   border-radius: var(--r-md);
-  font-size: 18px;
+  font-size: 1.2857rem;
   line-height: 1;
   gap: 0;
   /* 同上：高度是硬约束，内容不得撑高 */
@@ -3560,8 +3530,8 @@ td .truncate {
 }
 /* 上下页箭头图标：与 18px 字号相配，不随 .btn-icon 的 16px 规则 */
 .pager-btn .app-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.2857rem;
+  height: 1.2857rem;
   flex: 0 0 auto;
 }
 
@@ -3574,10 +3544,10 @@ td .truncate {
    为什么用 :has()：分页卡片与其它 .glass 卡片共用同一个 class，
    只有它内部含 .page-size-trigger，用它精确区分（Chrome 105+/Edge/Safari 15.4+ 支持）。 */
 .glass:has(.page-size-trigger) {
-  padding-top: 15px;
-  padding-bottom: 15px;
-  padding-left: 30px;
-  padding-right: 30px;
+  padding-top: 1.0714rem;
+  padding-bottom: 1.0714rem;
+  padding-left: 2.1429rem;
+  padding-right: 2.1429rem;
   border-radius: var(--r-lg);
 }
 
@@ -3819,10 +3789,10 @@ div[class*="rounded-xl"]:not(.glass):not(.app-dialog):not(.app-menu-surface) {
      所以 text-sm 实际是 12.25px，不是 14px —— 直接写 14px 会偏大。
      原来各菜单混用 text-xs(10.5px) / text-sm(12.25px)，视觉不齐。 */
   font-size: 0.875rem;
-  /* 最小宽度 12rem（约 168px），与「查看新番」基准一致 */
+  /* 最小宽度 12rem（约 168px），与「查看新番」基准一致。
+     纵向 padding 已移除（2026-11-06）：原 3.5px 让首/末项 hover 背景与面板
+     圆角之间留出 4.5px 空隙（用户截图）；overflow:hidden 圆角裁剪已足够。 */
   min-width: 12rem;
-  padding-top: 3.5px;
-  padding-bottom: 3.5px;
 }
 
 /* 深色模式：与全站菜单反转一致（半透明深底 + 亮边框） */

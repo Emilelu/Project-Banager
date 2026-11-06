@@ -11,10 +11,9 @@
        会成为 position:fixed 的包含块，fixed 子元素按祖先盒子定位（实测偏移可达 200px）。
        与全站弹窗/菜单同一纪律。 -->
   <div class="tb-search relative flex items-center min-w-0">
-    <!-- 宽档：内联输入框。允许被压缩（先收窄而不是把顶栏撑出横向溢出），
-         但设 10rem 下限 —— 2026-11-05 用户反馈「搜索栏等要灵活缩减长度」，
-         原先 min-w-0 在拥挤时缩到几乎没有（被挡住观感），10rem 保底仍可用。 -->
-    <div class="tb-search-inline relative w-[28rem] max-w-full min-w-[10rem]">
+    <!-- 宽档：内联输入框。收缩优先级最高（shrink-999）：2026-11-06 用户要求
+         空间不足时先收搜索栏、其他元素不动；10rem 下限保证收窄后仍可用。 -->
+    <div class="tb-search-inline relative w-[28rem] max-w-full min-w-[10rem] shrink-[999]">
       <input v-model="valueModel" type="text" :placeholder="placeholder" :aria-label="placeholder"
         class="w-full pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
       <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
