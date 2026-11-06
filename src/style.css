@@ -3484,18 +3484,19 @@ td .truncate {
      zh/en 恰好满宽零余量，字体度量一漂移就裁。min-width 保底
      「与页码按钮同宽」的设计，文案更宽时自然放宽。
      2026-11-05：本块是当年按 50px/18px 调参锁定的固定 px 设计。
-     2026-11-06：恢复 rem 化（÷14，1440 档像素级不变）——用户要求
-     分页栏在 2K/4K 随根字号缩放（px 锁定导致 2K 与 4K 同大）。 */
-  min-width: 13.2857rem;
+     2026-11-06 二次调整：用户裁定「4K 观感（根 25.6px 下的 50px/18px）为准」，
+     令牌按 ÷25.6 锚定 —— 2K（根 21.3）回落到 ≈42px 不再偏大、4K 恰好 50px 不变；
+     1440（根 14）下为 27px/9.8px，属该策略的一致性结果。 */
+  min-width: 7.2656rem;
   width: auto;
-  height: 3.5714rem;
-  padding: 0 1.0714rem;
+  height: 1.9531rem;
+  padding: 0 0.5859rem;
   /* 圆角走令牌（运行时本就被文件末令牌区的 --r-md 覆盖，这里声明与实际一致）；
-     尺寸/字号随根字号缩放（见上方 2026-11-06 注）。 */
+     尺寸/字号按 4K 观感锚定（见上方 2026-11-06 注）。 */
   border-radius: var(--r-md);
-  font-size: 1.2857rem;
+  font-size: 0.7031rem;
   line-height: 1;
-  gap: 0.5357rem;
+  gap: 0.293rem;
   /* 盒子高度是硬约束：内部图标/文字不能把盒子撑高（否则 height 会失效） */
   min-height: 0;
   max-height: none;
@@ -3505,20 +3506,20 @@ td .truncate {
 }
 /* 内部图标随盒高走，避免 18px 字号配 12px 小图标显得失衡 */
 .page-size-trigger .app-icon {
-  width: 1.2857rem;
-  height: 1.2857rem;
+  width: 0.7031rem;
+  height: 0.7031rem;
   flex: 0 0 auto;
 }
 
 /* 分页倒数/页码按钮：与「每页 XX 条」同高，并保持正方形（36×36） */
 .pager-btn {
-  width: 3.5714rem;
-  height: 3.5714rem;
-  min-width: 3.5714rem;
+  width: 1.9531rem;
+  height: 1.9531rem;
+  min-width: 1.9531rem;
   padding: 0;
   /* 圆角同上：运行时已被令牌区 --r-md 覆盖，声明对齐实际值 */
   border-radius: var(--r-md);
-  font-size: 1.2857rem;
+  font-size: 0.7031rem;
   line-height: 1;
   gap: 0;
   /* 同上：高度是硬约束，内容不得撑高 */
@@ -3530,8 +3531,8 @@ td .truncate {
 }
 /* 上下页箭头图标：与 18px 字号相配，不随 .btn-icon 的 16px 规则 */
 .pager-btn .app-icon {
-  width: 1.2857rem;
-  height: 1.2857rem;
+  width: 0.7031rem;
+  height: 0.7031rem;
   flex: 0 0 auto;
 }
 
@@ -3544,10 +3545,10 @@ td .truncate {
    为什么用 :has()：分页卡片与其它 .glass 卡片共用同一个 class，
    只有它内部含 .page-size-trigger，用它精确区分（Chrome 105+/Edge/Safari 15.4+ 支持）。 */
 .glass:has(.page-size-trigger) {
-  padding-top: 1.0714rem;
-  padding-bottom: 1.0714rem;
-  padding-left: 2.1429rem;
-  padding-right: 2.1429rem;
+  padding-top: 0.5859rem;
+  padding-bottom: 0.5859rem;
+  padding-left: 1.1719rem;
+  padding-right: 1.1719rem;
   border-radius: var(--r-lg);
 }
 
@@ -3968,7 +3969,7 @@ html:not(.dark) .app-menu-panel .text-danger {
  * 徽章改 display:block 才能让 text-overflow 生效（inline-flex 容器内是匿名 flex 项，
  * text-overflow 不生效）；overflow:hidden 同时把徽章的自动最小尺寸归 0，允许收缩。
  * max-width 封顶避免超长记录名把标题行的内在宽度撑到几百 px、挤瘪搜索框。 */
-.topbar-selection { max-width: 20rem; }
+.topbar-selection { max-width: 15rem; }
 .topbar-selection .topbar-stat {
   display: block;
   min-width: 0;

@@ -81,7 +81,12 @@ document.addEventListener(
 document.addEventListener(
   'click',
   (e) => {
-    if (e.shiftKey) window.getSelection()?.removeAllRanges()
+    if (!e.shiftKey) return
+    // 用户裁定：Shift+点击不得触发任何应用级选中（行/卡片的高亮与边框），
+    // 在捕获阶段拦停 —— 应用内的 click 处理器不再收到该事件。
+    e.preventDefault()
+    e.stopPropagation()
+    window.getSelection()?.removeAllRanges()
   },
   true,
 )

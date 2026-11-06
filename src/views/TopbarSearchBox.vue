@@ -12,8 +12,8 @@
        与全站弹窗/菜单同一纪律。 -->
   <div class="tb-search relative flex items-center min-w-0">
     <!-- 宽档：内联输入框。收缩优先级最高（shrink-999）：2026-11-06 用户要求
-         空间不足时先收搜索栏、其他元素不动；10rem 下限保证收窄后仍可用。 -->
-    <div class="tb-search-inline relative w-[28rem] max-w-full min-w-[10rem] shrink-[999]">
+         空间不足时先收搜索栏、其他元素不动；下限 7rem（拥挤顶栏实测再让一步）。 -->
+    <div class="tb-search-inline relative w-[28rem] max-w-full min-w-[7rem] shrink-[999]">
       <input v-model="valueModel" type="text" :placeholder="placeholder" :aria-label="placeholder"
         class="w-full pl-8 pr-8 py-2 border border-primary/20 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white/80" />
       <AppIcon scale="sm" name="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
