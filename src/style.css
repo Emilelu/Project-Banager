@@ -3952,7 +3952,16 @@ html:not(.dark) .app-menu-panel .text-danger {
 .topbar-stats .topbar-stat { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar-stats .topbar-stat.is-neutral { flex-shrink: 999; }
 .topbar-selection { overflow: hidden; }
-.topbar-selection-name { flex-shrink: 0; white-space: nowrap; }
+/* 名称徽章允许收缩（2026-11-06）：flex-shrink:0 + nowrap 会把选中块的内在本征宽度
+   撑出标题容器右缘（实测 2560/3072 溢出 318/381px，日期徽章被裁成「被挡住」观感）。
+   改为可收缩 + 省略号；完整记录名由选中块上的 v-tip 兜底。 */
+.topbar-selection-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .topbar-actions { flex-shrink: 0; }
 .topbar-utilities { flex-shrink: 0; }
 .topbar-clock { white-space: nowrap; }
@@ -4008,6 +4017,10 @@ html:not(.dark) .app-menu-panel .text-danger {
  * 1440(root 14) 下三件套宽与审计实测（28rem=392px、gap 10.5px）吻合。 */
 .topbar-controls {
   flex: 0 1 auto;
+  /* 收缩优先级最高（2026-11-06 用户要求：拥挤时先收搜索栏/内容控件，
+     标题与计数不动；shrink-999 让本容器吸收顶栏几乎全部收缩量，
+     其内部再由搜索框（shrink-999）优先让位，年份/标签胶囊 shrink-0 保底） */
+  flex-shrink: 999;
   min-width: 0;
   margin: 0 auto;
 }
