@@ -3944,19 +3944,33 @@ html:not(.dark) .app-menu-panel .text-danger {
    flex-shrink:0，空间不足时内容溢出 heading 盒被 overflow:hidden 硬裁，
    徽章被后绘的搜索框/年份钮拦腰盖住（audit3：1104 档 remaining/watched 11 组 BAD）。
    让位后所有收窄都以省略号收场，徽章与控件矩形不再重叠。 */
-.topbar-title { flex-shrink: 999; min-width: 4rem; white-space: nowrap; overflow: hidden; }
+/* 页面标题永不省略（2026-11-06 用户裁定）：shrink 0 —— 顶栏拥挤时收缩顺序为
+   搜索框（shrink 999，下限 7rem）→ 选中块名称徽章（shrink 999）→ 计数徽章
+   （is-neutral shrink 999）→ 标题（永不）。页面标题本身只有 4-6 字，不缩也不挤。 */
+.topbar-title { flex-shrink: 0; white-space: nowrap; overflow: hidden; }
 /* h1 是 flex 容器，省略号必须落在文字 span 上（匿名 flex 项不参与 text-overflow） */
 .topbar-title-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar-stats { min-width: 0; overflow: hidden; }
 /* 徽章 display:block 才能让 text-overflow 生效（同 .topbar-selection 的既有策略） */
 .topbar-stats .topbar-stat { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar-stats .topbar-stat.is-neutral { flex-shrink: 999; }
+/* 选中块名称徽章：收缩优先级仅次于搜索框（999），拥挤时先于标题省略 */
+.topbar-selection-name {
+  flex: 0 1 auto;
+  flex-shrink: 999;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .topbar-selection { overflow: hidden; }
 /* 名称徽章允许收缩（2026-11-06）：flex-shrink:0 + nowrap 会把选中块的内在本征宽度
    撑出标题容器右缘（实测 2560/3072 溢出 318/381px，日期徽章被裁成「被挡住」观感）。
-   改为可收缩 + 省略号；完整记录名由选中块上的 v-tip 兜底。 */
+   改为可收缩 + 省略号；完整记录名由选中块上的 v-tip 兜底。
+   收缩优先级仅次于搜索框（999），拥挤时先于标题省略。 */
 .topbar-selection-name {
   flex: 0 1 auto;
+  flex-shrink: 999;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
