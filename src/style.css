@@ -3977,8 +3977,10 @@ html:not(.dark) .app-menu-panel .text-danger {
  *   「当前选中:」标签（shrink-0 永不压缩）→ 圆点（shrink-0）。
  * 徽章改 display:block 才能让 text-overflow 生效（inline-flex 容器内是匿名 flex 项，
  * text-overflow 不生效）；overflow:hidden 同时把徽章的自动最小尺寸归 0，允许收缩。
- * max-width 封顶避免超长记录名把标题行的内在宽度撑到几百 px、挤瘪搜索框。 */
-.topbar-selection { max-width: 15rem; }
+ * max-width 硬上限已移除（2026-11-06）：名称徽章本身可收缩（flex 0 1 auto + 省略号），
+ * 拥挤时选中块随顶栏 deficit 逐级收缩（名称→日期徽章），空间富余时完整显示 ——
+ * 不再出现「搜索框很宽、选中块却被硬上限裁字」的观感。 */
+.topbar-selection { overflow: hidden; }
 .topbar-selection .topbar-stat {
   display: block;
   min-width: 0;
