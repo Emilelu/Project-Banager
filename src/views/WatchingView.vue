@@ -1012,20 +1012,72 @@ const getItemsByDay = (day) => watchingList.value
 // 边界处理与 placeContextMenu 同一取向：只认本页发起的拖拽（draggingId 为 null 时
 // dragover 不 preventDefault，外部拖入的文本/文件无法落列），dragend 兜底清理状态。
 // 键盘等价路径不缺位：改星期仍可走编辑弹窗的星期下拉（行内编辑/批量模式下禁拖）。
-const draggingId = ref(null)   // 正被拖拽的卡片 id（拖源降透明度，提示「拖的是它」）
+const draggingId = ref(null)   // 正被拖拽的卡片 id（拖源降透明度，提示「拖的是它」；仅真拖拽置位）
 const dragOverDay = ref('')    // 悬停中的落点列（整列高亮）
+// 幽灵拖拽抑制（与等番页 dragReal 同机制）：卡片 draggable，单击抖动 ≥4px 就会触发
+// 原生 dragstart 并吞掉 click —— 位移 ≥12px 才算真拖拽（高亮/降透明度/落列放行），
+// dragend 时非真拖拽按被拖卡合成点击（Shift+点击不选中任何东西）。
+const cardDragReal = ref(false)
+const cardDragActive = ref(false)
+const DRAG_REAL_DIST = 12
+let cardDragOrigin = null
+let cardDragItem = null
+let cardDragShift = false
+const markCardDragReal = (e) => {
+  if (cardDragReal.value) return true
+  const x = e?.clientX
+  const y = e?.clientY
+  if (cardDragOrigin == null || typeof x !== 'number' || typeof y !== 'number'
+    || Number.isNaN(x) || Number.isNaN(y)) {
+    cardDragReal.value = true
+    return true
+  }
+  if (Math.hypot(x - cardDragOrigin.x, y - cardDragOrigin.y) >= DRAG_REAL_DIST) {
+    cardDragReal.value = true
+    return true
+  }
+  return false
+}
 const canDrag = computed(() => !batchMode.value && !editing.value)
 const onCardDragStart = (e, item) => {
-  draggingId.value = item.id
+  // 幽灵拖拽抑制：记录锚点 / 被拖卡 / Shift 状态；降透明度等视觉延迟到真拖拽（≥12px）。
+  cardDragActive.value = true
+  cardDragItem = item
+  cardDragShift = !!e?.shiftKey
+  const sx = e?.clientX
+  const sy = e?.clientY
+  cardDragOrigin = (typeof sx === 'number' && typeof sy === 'number' && !Number.isNaN(sx) && !Number.isNaN(sy))
+    ? { x: sx, y: sy }
+    : null
+  cardDragReal.value = false
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData('text/plain', String(item.id))
 }
-const onCardDragEnd = () => { draggingId.value = null; dragOverDay.value = '' }
+const onCardDragEnd = () => {
+  const wasReal = cardDragReal.value
+  const item = cardDragItem
+  const wasShift = cardDragShift
+  cardDragActive.value = false
+  cardDragReal.value = false
+  cardDragItem = null
+  cardDragShift = false
+  draggingId.value = null
+  dragOverDay.value = ''
+  // 抖动型幽灵拖拽吞掉了 click 事件：非真拖拽时按被拖卡合成一次点击；
+  // Shift+点击按用户裁定不选中任何东西，跳过合成。
+  if (item && !wasReal && !wasShift) {
+    if (batchMode.value) toggleCheck(item.id)
+    else selectItem(item)
+  }
+}
 const onColumnDragOver = (e, day) => {
   // 外部拖入（文件/文本/外链）不 preventDefault：列不成为系统拖拽的落点
-  if (draggingId.value === null) return
+  if (!cardDragActive.value) return
+  if (!markCardDragReal(e)) return
   e.preventDefault()
   e.dataTransfer.dropEffect = 'move'
+  // 真拖拽就位后才降透明度 + 高亮落点列
+  if (cardDragItem) draggingId.value = cardDragItem.id
   dragOverDay.value = day
 }
 const moveItemToDay = async (item, day) => {
@@ -1041,6 +1093,8 @@ const moveItemToDay = async (item, day) => {
   } catch { showToast(tt('toast.updateFailed'), 'error') }
 }
 const onColumnDrop = (e, day) => {
+  // 抖动型幽灵拖拽不落列（未过 12px 真拖拽阈值时列也不会放行 drop，双保险）
+  if (!cardDragReal.value) return
   dragOverDay.value = ''
   const id = Number(e.dataTransfer.getData('text/plain'))
   moveItemToDay(watchingList.value.find(i => i.id === id), day)

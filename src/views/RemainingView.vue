@@ -615,10 +615,18 @@ const isManualOrder = computed(() => sortField.value === MANUAL || sortField.val
  * 单击抖动的位移远小于该阈值，dragstart/dragend 期间不再产生任何 DOM/样式变化；
  * 真拖拽移动 8px 后行为与原来完全一致（放置带、行高亮、drop 放行）。
  * 合成事件（jsdom 测试的 trigger('dragover')）没有坐标，按放行处理，不影响单测。
+ *
+ * 2026-11-07 二次调整（用户反馈「想单击结果触发拖动」）：
+ *   · 阈值 8 → 12px（单击抖动余量再放宽）；
+ *   · 抖动型「幽灵拖拽」会吞掉 click 事件（原生拖拽语义），被点的行因此不选中 ——
+ *     dragend 时若 !dragReal，按被拖行的 batchMode 合成点击（toggleCheck / selectItem），
+ *     单击意图得以恢复；Shift+拖拽按用户裁定不选中任何东西，跳过合成。
  */
-const DRAG_REAL_DIST = 8
+const DRAG_REAL_DIST = 12
 const dragReal = ref(false)
 let dragOrigin = null
+let dragItem = null
+let dragShift = false
 const markDragReal = (e) => {
   if (dragReal.value) return true
   const x = e?.clientX
@@ -695,6 +703,10 @@ const onDragStart = (e, index) => {
   dragOrigin = (typeof sx === 'number' && typeof sy === 'number' && !Number.isNaN(sx) && !Number.isNaN(sy))
     ? { x: sx, y: sy }
     : null
+  // 记录被拖行与 Shift 状态：dragend 时若为抖动型幽灵拖拽（!dragReal），
+  // 需按被拖行合成一次点击（Shift+点击按用户裁定不选中，跳过合成）。
+  dragItem = sortedRemainingList.value[index] ?? null
+  dragShift = !!e?.shiftKey
   dragReal.value = false
   try {
     e.dataTransfer.effectAllowed = 'move'
@@ -716,10 +728,21 @@ const onDragLeave = (index) => {
 }
 
 const onDragEnd = () => {
+  const wasReal = dragReal.value
+  const item = dragItem
+  const wasShift = dragShift
   dragIndex.value = -1
   dragOverIndex.value = -1
   dragOverEnd.value = false
   dragReal.value = false
+  dragItem = null
+  dragShift = false
+  // 抖动型幽灵拖拽吞掉了 click 事件：非真拖拽（位移 < 阈值）时按被拖行
+  // 合成一次点击，单击意图得以恢复；Shift+点击按用户裁定不选中任何东西。
+  if (item && !wasReal && !wasShift) {
+    if (batchMode.value) toggleCheck(item.id)
+    else selectItem(item)
+  }
 }
 
 // ===== 表格级拖放（解决「拖到末行之外拖不动」）=====
