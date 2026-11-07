@@ -313,6 +313,15 @@ select:focus-visible {
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
+/* 页面根 div（各视图根，tabindex=-1）永不画焦点环：点击空白即会聚焦它，
+   此时任何修饰键交互都会让它的 :focus-visible 翻真 → 整个主区域被 2px
+   描边框住，用户多次误读为「Shift 选中了整页」（2026-11-07 实测 R3/R6）。
+   根 div 的焦点只是键盘导航/焦点还原的载体，环没有信息价值；
+   可访问性由内部可聚焦元素与行/卡片的焦点提示承担。 */
+.space-y-5[tabindex="-1"]:focus-visible {
+  outline: none !important;
+}
+
 /* ==================== 全局禁止文字被框选 ==================== */
 /*
  * 问题：任意位置按住 Shift 拖动（或三击、Ctrl+A）时，浏览器会显示文字选区高亮，

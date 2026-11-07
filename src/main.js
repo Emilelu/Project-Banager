@@ -97,8 +97,8 @@ const markShiftSuppress = (el) => {
 document.addEventListener(
   'keydown',
   (e) => {
-    if (e.key === 'Shift') markShiftSuppress()
-    else clearShiftSuppress()
+    if (e.key !== 'Shift') return
+    markShiftSuppress()
   },
   true,
 )
@@ -115,10 +115,21 @@ document.addEventListener(
       e.preventDefault()
     } else {
       // 普通 mousedown = Shift 交互窗口关闭：其后 400ms 内的 focusin 与 Shift 无关，
-      // 不得打标（否则鼠标点击聚焦的元素会带一个无害但多余的标记）
+      // 不得打标（否则鼠标点击聚焦的元素会带一个无害但多余的标记）。
+      // 注意：这里**不清除标记** —— 标记的生命周期只跟随焦点（focusout 时清除）。
+      // 清除标记后若元素仍聚焦，其 :focus-visible 已永久翻真，环会立刻冒出并保持
+      // （用户实测「整个主区域被描边框住」的根因）。
       lastShiftPressAt = 0
-      clearShiftSuppress()
     }
+  },
+  true,
+)
+// 标记的唯一清除点：被标记元素失去焦点（Tab/方向键/点击移焦都会触发）。
+// 标记移除后该元素下次通过键盘导航重新聚焦时，焦点环保留（a11y 基线）。
+document.addEventListener(
+  'focusout',
+  (e) => {
+    if (shiftSuppressedEl && e.target === shiftSuppressedEl) clearShiftSuppress()
   },
   true,
 )
