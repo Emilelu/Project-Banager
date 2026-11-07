@@ -1,5 +1,5 @@
 <template>
-  <div ref="pageRootRef" class="space-y-5" @keydown="handleKeydown" tabindex="-1">
+  <div ref="pageRootRef" class="space-y-5 min-h-full" @keydown="handleKeydown" tabindex="-1" @contextmenu.prevent="openBlankMenu">
     <!-- 视觉审计 A-01：原「第一卡」（年份选择 + 搜索 + 标签筛选）已整卡迁入顶栏 ——
          三件控件经 pageControls 注册（见下方 watch），由 App.vue 顶栏渲染；
          selectedYear / searchQuery / tagFilter 的状态、按年 fetch 与年份增删改
@@ -250,6 +250,22 @@
       </div>
       </transition>
       <div v-if="contextMenu.show" class="fixed inset-0 z-[199]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu"></div>
+
+      <!-- 空位右键菜单：表格卡空白处/空状态右键 → 添加记录。
+           与追番页空位菜单同一套交互；行上右键仍走上方 contextMenu（openBlankMenu 里守卫分流）。 -->
+      <transition name="pop">
+        <div v-if="blankMenu.show" class="fixed z-[200]"
+          style="--pop-origin-y: top; --pop-from-y: -4px"
+          :style="{ left: blankMenu.x + 'px', top: blankMenu.y + 'px' }">
+          <div ref="blankMenuRef" class="app-dialog app-menu-panel min-w-[10rem] context-menu"
+            role="menu" :aria-label="tt('watched.addRecord')" @keydown="onBlankMenuKeydown" @contextmenu.prevent>
+            <button role="menuitem" @click="blankAdd"
+              class="text-left px-4 py-2 text-sm hover:bg-primary/10 transition flex items-center gap-2"><AppIcon scale="sm" name="plus" /><span class="inline-block w-[0.21875rem] shrink-0" aria-hidden="true"></span>{{ tt('watched.addRecord') }}</button>
+          </div>
+        </div>
+      </transition>
+      <div v-if="blankMenu.show" class="fixed inset-0 z-[199]" @click="closeBlankMenu"
+        @contextmenu.prevent="closeBlankMenu"></div>
     </Teleport>
 
     <!-- 删除确认对话框 -->
@@ -928,6 +944,24 @@ const openContextMenu = (e, item) => {
   nextTick(() => focusFirstMenuItem(contextMenuRef.value))
 }
 const closeContextMenu = () => { contextMenu.value.show = false }
+
+// 空位右键：页面空白处（表格卡四周、空状态、末行下方）右键 → 添加记录。
+// 行上右键仍走 openContextMenu；命中按钮/链接/输入框时不抢交互。
+const blankMenu = ref({ show:false, x:0, y:0 })
+const blankMenuRef = ref(null)
+const onBlankMenuKeydown = (event) => onMenuKeydown(
+  event, closeBlankMenu, () => restoreMenuFocus(null))
+const openBlankMenu = (e) => {
+  const t = e.target
+  if (t.closest('.context-menu, button, input, select, textarea, a')) return
+  if (t.closest('thead')) return
+  const tr = t.closest('tbody tr')
+  if (tr && !t.closest('.empty-state')) return
+  placeContextMenu(blankMenu, e)
+  nextTick(() => focusFirstMenuItem(blankMenuRef.value))
+}
+const closeBlankMenu = () => { blankMenu.value.show = false }
+const blankAdd = () => { closeBlankMenu(); openAddDialog() }
 const ctxEdit = () => { closeContextMenu(); openEditDialog() }
 const ctxOpenUrl = () => {
   const item = contextMenu.value.item

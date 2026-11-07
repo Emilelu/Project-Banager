@@ -49,7 +49,9 @@ function detectLocale() {
   const lower = nav.toLowerCase()
   if (lower.startsWith('ja')) return 'ja'
   if (lower.startsWith('en')) return 'en'
-  return 'zh'
+  // 2026-11-07（用户裁定）：系统语言无匹配时回退英文，不再回退中文 ——
+  // 仅首次启动生效（有保存值后永远用保存值，用户改语言不会被自动改回）。
+  return 'en'
 }
 
 export function initLocale() {
