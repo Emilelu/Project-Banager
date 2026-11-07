@@ -70,11 +70,47 @@ document.addEventListener(
  *   · mousedown 捕获阶段直接 preventDefault —— 掐断延伸起点；
  *   · click 后清掉任何残留选区。
  * 输入控件不受影响（输入框内的 Shift+方向键/Home/End 走 keydown 路径）。
+ *
+ * 焦点环泄漏（2026-11-07 第三轮定位）：文字选区已全链路拦死，但 Chromium 把
+ * 带修饰键的交互视为「键盘操作」——Shift 按下或 Shift+单击会让**当前已聚焦元素**
+ * 的 :focus-visible 由 false 翻转为 true，style.css 的 :focus-visible 环立刻画出，
+ * 用户观感即「Shift 选中了元素（还带边框）」。preventDefault 只能阻止**新**焦点，
+ * 挡不住对**旧**焦点的翻真。解法：Shift 交互瞬间给 activeElement 打
+ * data-shift-suppress 临时标记，CSS 对标记元素不画焦点环；下一次真实交互
+ * （非 Shift 的 mousedown / 按键）清除标记，键盘 Tab 导航的正常焦点环不受影响。
  */
+let shiftSuppressedEl = null
+const clearShiftSuppress = () => {
+  if (shiftSuppressedEl) {
+    shiftSuppressedEl.removeAttribute('data-shift-suppress')
+    shiftSuppressedEl = null
+  }
+}
+const markShiftSuppress = () => {
+  const ae = document.activeElement
+  if (ae && ae !== document.body && ae !== document.documentElement) {
+    if (shiftSuppressedEl !== ae) clearShiftSuppress()
+    ae.setAttribute('data-shift-suppress', '')
+    shiftSuppressedEl = ae
+  }
+}
+document.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key === 'Shift') markShiftSuppress()
+    else clearShiftSuppress()
+  },
+  true,
+)
 document.addEventListener(
   'mousedown',
   (e) => {
-    if (e.shiftKey) e.preventDefault()
+    if (e.shiftKey) {
+      markShiftSuppress()
+      e.preventDefault()
+    } else {
+      clearShiftSuppress()
+    }
   },
   true,
 )

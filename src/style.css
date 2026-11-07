@@ -299,6 +299,17 @@ select:focus-visible {
   outline-color: rgb(var(--c-primary-light) / 0.7) !important;
 }
 
+/* Shift 焦点环抑制（main.js 打 data-shift-suppress 标记）：
+   Chromium 把带修饰键的按下/点击视为键盘交互，让**当前已聚焦元素**的
+   :focus-visible 翻真 → 上面 :focus-visible 环立刻画出（用户看到
+   「Shift 选中了元素还带边框」）。标记元素在此期间不画环；
+   下一次真实交互（非 Shift 的 mousedown/按键）清标记，
+   之后 Tab/方向键导航的焦点环照常恢复（可访问性不受损）。
+   本规则必须在 .dark :focus-visible 之后 —— 同特异性（0,2,0）后者胜。 */
+[data-shift-suppress]:focus-visible {
+  outline: none !important;
+}
+
 /* ==================== 全局禁止文字被框选 ==================== */
 /*
  * 问题：任意位置按住 Shift 拖动（或三击、Ctrl+A）时，浏览器会显示文字选区高亮，
