@@ -290,6 +290,9 @@ function makeWorkbook(sheets) {
 }
 
 let wrapper = null
+// mountApp 挂的 App 实例单独持有：mountTransfer/mountWatched 会覆盖 wrapper，
+// 只按 wrapper 清理的话 App 将永不 unmount（见 afterEach 里的孤儿说明）
+let appWrapper = null
 // 顶栏内容控件宿主（视觉审计 A-01）：搜索/标签/年份已迁入顶栏，
 // view 把控件组件注册进 pageControls，App.vue 才渲染；单测没有 App.vue，
 // 用与 App.vue 同构的宿主把注册的控件真正挂到 DOM（见 helpers/topbarControls.js）。
@@ -331,9 +334,18 @@ afterEach(() => {
     controls.unmount()
     controls = null
   }
-  if (wrapper) {
+  if (wrapper && wrapper !== appWrapper) {
     wrapper.unmount()
-    wrapper = null
+  }
+  wrapper = null
+  // 孤儿 App 防护（vitest「Errors: 2 unhandled rejections」根因）：
+  // App 被覆盖后若不 unmount，document.body.innerHTML='' 撕掉其 DOM 时
+  // 响应式 effect 与 App.vue 的 1s 时钟 interval 仍存活；下一个 tick 在
+  // detach 状态重渲染，patch 进 null 容器抛 insertBefore(null)。
+  // 每个 AfterEach 都要真正卸载 App，interval 与 document 监听才会清掉。
+  if (appWrapper) {
+    appWrapper.unmount()
+    appWrapper = null
   }
   document.body.innerHTML = ''
   vi.useRealTimers()
@@ -1102,11 +1114,14 @@ describe('App · 备份导出与恢复', () => {
     })
     await router.push('/')
     await router.isReady()
-    wrapper = mount(App, {
+    // App 实例单独持有（appWrapper）：本测试随后会 mountTransfer 覆盖 wrapper，
+    // 若只把 App 存进 wrapper，它将永不 unmount（孤儿 App → unhandled rejection）
+    appWrapper = mount(App, {
       attachTo: document.body,
       // ThemeSettings 已改为独立页面（/appearance），App 不再挂载该组件，无需 stub
       global: { plugins: [router] },
     })
+    wrapper = appWrapper
     await flushPromises()
     return wrapper
   }
