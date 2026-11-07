@@ -308,6 +308,9 @@ select:focus-visible {
    本规则必须在 .dark :focus-visible 之后 —— 同特异性（0,2,0）后者胜。 */
 [data-shift-suppress]:focus-visible {
   outline: none !important;
+  /* Tailwind 的 focus:ring-* 类走 box-shadow 合成，一并掐掉环分量
+     （保留 --tw-shadow 分量，元素的普通投影不受影响） */
+  --tw-ring-shadow: 0 0 #0000 !important;
 }
 
 /* ==================== 全局禁止文字被框选 ==================== */

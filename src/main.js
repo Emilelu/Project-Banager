@@ -86,12 +86,12 @@ const clearShiftSuppress = () => {
     shiftSuppressedEl = null
   }
 }
-const markShiftSuppress = () => {
-  const ae = document.activeElement
-  if (ae && ae !== document.body && ae !== document.documentElement) {
-    if (shiftSuppressedEl !== ae) clearShiftSuppress()
-    ae.setAttribute('data-shift-suppress', '')
-    shiftSuppressedEl = ae
+const markShiftSuppress = (el) => {
+  const t = el || document.activeElement
+  if (t && t !== document.body && t !== document.documentElement && typeof t.setAttribute === 'function') {
+    if (shiftSuppressedEl !== t) clearShiftSuppress()
+    t.setAttribute('data-shift-suppress', '')
+    shiftSuppressedEl = t
   }
 }
 document.addEventListener(
@@ -102,15 +102,31 @@ document.addEventListener(
   },
   true,
 )
+// Shift+交互期间新建立的焦点同样打标：mousedown 虽已 preventDefault，浏览器或
+// 应用代码仍可能转移焦点，:focus-visible 会随之翻真画环。只认紧跟在 Shift+按下
+// 之后 400ms 内的 focusin —— 纯键盘 Tab / Shift+Tab 导航不在此列，其焦点环不受影响。
+let lastShiftPressAt = 0
 document.addEventListener(
   'mousedown',
   (e) => {
     if (e.shiftKey) {
       markShiftSuppress()
+      lastShiftPressAt = performance.now()
       e.preventDefault()
     } else {
+      // 普通 mousedown = Shift 交互窗口关闭：其后 400ms 内的 focusin 与 Shift 无关，
+      // 不得打标（否则鼠标点击聚焦的元素会带一个无害但多余的标记）
+      lastShiftPressAt = 0
       clearShiftSuppress()
     }
+  },
+  true,
+)
+document.addEventListener(
+  'focusin',
+  (e) => {
+    if (performance.now() - lastShiftPressAt > 400) return
+    markShiftSuppress(e.target)
   },
   true,
 )
@@ -138,6 +154,33 @@ document.addEventListener(
   },
   true,
 )
+
+/**
+ * 选区最终裁判（2026-11-07 用户实测：仍有选区残留，点空白处才消失）。
+ *
+ * 前置拦截（selectstart / mousedown / click / dblclick）按事件通道逐一布防，
+ * 但真实浏览器的时序路径无法穷举——总有创建选区却绕过全部前置拦截的组合；
+ * 事后清理又挂在下一次 Shift+点击上，选区就持久存在（用户看到「选中」，
+ * 直到点空白处才被浏览器的默认 mousedown 行为清掉）。
+ *
+ * 治本：selectionchange 处任何选区就地裁决 —— 锚点与焦点落在**同一个**豁免
+ * 控件内（输入框里选词/方向键选区，编辑本身的正常行为）才放行；
+ * 跨元素边界的选区（即一切页面级选区）无论由哪条路径产生，立即抹掉，
+ * 不再存在「持久选中」。抹掉会再触发一次 selectionchange，此时 isCollapsed
+ * 直接返回，无递归。
+ */
+const EXEMPT_SEL = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .selectable-text'
+const exemptOf = (node) => {
+  const el = node && (node.nodeType === 1 ? node : node.parentElement)
+  return el && typeof el.closest === 'function' ? el.closest(EXEMPT_SEL) : null
+}
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+  const anchorExempt = exemptOf(sel.anchorNode)
+  if (anchorExempt && anchorExempt === exemptOf(sel.focusNode)) return
+  sel.removeAllRanges()
+})
 
 console.log('[boot] main.js start')
 
