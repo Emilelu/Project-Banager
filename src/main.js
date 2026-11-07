@@ -126,6 +126,18 @@ document.addEventListener(
   },
   true,
 )
+document.addEventListener(
+  'dblclick',
+  (e) => {
+    if (!e.shiftKey) return
+    // 同通道兜底（2026-11-07 审计发现）：Shift+双击不得触发任何应用级动作
+    // （如标签页行名双击进入改名），也不得产生 dblclick 默认的选词选区。
+    e.preventDefault()
+    e.stopPropagation()
+    window.getSelection()?.removeAllRanges()
+  },
+  true,
+)
 
 console.log('[boot] main.js start')
 
